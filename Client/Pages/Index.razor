@@ -1,0 +1,112 @@
+@page "/"
+@using VentyTime.Shared.Models
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+
+<div class="hero-section mb-8">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudGrid>
+            <MudItem xs="12" md="6" Class="d-flex flex-column justify-center">
+                <MudText Typo="Typo.h2" Color="Color.Primary" Class="font-weight-bold mb-4">
+                    Discover Amazing Events Near You
+                </MudText>
+                <MudText Typo="Typo.h6" Color="Color.Surface" Class="mb-8">
+                    Join exciting events, meet new people, and create unforgettable memories with VentyTime
+                </MudText>
+                <div class="d-flex gap-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                             Href="/events">Browse Events</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                             Href="/create-event">Create Event</MudButton>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="6" Class="d-flex align-center justify-center">
+                <MudImage Src="images/hero-image.svg" Alt="Events illustration" Class="hero-image" />
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+</div>
+
+<MudDivider Class="my-8" />
+
+<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">Upcoming Events</MudText>
+
+@if (events == null)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (!events.Any())
+{
+    <MudAlert Severity="Severity.Info">No events found. Be the first to create one!</MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var evt in events)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2" Class="event-card">
+                    <MudCardMedia Image="@(string.IsNullOrEmpty(evt.ImageUrl) ? "images/event-placeholder.jpg" : evt.ImageUrl)" 
+                                Height="200" />
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary">@evt.Date.ToString("MMM dd")</MudText>
+                            <MudChip Color="Color.Primary" Size="Size.Small">@evt.Price.ToString("C")</MudChip>
+                        </div>
+                        <MudText Typo="Typo.h6" Class="mb-2">@evt.Title</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
+                            @(evt.Description.Length > 100 ? evt.Description.Substring(0, 100) + "..." : evt.Description)
+                        </MudText>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
+                            <MudText Typo="Typo.body2">@evt.Location</MudText>
+                        </div>
+                    </MudCardContent>
+                    <MudCardActions Class="d-flex justify-end">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" 
+                                 OnClick="@(() => NavigateToEvent(evt.Id))">
+                            Learn More
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<style>
+    .hero-section {
+        padding: 4rem 0;
+        background: linear-gradient(to right, var(--mud-palette-background) 0%, var(--mud-palette-background) 100%);
+    }
+
+    .hero-image {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .event-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .event-card:hover {
+        transform: translateY(-4px);
+    }
+</style>
+
+@code {
+    private List<Event> events = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        events = await EventService.GetEventsAsync();
+    }
+
+    private void NavigateToEvent(int eventId)
+    {
+        NavigationManager.NavigateTo($"/event/{eventId}");
+    }
+}

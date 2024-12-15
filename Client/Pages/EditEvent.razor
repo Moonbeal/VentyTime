@@ -1,0 +1,146 @@
+@page "/events/{Id:int}/edit"
+@using VentyTime.Shared.Models
+@inject IEventService EventService
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+    @if (loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (eventModel == null)
+    {
+        <MudAlert Severity="Severity.Error">Event not found.</MudAlert>
+    }
+    else
+    {
+        <MudPaper Class="pa-4">
+            <MudForm @ref="form" @bind-IsValid="@success">
+                <MudText Typo="Typo.h4" Class="mb-4">Edit Event</MudText>
+
+                <MudTextField 
+                    @bind-Value="eventModel.Title" 
+                    Label="Title"
+                    Required="true"
+                    RequiredError="Title is required!"
+                    Class="mb-4"/>
+
+                <MudTextField 
+                    @bind-Value="eventModel.Description" 
+                    Label="Description"
+                    Required="true"
+                    RequiredError="Description is required!"
+                    Lines="3"
+                    Class="mb-4"/>
+
+                <MudDatePicker 
+                    Date="@eventModel.Date"
+                    DateChanged="@(date => eventModel.Date = date ?? DateTime.Today)"
+                    Label="Date"
+                    Required="true"
+                    RequiredError="Date is required!"
+                    Class="mb-4"/>
+
+                <MudTextField 
+                    @bind-Value="eventModel.Time"
+                    Label="Time (HH:mm)" 
+                    Variant="Variant.Outlined"
+                    Required="true"
+                    RequiredError="Time is required!"
+                    Class="mb-4"/>
+
+                <MudTextField 
+                    @bind-Value="eventModel.Location" 
+                    Label="Location"
+                    Required="true"
+                    RequiredError="Location is required!"
+                    Class="mb-4"/>
+
+                <MudTextField 
+                    @bind-Value="eventModel.ImageUrl" 
+                    Label="Image URL"
+                    Class="mb-4"/>
+
+                <MudNumericField 
+                    @bind-Value="eventModel.MaxAttendees" 
+                    Label="Max Attendees"
+                    Min="0"
+                    Class="mb-4"/>
+
+                <div class="d-flex justify-space-between align-center">
+                    <MudButton 
+                        Variant="Variant.Text" 
+                        Color="Color.Secondary"
+                        OnClick="@(() => NavigationManager.NavigateTo($"/events/{Id}"))">
+                        Cancel
+                    </MudButton>
+                    <MudButton 
+                        Variant="Variant.Filled" 
+                        Color="Color.Primary" 
+                        DisableElevation="true"
+                        OnClick="HandleValidSubmit"
+                        Disabled="!success">
+                        Save Changes
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private MudForm? form;
+    private bool success;
+    private bool loading = true;
+    private Event? eventModel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            eventModel = await EventService.GetEventByIdAsync(Id);
+            if (eventModel != null)
+            {
+                var currentUserId = await UserService.GetCurrentUserIdAsync();
+                if (eventModel.OrganizerId != currentUserId)
+                {
+                    Snackbar.Add("You are not authorized to edit this event.", Severity.Error);
+                    NavigationManager.NavigateTo($"/events/{Id}");
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading event: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (eventModel == null) return;
+
+        try
+        {
+            var result = await EventService.UpdateEventAsync(eventModel);
+            if (result != null)
+            {
+                Snackbar.Add("Event updated successfully!", Severity.Success);
+                NavigationManager.NavigateTo($"/events/{Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating event: {ex.Message}", Severity.Error);
+        }
+    }
+}

@@ -1,0 +1,77 @@
+@page "/login"
+@using VentyTime.Shared.Models
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column align-center justify-center" Style="min-height: calc(100vh - 64px);">
+    <MudPaper Elevation="0" Class="pa-8 ma-2" Style="width: 100%; max-width: 400px;">
+        <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4 text-center font-weight-bold">Welcome Back</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Surface" Class="mb-8 text-center">Sign in to continue to VentyTime</MudText>
+
+        <EditForm Model="@loginRequest" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+
+            <MudCard Elevation="0">
+                <MudCardContent>
+                    <MudTextField @bind-Value="loginRequest.Email"
+                                Label="Email"
+                                Variant="Variant.Outlined"
+                                InputType="InputType.Email"
+                                Class="mb-4"/>
+
+                    <MudTextField @bind-Value="loginRequest.Password"
+                                Label="Password"
+                                Variant="Variant.Outlined"
+                                InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                Class="mb-4"
+                                Adornment="Adornment.End"
+                                AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                OnAdornmentClick="() => _showPassword = !_showPassword" />
+
+                    <ValidationSummary />
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
+                    }
+
+                    <MudButton ButtonType="ButtonType.Submit"
+                              Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              Size="Size.Large"
+                              FullWidth="true"
+                              Class="mt-4">
+                        Sign In
+                    </MudButton>
+                </MudCardContent>
+            </MudCard>
+        </EditForm>
+
+        <div class="d-flex justify-center mt-6">
+            <MudText Color="Color.Surface">Don't have an account?</MudText>
+            <MudLink Href="/register" Color="Color.Primary" Class="ml-2">Sign up</MudLink>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private string? errorMessage;
+    private bool _showPassword;
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            errorMessage = null;
+            await UserService.LoginAsync(loginRequest);
+            NavigationManager.NavigateTo("/");
+            Snackbar.Add("Successfully logged in!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+}

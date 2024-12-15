@@ -1,0 +1,110 @@
+@page "/events/create"
+@using VentyTime.Shared.Models
+@inject IEventService EventService
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+    <MudPaper Class="pa-4">
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudText Typo="Typo.h4" Class="mb-4">Create Event</MudText>
+
+            <MudTextField 
+                @bind-Value="eventModel.Title" 
+                Label="Title"
+                Required="true"
+                RequiredError="Title is required!"
+                Class="mb-4"/>
+
+            <MudTextField 
+                @bind-Value="eventModel.Description" 
+                Label="Description"
+                Required="true"
+                RequiredError="Description is required!"
+                Lines="3"
+                Class="mb-4"/>
+
+            <MudDatePicker 
+                Date="@eventModel.Date"
+                DateChanged="@(date => eventModel.Date = date ?? DateTime.Today)"
+                Label="Date"
+                Required="true"
+                RequiredError="Date is required!"
+                Class="mb-4"/>
+
+            <MudTextField 
+                @bind-Value="eventModel.Time"
+                Label="Time (HH:mm)" 
+                Variant="Variant.Outlined"
+                Required="true"
+                RequiredError="Time is required!"
+                Class="mb-4"/>
+
+            <MudTextField 
+                @bind-Value="eventModel.Location" 
+                Label="Location"
+                Required="true"
+                RequiredError="Location is required!"
+                Class="mb-4"/>
+
+            <MudTextField 
+                @bind-Value="eventModel.ImageUrl" 
+                Label="Image URL"
+                Class="mb-4"/>
+
+            <MudNumericField 
+                @bind-Value="eventModel.MaxAttendees" 
+                Label="Max Attendees"
+                Min="0"
+                Class="mb-4"/>
+
+            <div class="d-flex justify-space-between align-center">
+                <MudButton 
+                    Variant="Variant.Text" 
+                    Color="Color.Secondary"
+                    OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                    Cancel
+                </MudButton>
+                <MudButton 
+                    Variant="Variant.Filled" 
+                    Color="Color.Primary" 
+                    DisableElevation="true"
+                    OnClick="HandleValidSubmit"
+                    Disabled="!success">
+                    Create Event
+                </MudButton>
+            </div>
+        </MudForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudForm? form;
+    private bool success;
+    private Event eventModel = new()
+    {
+        Date = DateTime.Today,
+        Time = DateTime.Now.ToString("HH:mm")
+    };
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var userId = await UserService.GetCurrentUserIdAsync();
+            eventModel.OrganizerId = userId;
+
+            var result = await EventService.CreateEventAsync(eventModel);
+            if (result != null)
+            {
+                Snackbar.Add("Event created successfully!", Severity.Success);
+                NavigationManager.NavigateTo($"/events/{result.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
+        }
+    }
+}

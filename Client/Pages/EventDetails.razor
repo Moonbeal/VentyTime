@@ -1,0 +1,237 @@
+@page "/events/{Id:int}"
+@using VentyTime.Shared.Models
+@inject IEventService EventService
+@inject IUserService UserService
+@inject IRegistrationService RegistrationService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (eventModel == null)
+    {
+        <MudAlert Severity="Severity.Error">Event not found.</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="8">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h4" Class="mb-4">@eventModel.Title</MudText>
+
+                    @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+                    {
+                        <MudImage Src="@eventModel.ImageUrl" Alt="Event Image" Class="rounded-lg mb-4" />
+                    }
+
+                    <MudText Typo="Typo.body1" Class="mb-4">@eventModel.Description</MudText>
+
+                    <MudDivider Class="my-4" />
+
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                                @eventModel.GetDateTime().ToString("f")
+                            </MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6">
+                            <MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                @eventModel.Location
+                            </MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6">
+                            <MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+                                Organized by @eventModel.OrganizerName
+                            </MudText>
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6">
+                            <MudText>
+                                <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
+                                @(eventModel.MaxAttendees == 0 ? "Unlimited spots" : 
+                                  $"{eventModel.Registrations.Count}/{eventModel.MaxAttendees} spots taken")
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudDivider Class="my-4" />
+
+                    <div class="d-flex justify-end">
+                        @if (isOrganizer)
+                        {
+                            <MudButton 
+                                Variant="Variant.Text" 
+                                Color="Color.Primary"
+                                OnClick="@(() => NavigationManager.NavigateTo($"/events/{Id}/edit"))">
+                                Edit Event
+                            </MudButton>
+                            <MudButton 
+                                Variant="Variant.Text" 
+                                Color="Color.Error"
+                                OnClick="DeleteEventAsync">
+                                Delete Event
+                            </MudButton>
+                        }
+                        else
+                        {
+                            @if (isRegistered)
+                            {
+                                <MudButton 
+                                    Variant="Variant.Filled" 
+                                    Color="Color.Error"
+                                    OnClick="CancelRegistrationAsync">
+                                    Cancel Registration
+                                </MudButton>
+                            }
+                            else if (eventModel.IsRegistrationOpen)
+                            {
+                                <MudButton 
+                                    Variant="Variant.Filled" 
+                                    Color="Color.Primary"
+                                    OnClick="RegisterForEventAsync">
+                                    Register for Event
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudAlert Severity="Severity.Warning">Registration is closed</MudAlert>
+                            }
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-4">Attendees</MudText>
+                    @if (!eventModel.Registrations.Any())
+                    {
+                        <MudText>No attendees yet</MudText>
+                    }
+                    else
+                    {
+                        <MudList>
+                            @foreach (var registration in eventModel.Registrations)
+                            {
+                                <MudListItem>
+                                    <MudText>
+                                        <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+                                        @registration.UserName
+                                    </MudText>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private bool loading = true;
+    private Event? eventModel;
+    private bool isOrganizer;
+    private bool isRegistered;
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            currentUserId = await UserService.GetCurrentUserIdAsync();
+            await LoadEventData();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading event: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadEventData()
+    {
+        eventModel = await EventService.GetEventByIdAsync(Id);
+        if (eventModel != null)
+        {
+            isOrganizer = eventModel.OrganizerId == currentUserId;
+            isRegistered = eventModel.Registrations.Any(r => r.UserId == currentUserId);
+        }
+    }
+
+    private async Task RegisterForEventAsync()
+    {
+        try
+        {
+            if (await RegistrationService.RegisterForEventAsync(Id))
+            {
+                await LoadEventData();
+                Snackbar.Add("Successfully registered for the event!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error registering for event: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CancelRegistrationAsync()
+    {
+        try
+        {
+            if (await RegistrationService.CancelRegistrationAsync(Id))
+            {
+                await LoadEventData();
+                Snackbar.Add("Successfully cancelled registration!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error cancelling registration: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteEventAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", "Are you sure you want to delete this event? This action cannot be undone." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Event", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                if (await EventService.DeleteEventAsync(Id))
+                {
+                    Snackbar.Add("Event deleted successfully!", Severity.Success);
+                    NavigationManager.NavigateTo("/");
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting event: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

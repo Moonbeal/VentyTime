@@ -1,0 +1,84 @@
+@page "/register"
+@using VentyTime.Shared.Models
+@inject IUserService UserService
+@inject NavigationManager NavigationManager
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
+    <MudPaper Class="pa-8" Elevation="0">
+        <MudText Typo="Typo.h3" Align="Align.Center" Class="mb-8">Register</MudText>
+        
+        <EditForm Model="@registerRequest" OnValidSubmit="HandleRegistration">
+            <DataAnnotationsValidator />
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registerRequest.Username" 
+                                Label="Username" 
+                                Variant="Variant.Outlined"
+                                For="@(() => registerRequest.Username)"
+                                Required="true"
+                                RequiredError="Username is required!" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registerRequest.Email" 
+                                Label="Email" 
+                                Variant="Variant.Outlined"
+                                For="@(() => registerRequest.Email)"
+                                Required="true"
+                                RequiredError="Email is required!" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registerRequest.Password" 
+                                Label="Password" 
+                                Variant="Variant.Outlined"
+                                InputType="InputType.Password"
+                                For="@(() => registerRequest.Password)"
+                                Required="true"
+                                RequiredError="Password is required!" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registerRequest.ConfirmPassword" 
+                                Label="Confirm Password" 
+                                Variant="Variant.Outlined"
+                                InputType="InputType.Password"
+                                For="@(() => registerRequest.ConfirmPassword)"
+                                Required="true"
+                                RequiredError="Password confirmation is required!" />
+                </MudItem>
+
+                <MudItem xs="12" Class="d-flex justify-center">
+                    <MudButton ButtonType="ButtonType.Submit" 
+                              Variant="Variant.Filled" 
+                              Color="Color.Primary"
+                              Size="Size.Large"
+                              Class="mt-4"
+                              Style="width: 200px;">
+                        Register
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12" Class="d-flex justify-center">
+                    <MudLink Href="/login" Underline="Underline.Always">
+                        Already have an account? Login here
+                    </MudLink>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private RegisterRequest registerRequest = new();
+
+    private async Task HandleRegistration()
+    {
+        var result = await UserService.RegisterAsync(registerRequest);
+        if (result)
+        {
+            NavigationManager.NavigateTo("/");
+        }
+    }
+}

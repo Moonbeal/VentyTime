@@ -1,0 +1,105 @@
+@using MudBlazor
+@inherits LayoutComponentBase
+@inject IDialogService DialogService
+
+<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_theme"/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudAppBar Elevation="0" Color="Color.Transparent" Class="border-b border-b-1">
+        <MudLink Href="" Color="Color.Primary" Underline="Underline.None">
+            <MudText Typo="Typo.h5" Color="Color.Primary" Class="ml-4 font-weight-bold">VentyTime</MudText>
+        </MudLink>
+        <MudSpacer />
+        
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary" Class="ma-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" />
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Href="/profile">Profile</MudMenuItem>
+                        <MudMenuItem Href="/my-events">My Events</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="Logout">Logout</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Href="/login" Variant="Variant.Text" Color="Color.Primary" Class="mr-2">Login</MudButton>
+                <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Primary" Class="mr-4">Sign Up</MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+        
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
+                      Color="Color.Primary" 
+                      OnClick="@ToggleTheme"
+                      Class="mr-4"/>
+    </MudAppBar>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _isDarkMode = true;
+
+    void ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+    }
+
+    private async Task Logout()
+    {
+        var authStateProvider = (CustomAuthStateProvider)AuthenticationStateProvider;
+        await authStateProvider.LogoutAsync();
+        NavigationManager.NavigateTo("/");
+    }
+
+    private MudTheme _theme = new MudTheme()
+    {
+        Palette = new PaletteLight()
+        {
+            Primary = "#7C3AED",
+            Secondary = "#EC4899",
+            AppbarBackground = "rgba(255,255,255,0.8)",
+            Background = "#F9FAFB",
+            Surface = "#FFFFFF",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "rgba(0,0,0,0.7)",
+            Success = "#10B981"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#8B5CF6",
+            Secondary = "#F472B6",
+            Background = "#1A1A1A",
+            AppbarBackground = "rgba(26,26,26,0.8)",
+            Surface = "#262626",
+            DrawerBackground = "#262626",
+            DrawerText = "rgba(255,255,255,0.7)",
+            Success = "#34D399"
+        },
+        LayoutProperties = new LayoutProperties()
+        {
+            DefaultBorderRadius = "0.5rem"
+        },
+        Typography = new Typography()
+        {
+            Default = new Default()
+            {
+                FontFamily = new[] { "Inter", "system-ui", "sans-serif" }
+            }
+        }
+    };
+
+    [Inject] public required NavigationManager NavigationManager { get; set; }
+    [Inject] public required AuthenticationStateProvider AuthenticationStateProvider { get; set; }
+}

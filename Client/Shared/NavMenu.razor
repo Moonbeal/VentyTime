@@ -1,0 +1,52 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<MudDrawer @bind-Open="@_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2" Variant="@DrawerVariant.Mini" OpenMiniOnHover="true">
+    <MudNavMenu Color="Color.Primary" Class="pa-2">
+        <MudText Typo="Typo.h6" Class="px-4 py-2 mud-text-primary">VentyTime</MudText>
+        <MudDivider Class="my-2" />
+        
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+        
+        <AuthorizeView>
+            <Authorized>
+                <MudNavLink Href="events" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Event">
+                    Events
+                </MudNavLink>
+                <MudNavLink Href="event/create" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Add">
+                    Create Event
+                </MudNavLink>
+                <MudNavLink Href="my-events" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.EventNote">
+                    My Events
+                </MudNavLink>
+                <MudNavLink Href="profile" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">
+                    Profile
+                </MudNavLink>
+                <MudNavLink OnClick="Logout" Icon="@Icons.Material.Filled.Logout">
+                    Logout
+                </MudNavLink>
+            </Authorized>
+            <NotAuthorized>
+                <MudNavLink Href="register" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PersonAdd">
+                    Register
+                </MudNavLink>
+                <MudNavLink Href="login" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Login">
+                    Login
+                </MudNavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudNavMenu>
+</MudDrawer>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private async Task Logout()
+    {
+        var customAuthStateProvider = (CustomAuthStateProvider)AuthStateProvider;
+        await customAuthStateProvider.LogoutAsync();
+        NavigationManager.NavigateTo("/");
+    }
+}
