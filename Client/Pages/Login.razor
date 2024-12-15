@@ -5,9 +5,12 @@
 @inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column align-center justify-center" Style="min-height: calc(100vh - 64px);">
-    <MudPaper Elevation="0" Class="pa-8 ma-2" Style="width: 100%; max-width: 400px;">
-        <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4 text-center font-weight-bold">Welcome Back</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Surface" Class="mb-8 text-center">Sign in to continue to VentyTime</MudText>
+    <MudPaper Elevation="3" Class="pa-8 rounded-lg" Style="width: 100%; max-width: 400px;">
+        <div class="d-flex flex-column align-center mb-8">
+            <MudIcon Icon="@Icons.Material.Filled.EventNote" Color="Color.Primary" Size="Size.Large" Class="mb-4" Style="width: 64px; height: 64px;" />
+            <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-2 font-weight-bold">Welcome Back</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="text-center">Sign in to continue to VentyTime</MudText>
+        </div>
 
         <EditForm Model="@loginRequest" OnValidSubmit="HandleLogin">
             <DataAnnotationsValidator />
@@ -18,22 +21,35 @@
                                 Label="Email"
                                 Variant="Variant.Outlined"
                                 InputType="InputType.Email"
-                                Class="mb-4"/>
+                                Required="true"
+                                RequiredError="Email is required"
+                                Class="mb-4"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Email" />
 
                     <MudTextField @bind-Value="loginRequest.Password"
                                 Label="Password"
                                 Variant="Variant.Outlined"
+                                Required="true"
+                                RequiredError="Password is required"
                                 InputType="@(_showPassword ? InputType.Text : InputType.Password)"
                                 Class="mb-4"
-                                Adornment="Adornment.End"
-                                AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                OnAdornmentClick="() => _showPassword = !_showPassword" />
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Lock"
+                                AdornmentColor="Color.Primary"
+                                AppendAdornment="true"
+                                AppendAdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                OnAppendAdornmentClick="() => _showPassword = !_showPassword" />
 
                     <ValidationSummary />
 
                     @if (!string.IsNullOrEmpty(errorMessage))
                     {
-                        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
+                        <MudAlert Severity="Severity.Error" 
+                                 Variant="Variant.Filled" 
+                                 Class="my-4">
+                            @errorMessage
+                        </MudAlert>
                     }
 
                     <MudButton ButtonType="ButtonType.Submit"
@@ -41,7 +57,8 @@
                               Color="Color.Primary"
                               Size="Size.Large"
                               FullWidth="true"
-                              Class="mt-4">
+                              Class="mt-6 rounded-lg py-3"
+                              Style="font-weight: 500;">
                         Sign In
                     </MudButton>
                 </MudCardContent>
@@ -49,8 +66,10 @@
         </EditForm>
 
         <div class="d-flex justify-center mt-6">
-            <MudText Color="Color.Surface">Don't have an account?</MudText>
-            <MudLink Href="/register" Color="Color.Primary" Class="ml-2">Sign up</MudLink>
+            <MudText Align="Align.Center">
+                Don't have an account? 
+                <MudLink Href="/register" Color="Color.Primary">Sign up</MudLink>
+            </MudText>
         </div>
     </MudPaper>
 </MudContainer>
@@ -58,16 +77,23 @@
 @code {
     private LoginRequest loginRequest = new();
     private string? errorMessage;
-    private bool _showPassword;
+    private bool _showPassword = false;
 
     private async Task HandleLogin()
     {
         try
         {
             errorMessage = null;
-            await UserService.LoginAsync(loginRequest);
-            NavigationManager.NavigateTo("/");
-            Snackbar.Add("Successfully logged in!", Severity.Success);
+            var result = await UserService.LoginAsync(loginRequest);
+            if (result)
+            {
+                Snackbar.Add("Successfully logged in!", Severity.Success);
+                NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Invalid email or password";
+            }
         }
         catch (Exception ex)
         {

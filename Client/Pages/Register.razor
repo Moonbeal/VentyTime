@@ -2,10 +2,15 @@
 @using VentyTime.Shared.Models
 @inject IUserService UserService
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-10">
-    <MudPaper Class="pa-8" Elevation="0">
-        <MudText Typo="Typo.h3" Align="Align.Center" Class="mb-8">Register</MudText>
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column align-center justify-center" Style="min-height: calc(100vh - 64px);">
+    <MudPaper Elevation="3" Class="pa-8 rounded-lg" Style="width: 100%; max-width: 500px;">
+        <div class="d-flex flex-column align-center mb-8">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Size="Size.Large" Class="mb-4" Style="width: 64px; height: 64px;" />
+            <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-2 font-weight-bold">Create Account</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="text-center">Join VentyTime to create and discover amazing events</MudText>
+        </div>
         
         <EditForm Model="@registerRequest" OnValidSubmit="HandleRegistration">
             <DataAnnotationsValidator />
@@ -17,7 +22,10 @@
                                 Variant="Variant.Outlined"
                                 For="@(() => registerRequest.Username)"
                                 Required="true"
-                                RequiredError="Username is required!" />
+                                RequiredError="Username is required!"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Person"
+                                Class="mb-4" />
                 </MudItem>
 
                 <MudItem xs="12">
@@ -26,59 +34,105 @@
                                 Variant="Variant.Outlined"
                                 For="@(() => registerRequest.Email)"
                                 Required="true"
-                                RequiredError="Email is required!" />
+                                RequiredError="Email is required!"
+                                InputType="InputType.Email"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Email"
+                                Class="mb-4" />
                 </MudItem>
 
                 <MudItem xs="12">
                     <MudTextField @bind-Value="registerRequest.Password" 
                                 Label="Password" 
                                 Variant="Variant.Outlined"
-                                InputType="InputType.Password"
                                 For="@(() => registerRequest.Password)"
                                 Required="true"
-                                RequiredError="Password is required!" />
+                                RequiredError="Password is required!"
+                                InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Lock"
+                                AdornmentColor="Color.Primary"
+                                AppendAdornment="true"
+                                AppendAdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                OnAppendAdornmentClick="() => _showPassword = !_showPassword"
+                                Class="mb-4" />
                 </MudItem>
 
                 <MudItem xs="12">
                     <MudTextField @bind-Value="registerRequest.ConfirmPassword" 
                                 Label="Confirm Password" 
                                 Variant="Variant.Outlined"
-                                InputType="InputType.Password"
                                 For="@(() => registerRequest.ConfirmPassword)"
                                 Required="true"
-                                RequiredError="Password confirmation is required!" />
+                                RequiredError="Password confirmation is required!"
+                                InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Lock"
+                                AdornmentColor="Color.Primary"
+                                AppendAdornment="true"
+                                AppendAdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                OnAppendAdornmentClick="() => _showPassword = !_showPassword"
+                                Class="mb-4" />
                 </MudItem>
 
-                <MudItem xs="12" Class="d-flex justify-center">
-                    <MudButton ButtonType="ButtonType.Submit" 
-                              Variant="Variant.Filled" 
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error" 
+                                 Variant="Variant.Filled" 
+                                 Class="mb-4">
+                            @errorMessage
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudButton ButtonType="ButtonType.Submit"
+                              Variant="Variant.Filled"
                               Color="Color.Primary"
                               Size="Size.Large"
-                              Class="mt-4"
-                              Style="width: 200px;">
-                        Register
+                              FullWidth="true"
+                              Class="rounded-lg py-3"
+                              Style="font-weight: 500;">
+                        Create Account
                     </MudButton>
-                </MudItem>
-
-                <MudItem xs="12" Class="d-flex justify-center">
-                    <MudLink Href="/login" Underline="Underline.Always">
-                        Already have an account? Login here
-                    </MudLink>
                 </MudItem>
             </MudGrid>
         </EditForm>
+
+        <div class="d-flex justify-center mt-6">
+            <MudText Align="Align.Center">
+                Already have an account? 
+                <MudLink Href="/login" Color="Color.Primary">Sign in</MudLink>
+            </MudText>
+        </div>
     </MudPaper>
 </MudContainer>
 
 @code {
     private RegisterRequest registerRequest = new();
+    private string? errorMessage;
+    private bool _showPassword = false;
 
     private async Task HandleRegistration()
     {
-        var result = await UserService.RegisterAsync(registerRequest);
-        if (result)
+        try
         {
-            NavigationManager.NavigateTo("/");
+            errorMessage = null;
+            var result = await UserService.RegisterAsync(registerRequest);
+            if (result)
+            {
+                Snackbar.Add("Registration successful! Please sign in.", Severity.Success);
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                errorMessage = "Registration failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
         }
     }
 }

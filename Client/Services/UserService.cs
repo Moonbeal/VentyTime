@@ -245,6 +245,24 @@ public class UserService : IUserService
         }
     }
 
+    public async Task<ApplicationUser?> GetUserByIdAsync(string userId)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"api/user/{userId}");
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<ApplicationUser>();
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add($"Error fetching user: {ex.Message}", Severity.Error);
+            return null;
+        }
+    }
+
     private async Task<string?> GetAuthTokenAsync()
     {
         try

@@ -1,104 +1,208 @@
 @page "/dashboard"
 @using VentyTime.Shared.Models
+@using Microsoft.AspNetCore.Components.Web
 @inject IUserService UserService
 @inject IRegistrationService RegistrationService
 @inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IEventService EventService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     @if (isLoading)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
     }
     else if (user == null)
     {
-        <MudAlert Severity="Severity.Error">Unable to load user profile</MudAlert>
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="my-4">
+            Unable to load user profile. Please try again later.
+        </MudAlert>
     }
     else
     {
         <MudGrid>
             <MudItem xs="12" sm="4">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.h5" Class="mb-4">Profile</MudText>
-                    <MudList>
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
+                    <div class="d-flex flex-column align-center mb-6">
+                        <MudAvatar Size="Size.Large" Image="@(user?.ProfilePictureUrl ?? string.Empty)" />
+                        <MudText Typo="Typo.h5" Class="mt-4">@(user?.UserName ?? "Unknown")</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Member since @(user?.CreatedAt.ToString("MMMM yyyy") ?? "Unknown")</MudText>
+                    </div>
+
+                    <MudDivider Class="mb-4" />
+
+                    <MudList Dense="true">
                         <MudListItem>
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
-                                @user.FullName
-                            </MudText>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Email" 
+                                        Class="mr-3" 
+                                        Color="Color.Primary" />
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Email</MudText>
+                                    <MudText>@(user?.Email ?? "Unknown")</MudText>
+                                </div>
+                            </div>
                         </MudListItem>
                         <MudListItem>
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.Email" Class="mr-2" />
-                                @user.Email
-                            </MudText>
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.EventNote" 
+                                        Class="mr-3" 
+                                        Color="Color.Primary" />
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Events Registered</MudText>
+                                    <MudText>@registrations.Count()</MudText>
+                                </div>
+                            </div>
                         </MudListItem>
                     </MudList>
+
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Edit"
+                              FullWidth="true"
+                              Class="mt-4">
+                        Edit Profile
+                    </MudButton>
                 </MudPaper>
             </MudItem>
 
             <MudItem xs="12" sm="8">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.h5" Class="mb-4">My Registrations</MudText>
-                    @if (!registrations.Any())
-                    {
-                        <MudAlert Severity="Severity.Info">You haven't registered for any events yet.</MudAlert>
-                    }
-                    else
-                    {
-                        <MudList>
-                            @foreach (var registration in registrations)
-                            {
-                                <MudListItem>
-                                    <MudCard>
-                                        <MudCardContent>
-                                            <MudText Typo="Typo.h6">@registration.Event?.Title</MudText>
-                                            <MudText>@registration.Event?.Description</MudText>
-                                            <MudText>
-                                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
-                                                @registration.Event?.GetDateTime().ToString("f")
-                                            </MudText>
-                                            <MudText>
-                                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
-                                                @registration.Event?.Location
-                                            </MudText>
-                                        </MudCardContent>
-                                        <MudCardActions>
-                                            <MudButton 
-                                                Variant="Variant.Text" 
-                                                Color="Color.Primary"
-                                                OnClick="@(() => NavigateToEvent(registration.Event?.Id ?? 0))">
-                                                View Details
-                                            </MudButton>
-                                        </MudCardActions>
-                                    </MudCard>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    }
-                </MudPaper>
+                <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                    <MudTabPanel Text="Upcoming Events" Icon="@Icons.Material.Filled.Event">
+                        @if (!registrations.Any())
+                        {
+                            <div class="d-flex flex-column align-center py-8">
+                                <MudIcon Icon="@Icons.Material.Filled.EventBusy" 
+                                        Color="Color.Secondary" 
+                                        Size="Size.Large" 
+                                        Class="mb-4" />
+                                <MudText Color="Color.Secondary" Class="mb-4">You haven't registered for any events yet</MudText>
+                                <MudButton Variant="Variant.Filled" 
+                                         Color="Color.Primary"
+                                         OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                                    Browse Events
+                                </MudButton>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudList Clickable="true">
+                                @foreach (var registration in registrations.OrderBy(r => r?.Event?.GetDateTime() ?? DateTime.MaxValue))
+                                {
+                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{registration.EventId}"))">
+                                        <div class="d-flex" style="gap: 16px;">
+                                            @if (!string.IsNullOrEmpty(registration?.Event?.ImageUrl))
+                                            {
+                                                <MudImage ObjectFit="ObjectFit.Cover"
+                                                         Src="@registration.Event.ImageUrl"
+                                                         Alt="Event image"
+                                                         Width="120"
+                                                         Height="80"
+                                                         Class="rounded-lg" />
+                                            }
+                                            else
+                                            {
+                                                <MudPaper Width="120" Height="80" Class="d-flex align-center justify-center rounded-lg">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Default" />
+                                                </MudPaper>
+                                            }
+                                            <div class="d-flex flex-column justify-center">
+                                                <MudText Typo="Typo.h6">@(registration?.Event?.Title ?? "Unknown Event")</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                    @(registration?.Event?.GetDateTime().ToString("f") ?? "Date not set")
+                                                </MudText>
+                                                <MudText Typo="Typo.body2">@(registration?.Event?.Location ?? "Location not set")</MudText>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="My Events" Icon="@Icons.Material.Filled.EventAvailable">
+                        @if (!organizedEvents.Any())
+                        {
+                            <div class="d-flex flex-column align-center py-8">
+                                <MudIcon Icon="@Icons.Material.Filled.AddCircle" 
+                                        Color="Color.Secondary" 
+                                        Size="Size.Large" 
+                                        Class="mb-4" />
+                                <MudText Color="Color.Secondary" Class="mb-4">You haven't created any events yet</MudText>
+                                <MudButton Variant="Variant.Filled" 
+                                         Color="Color.Primary"
+                                         OnClick="@(() => NavigationManager.NavigateTo("/events/create"))">
+                                    Create Event
+                                </MudButton>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudList Clickable="true">
+                                @foreach (var evt in organizedEvents.OrderByDescending(e => e?.GetDateTime() ?? DateTime.MinValue))
+                                {
+                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
+                                        <div class="d-flex" style="gap: 16px;">
+                                            @if (!string.IsNullOrEmpty(evt?.ImageUrl))
+                                            {
+                                                <MudImage ObjectFit="ObjectFit.Cover"
+                                                         Src="@evt.ImageUrl"
+                                                         Alt="Event image"
+                                                         Width="120"
+                                                         Height="80"
+                                                         Class="rounded-lg" />
+                                            }
+                                            else
+                                            {
+                                                <MudPaper Width="120" Height="80" Class="d-flex align-center justify-center rounded-lg">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Default" />
+                                                </MudPaper>
+                                            }
+                                            <div class="d-flex flex-column justify-center">
+                                                <MudText Typo="Typo.h6">@(evt?.Title ?? "Unknown Event")</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                    @(evt?.GetDateTime().ToString("f") ?? "Date not set")
+                                                </MudText>
+                                                <MudText Typo="Typo.body2">@(evt?.Location ?? "Location not set")</MudText>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </MudTabPanel>
+                </MudTabs>
             </MudItem>
         </MudGrid>
     }
 </MudContainer>
 
 @code {
+    private bool isLoading = true;
     private ApplicationUser? user;
     private List<Registration> registrations = new();
-    private bool isLoading = true;
+    private List<Event> organizedEvents = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            user = await UserService.GetUserProfileAsync();
-            if (user != null)
+            var userId = await UserService.GetCurrentUserIdAsync();
+            if (!string.IsNullOrEmpty(userId))
             {
-                registrations = await RegistrationService.GetUserRegistrationsAsync(user.Id);
+                user = await UserService.GetUserByIdAsync(userId);
+                if (user != null)
+                {
+                    organizedEvents = await EventService.GetEventsByOrganizerIdAsync(userId);
+                    registrations = await RegistrationService.GetUserRegistrationsAsync(userId);
+                }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Handle error appropriately
+            Snackbar.Add($"Error loading dashboard: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -106,8 +210,8 @@
         }
     }
 
-    private void NavigateToEvent(int eventId)
+    private void NavigateToEditEvent(int eventId)
     {
-        NavigationManager.NavigateTo($"/events/{eventId}");
+        NavigationManager.NavigateTo($"/events/{eventId}/edit");
     }
 }

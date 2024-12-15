@@ -16,7 +16,7 @@ public class EventService : IEventService
     {
         try
         {
-            var events = await _httpClient.GetFromJsonAsync<List<Event>>("api/events");
+            var events = await _httpClient.GetFromJsonAsync<List<Event>>("api/event");
             return events ?? new List<Event>();
         }
         catch
@@ -29,7 +29,7 @@ public class EventService : IEventService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<Event>($"api/events/{id}");
+            return await _httpClient.GetFromJsonAsync<Event>($"api/event/{id}");
         }
         catch
         {
@@ -41,7 +41,7 @@ public class EventService : IEventService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/events", eventModel);
+            var response = await _httpClient.PostAsJsonAsync("api/event", eventModel);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<Event>();
@@ -58,7 +58,7 @@ public class EventService : IEventService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/events/{eventModel.Id}", eventModel);
+            var response = await _httpClient.PutAsJsonAsync($"api/event/{eventModel.Id}", eventModel);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadFromJsonAsync<Event>();
@@ -75,12 +75,25 @@ public class EventService : IEventService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/events/{id}");
+            var response = await _httpClient.DeleteAsync($"api/event/{id}");
             return response.IsSuccessStatusCode;
         }
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
+    {
+        try
+        {
+            var events = await _httpClient.GetFromJsonAsync<List<Event>>($"api/event/organizer/{organizerId}");
+            return events ?? new List<Event>();
+        }
+        catch
+        {
+            return new List<Event>();
         }
     }
 }

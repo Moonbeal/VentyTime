@@ -9,8 +9,12 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("http://localhost:7000") });
+// Configure server URL
+var serverUrl = builder.Configuration.GetValue<string>("ServerUrl") ?? "https://localhost:7001";
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(serverUrl) });
+
 builder.Services.AddMudServices();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();

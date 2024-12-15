@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.ResponseCompression;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure server URL
+builder.WebHost.UseUrls("https://localhost:7001;http://localhost:7000");
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
@@ -17,9 +20,10 @@ builder.Services.AddRazorPages();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", builder =>
-        builder.AllowAnyOrigin()
+        builder.SetIsOriginAllowed(_ => true) // Allow any origin in development
                .AllowAnyMethod()
-               .AllowAnyHeader());
+               .AllowAnyHeader()
+               .AllowCredentials());
 });
 
 // Configure DbContext
@@ -67,6 +71,9 @@ else
     app.UseHsts();
 }
 
+// Use CORS before other middleware
+app.UseCors("AllowAll");
+
 // Apply migrations
 using (var scope = app.Services.CreateScope())
 {
@@ -79,10 +86,6 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.UseRouting();
-
-// Use CORS before routing
-app.UseCors("AllowAll");
-
 app.UseAuthentication();
 app.UseAuthorization();
 

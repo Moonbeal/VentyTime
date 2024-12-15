@@ -21,6 +21,8 @@ namespace VentyTime.Shared.Models
 
         public DateTime DateJoined { get; set; } = DateTime.Now;
 
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
     }

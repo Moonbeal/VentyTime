@@ -9,4 +9,5 @@ public interface IUserService
     Task LogoutAsync();
     Task<string> GetCurrentUserIdAsync();
     Task<ApplicationUser?> GetUserProfileAsync();
+    Task<ApplicationUser?> GetUserByIdAsync(string userId);
 }

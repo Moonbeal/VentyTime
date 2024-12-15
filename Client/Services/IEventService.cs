@@ -9,4 +9,5 @@ public interface IEventService
     Task<Event?> CreateEventAsync(Event eventModel);
     Task<Event?> UpdateEventAsync(Event eventModel);
     Task<bool> DeleteEventAsync(int id);
+    Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId);
 }

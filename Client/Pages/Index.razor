@@ -3,21 +3,29 @@
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 
-<div class="hero-section mb-8">
+<div class="hero-section mb-8 py-8" style="background: var(--mud-palette-primary-lighten);">
     <MudContainer MaxWidth="MaxWidth.Large">
         <MudGrid>
             <MudItem xs="12" md="6" Class="d-flex flex-column justify-center">
                 <MudText Typo="Typo.h2" Color="Color.Primary" Class="font-weight-bold mb-4">
                     Discover Amazing Events Near You
                 </MudText>
-                <MudText Typo="Typo.h6" Color="Color.Surface" Class="mb-8">
+                <MudText Typo="Typo.h6" Color="Color.Dark" Class="mb-8">
                     Join exciting events, meet new people, and create unforgettable memories with VentyTime
                 </MudText>
-                <div class="d-flex gap-4">
+                <div class="d-flex gap-4 flex-wrap">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
                              Href="/events">Browse Events</MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
-                             Href="/create-event">Create Event</MudButton>
+                    <AuthorizeView>
+                        <Authorized>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
+                                     Href="/create-event">Create Event</MudButton>
+                        </Authorized>
+                        <NotAuthorized>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large"
+                                     Href="/register">Join Now</MudButton>
+                        </NotAuthorized>
+                    </AuthorizeView>
                 </div>
             </MudItem>
             <MudItem xs="12" md="6" Class="d-flex align-center justify-center">
@@ -27,57 +35,94 @@
     </MudContainer>
 </div>
 
-<MudDivider Class="my-8" />
-
-<MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">Upcoming Events</MudText>
-
-@if (events == null)
-{
-    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-}
-else if (!events.Any())
-{
-    <MudAlert Severity="Severity.Info">No events found. Be the first to create one!</MudAlert>
-}
-else
-{
+<MudContainer MaxWidth="MaxWidth.Large">
     <MudGrid>
-        @foreach (var evt in events)
-        {
-            <MudItem xs="12" sm="6" md="4">
-                <MudCard Elevation="2" Class="event-card">
-                    <MudCardMedia Image="@(string.IsNullOrEmpty(evt.ImageUrl) ? "images/event-placeholder.jpg" : evt.ImageUrl)" 
-                                Height="200" />
-                    <MudCardContent>
-                        <div class="d-flex justify-space-between align-center mb-2">
-                            <MudText Typo="Typo.subtitle1" Color="Color.Primary">@evt.Date.ToString("MMM dd")</MudText>
-                            <MudChip Color="Color.Primary" Size="Size.Small">@evt.Price.ToString("C")</MudChip>
-                        </div>
-                        <MudText Typo="Typo.h6" Class="mb-2">@evt.Title</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2">
-                            @(evt.Description.Length > 100 ? evt.Description.Substring(0, 100) + "..." : evt.Description)
-                        </MudText>
-                        <div class="d-flex align-center">
-                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
-                            <MudText Typo="Typo.body2">@evt.Location</MudText>
-                        </div>
-                    </MudCardContent>
-                    <MudCardActions Class="d-flex justify-end">
-                        <MudButton Variant="Variant.Text" Color="Color.Primary" 
-                                 OnClick="@(() => NavigateToEvent(evt.Id))">
-                            Learn More
-                        </MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudItem>
-        }
+        <MudItem xs="12" md="8">
+            <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">Upcoming Events</MudText>
+
+            @if (events == null)
+            {
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            }
+            else if (!events.Any())
+            {
+                <MudAlert Severity="Severity.Info">No events found. Be the first to create one!</MudAlert>
+            }
+            else
+            {
+                <MudGrid>
+                    @foreach (var evt in events.Take(6))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudCard Elevation="2" Class="event-card" @onclick="@(() => NavigateToEvent(evt.Id))">
+                                <MudCardMedia Image="@(string.IsNullOrEmpty(evt.ImageUrl) ? "images/event-placeholder.jpg" : evt.ImageUrl)" 
+                                            Height="200" />
+                                <MudCardContent>
+                                    <MudText Typo="Typo.h6" Class="mb-2">@evt.Title</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                                        @evt.StartDate.ToString("D") at @evt.StartTime.ToString("t")
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2 text-truncate">
+                                        @evt.Description
+                                    </MudText>
+                                </MudCardContent>
+                                <MudCardActions>
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" 
+                                             @onclick="@(() => NavigateToEvent(evt.Id))">Learn More</MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+
+                @if (events.Count > 6)
+                {
+                    <div class="d-flex justify-center mt-4">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
+                                 Href="/events">View All Events</MudButton>
+                    </div>
+                }
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="0">
+                <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Quick Links</MudText>
+                <MudList Clickable="true">
+                    <MudListItem Href="/events" Icon="@Icons.Material.Filled.Event">
+                        Browse All Events
+                    </MudListItem>
+                    <AuthorizeView>
+                        <Authorized>
+                            <MudListItem Href="/create-event" Icon="@Icons.Material.Filled.Add">
+                                Create New Event
+                            </MudListItem>
+                            <MudListItem Href="/my-events" Icon="@Icons.Material.Filled.EventNote">
+                                My Events
+                            </MudListItem>
+                            <MudListItem Href="/my-registrations" Icon="@Icons.Material.Filled.BookmarkBorder">
+                                My Registrations
+                            </MudListItem>
+                        </Authorized>
+                        <NotAuthorized>
+                            <MudListItem Href="/register" Icon="@Icons.Material.Filled.PersonAdd">
+                                Create Account
+                            </MudListItem>
+                            <MudListItem Href="/login" Icon="@Icons.Material.Filled.Login">
+                                Sign In
+                            </MudListItem>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </MudList>
+            </MudPaper>
+        </MudItem>
     </MudGrid>
-}
+</MudContainer>
 
 <style>
     .hero-section {
-        padding: 4rem 0;
-        background: linear-gradient(to right, var(--mud-palette-background) 0%, var(--mud-palette-background) 100%);
+        background-size: cover;
+        background-position: center;
     }
 
     .hero-image {
@@ -89,7 +134,8 @@ else
         height: 100%;
         display: flex;
         flex-direction: column;
-        transition: transform 0.2s ease-in-out;
+        cursor: pointer;
+        transition: transform 0.2s;
     }
 
     .event-card:hover {

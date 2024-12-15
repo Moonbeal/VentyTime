@@ -10,123 +10,153 @@
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     @if (loading)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
     }
     else if (eventModel == null)
     {
-        <MudAlert Severity="Severity.Error">Event not found.</MudAlert>
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="my-4">Event not found.</MudAlert>
     }
     else
     {
         <MudGrid>
             <MudItem xs="12" sm="8">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.h4" Class="mb-4">@eventModel.Title</MudText>
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
+                    <div class="d-flex justify-space-between align-center mb-4">
+                        <MudText Typo="Typo.h3" Color="Color.Primary">@eventModel.Title</MudText>
+                        @if (isOrganizer)
+                        {
+                            <div>
+                                <MudButton Variant="Variant.Outlined" 
+                                          Color="Color.Primary" 
+                                          StartIcon="@Icons.Material.Filled.Edit"
+                                          OnClick="@(() => NavigationManager.NavigateTo($"/events/{Id}/edit"))">
+                                    Edit
+                                </MudButton>
+                            </div>
+                        }
+                    </div>
 
                     @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
                     {
-                        <MudImage Src="@eventModel.ImageUrl" Alt="Event Image" Class="rounded-lg mb-4" />
+                        <MudCard Elevation="0" Class="mb-6">
+                            <MudImage Src="@eventModel.ImageUrl" 
+                                    Alt="Event Image" 
+                                    Class="rounded-lg" 
+                                    ObjectFit="ObjectFit.Cover"
+                                    Height="400" />
+                        </MudCard>
                     }
 
-                    <MudText Typo="Typo.body1" Class="mb-4">@eventModel.Description</MudText>
+                    <MudPaper Elevation="0" Class="pa-4 mb-6" Style="background-color: var(--mud-palette-background-grey)">
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudText Class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" 
+                                            Class="mr-2" 
+                                            Color="Color.Primary" />
+                                    @eventModel.GetDateTime().ToString("f")
+                                </MudText>
+                            </MudItem>
 
-                    <MudDivider Class="my-4" />
+                            <MudItem xs="12" sm="6">
+                                <MudText Class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" 
+                                            Class="mr-2" 
+                                            Color="Color.Primary" />
+                                    @eventModel.Location
+                                </MudText>
+                            </MudItem>
 
-                    <MudGrid>
-                        <MudItem xs="12" sm="6">
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
-                                @eventModel.GetDateTime().ToString("f")
-                            </MudText>
-                        </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" 
+                                            Class="mr-2" 
+                                            Color="Color.Primary" />
+                                    Organized by @eventModel.OrganizerName
+                                </MudText>
+                            </MudItem>
 
-                        <MudItem xs="12" sm="6">
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
-                                @eventModel.Location
-                            </MudText>
-                        </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Group" 
+                                            Class="mr-2" 
+                                            Color="Color.Primary" />
+                                    @(eventModel.MaxAttendees == 0 ? "∞" : eventModel.Registrations.Count().ToString()) / @(eventModel.MaxAttendees > 0 ? eventModel.MaxAttendees.ToString() : "∞") attendees
+                                </MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
 
-                        <MudItem xs="12" sm="6">
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
-                                Organized by @eventModel.OrganizerName
-                            </MudText>
-                        </MudItem>
-
-                        <MudItem xs="12" sm="6">
-                            <MudText>
-                                <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
-                                @(eventModel.MaxAttendees == 0 ? "Unlimited spots" : 
-                                  $"{eventModel.Registrations.Count}/{eventModel.MaxAttendees} spots taken")
-                            </MudText>
-                        </MudItem>
-                    </MudGrid>
-
-                    <MudDivider Class="my-4" />
-
-                    <div class="d-flex justify-end">
-                        @if (isOrganizer)
-                        {
-                            <MudButton 
-                                Variant="Variant.Text" 
-                                Color="Color.Primary"
-                                OnClick="@(() => NavigationManager.NavigateTo($"/events/{Id}/edit"))">
-                                Edit Event
-                            </MudButton>
-                            <MudButton 
-                                Variant="Variant.Text" 
-                                Color="Color.Error"
-                                OnClick="DeleteEventAsync">
-                                Delete Event
-                            </MudButton>
-                        }
-                        else
-                        {
-                            @if (isRegistered)
-                            {
-                                <MudButton 
-                                    Variant="Variant.Filled" 
-                                    Color="Color.Error"
-                                    OnClick="CancelRegistrationAsync">
-                                    Cancel Registration
-                                </MudButton>
-                            }
-                            else if (eventModel.IsRegistrationOpen)
-                            {
-                                <MudButton 
-                                    Variant="Variant.Filled" 
-                                    Color="Color.Primary"
-                                    OnClick="RegisterForEventAsync">
-                                    Register for Event
-                                </MudButton>
-                            }
-                            else
-                            {
-                                <MudAlert Severity="Severity.Warning">Registration is closed</MudAlert>
-                            }
-                        }
-                    </div>
+                    <MudText Typo="Typo.h5" Class="mb-4">About this event</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-6">@eventModel.Description</MudText>
                 </MudPaper>
             </MudItem>
 
             <MudItem xs="12" sm="4">
-                <MudPaper Class="pa-4">
-                    <MudText Typo="Typo.h6" Class="mb-4">Attendees</MudText>
-                    @if (!eventModel.Registrations.Any())
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
+                    <MudText Typo="Typo.h5" Class="mb-4">Registration</MudText>
+                    
+                    @if (!isAuthenticated)
                     {
-                        <MudText>No attendees yet</MudText>
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="mb-4">
+                            Please log in to register for this event.
+                        </MudAlert>
+                        <MudButton Variant="Variant.Filled" 
+                                 Color="Color.Primary" 
+                                 FullWidth="true"
+                                 OnClick="@(() => NavigationManager.NavigateTo("/login"))">
+                            Log In
+                        </MudButton>
+                    }
+                    else if (isRegistered)
+                    {
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Filled" Class="mb-4">
+                            You're registered for this event!
+                        </MudAlert>
+                        <MudButton Variant="Variant.Filled" 
+                                 Color="Color.Error" 
+                                 FullWidth="true"
+                                 OnClick="CancelRegistrationAsync">
+                            Cancel Registration
+                        </MudButton>
+                    }
+                    else if (eventModel.MaxAttendees > 0 && eventModel.Registrations.Count() >= eventModel.MaxAttendees)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+                            This event is full.
+                        </MudAlert>
                     }
                     else
                     {
-                        <MudList>
+                        <MudButton Variant="Variant.Filled" 
+                                 Color="Color.Primary" 
+                                 FullWidth="true"
+                                 OnClick="RegisterForEventAsync">
+                            Register Now
+                        </MudButton>
+                    }
+
+                    <MudDivider Class="my-6" />
+
+                    <MudText Typo="Typo.h5" Class="mb-4">Attendees</MudText>
+                    @if (!eventModel.Registrations.Any())
+                    {
+                        <MudText Color="Color.Secondary">No attendees yet. Be the first to join!</MudText>
+                    }
+                    else
+                    {
+                        <MudList Clickable="false">
                             @foreach (var registration in eventModel.Registrations)
                             {
                                 <MudListItem>
-                                    <MudText>
-                                        <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
-                                        @registration.UserName
-                                    </MudText>
+                                    <div class="d-flex align-center">
+                                        <MudAvatar Color="Color.Primary" Class="mr-2">
+                                            @(registration.User?.UserName?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                                        </MudAvatar>
+                                        <MudText>@(registration.User?.UserName ?? "Unknown")</MudText>
+                                    </div>
                                 </MudListItem>
                             }
                         </MudList>
@@ -146,12 +176,14 @@
     private bool isOrganizer;
     private bool isRegistered;
     private string? currentUserId;
+    private bool isAuthenticated;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             currentUserId = await UserService.GetCurrentUserIdAsync();
+            isAuthenticated = currentUserId != null;
             await LoadEventData();
         }
         catch (Exception ex)
