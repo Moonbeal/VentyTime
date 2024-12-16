@@ -1,0 +1,156 @@
+@page "/event/create"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+@inject IAuthService AuthService
+@attribute [Authorize]
+
+<div class="container mt-4">
+    <h2>Create New Event</h2>
+
+    <EditForm Model="@eventModel" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label for="title" class="form-label">Title</label>
+            <InputText id="title" class="form-control" @bind-Value="eventModel.Title" />
+            <ValidationMessage For="@(() => eventModel.Title)" />
+        </div>
+
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <InputTextArea id="description" class="form-control" @bind-Value="eventModel.Description" rows="4" />
+            <ValidationMessage For="@(() => eventModel.Description)" />
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="category" class="form-label">Category</label>
+                <InputSelect id="category" class="form-select" @bind-Value="eventModel.Category">
+                    <option value="">Select a category</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Business">Business</option>
+                    <option value="Arts & Culture">Arts & Culture</option>
+                    <option value="Health & Wellness">Health & Wellness</option>
+                    <option value="Education">Education</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Food & Drink">Food & Drink</option>
+                </InputSelect>
+                <ValidationMessage For="@(() => eventModel.Category)" />
+            </div>
+
+            <div class="col-md-6">
+                <label for="price" class="form-label">Price</label>
+                <InputNumber id="price" class="form-control" @bind-Value="eventModel.Price" />
+                <ValidationMessage For="@(() => eventModel.Price)" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="startDate" class="form-label">Start Date</label>
+                <InputDate id="startDate" class="form-control" @bind-Value="eventModel.StartDate" />
+                <ValidationMessage For="@(() => eventModel.StartDate)" />
+            </div>
+
+            <div class="col-md-6">
+                <label for="startTime" class="form-label">Start Time</label>
+                <InputText id="startTime" class="form-control" type="time" @bind-Value="startTimeString" />
+                <ValidationMessage For="@(() => eventModel.StartTime)" />
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="location" class="form-label">Location</label>
+                <InputText id="location" class="form-control" @bind-Value="eventModel.Location" />
+                <ValidationMessage For="@(() => eventModel.Location)" />
+            </div>
+
+            <div class="col-md-6">
+                <label for="maxAttendees" class="form-label">Maximum Attendees (0 for unlimited)</label>
+                <InputNumber id="maxAttendees" class="form-control" @bind-Value="eventModel.MaxAttendees" />
+                <ValidationMessage For="@(() => eventModel.MaxAttendees)" />
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="imageUrl" class="form-label">Image URL</label>
+            <InputText id="imageUrl" class="form-control" @bind-Value="eventModel.ImageUrl" />
+            @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+            {
+                <img src="@eventModel.ImageUrl" class="mt-2 img-preview" alt="Event image preview" />
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Create Event</button>
+            <button type="button" class="btn btn-secondary" @onclick="NavigateBack">Cancel</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private Event eventModel = new Event
+    {
+        StartDate = DateTime.Today,
+        StartTime = TimeSpan.Zero,
+        MaxAttendees = 0
+    };
+
+    private string startTimeString
+    {
+        get => eventModel.StartTime.ToString(@"hh\:mm");
+        set
+        {
+            if (TimeSpan.TryParse(value, out TimeSpan time))
+            {
+                eventModel.StartTime = time;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Set default values
+        eventModel.StartDate = DateTime.Today;
+        eventModel.StartTime = new TimeSpan(9, 0, 0); // Default to 9:00 AM
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var createdEvent = await EventService.CreateEventAsync(eventModel);
+            NavigationManager.NavigateTo($"/event/{createdEvent.Id}");
+        }
+        catch (Exception ex)
+        {
+            // Handle error (you might want to show an error message to the user)
+            Console.WriteLine($"Error creating event: {ex.Message}");
+        }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/events");
+    }
+}
+
+<style>
+    .img-preview {
+        max-width: 300px;
+        max-height: 200px;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+
+    .validation-message {
+        color: red;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>

@@ -210,10 +210,15 @@
     {
         try
         {
-            if (await RegistrationService.RegisterForEventAsync(Id))
+            var result = await RegistrationService.RegisterForEventAsync(Id);
+            if (result.Success)
             {
                 await LoadEventData();
                 Snackbar.Add("Successfully registered for the event!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
             }
         }
         catch (Exception ex)

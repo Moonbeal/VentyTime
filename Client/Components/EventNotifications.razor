@@ -1,0 +1,161 @@
+@using VentyTime.Client.Services
+@using VentyTime.Shared.Models
+@inject NotificationService NotificationService
+
+<div class="notifications-container @(notifications.Any() ? "show" : "")">
+    @foreach (var notification in notifications.OrderByDescending(n => n.Timestamp))
+    {
+        <div class="notification @notification.Type.ToString().ToLowerInvariant()" @key="notification.Id">
+            <div class="notification-content">
+                <div class="notification-title">@notification.Title</div>
+                <MudText Typo="Typo.body2">@notification.Message</MudText>
+                <MudText Typo="Typo.caption" Class="mt-1">@notification.Timestamp.ToString("g")</MudText>
+                @if (!notification.IsDismissed && notification.Id == selectedNotificationId)
+                {
+                    <MudButton Color="Color.Primary" Size="Size.Small" OnClick="() => DismissNotification(notification.Id)">
+                        Dismiss
+                    </MudButton>
+                }
+            </div>
+            <button class="notification-dismiss" @onclick="() => DismissNotification(notification.Id)">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<NotificationMessage> notifications = new();
+    private int selectedNotificationId = 0;
+
+    protected override void OnInitialized()
+    {
+        NotificationService.OnNotification(HandleNotification);
+    }
+
+    private void HandleNotification(NotificationMessage notification)
+    {
+        notifications.Add(notification);
+        InvokeAsync(StateHasChanged);
+
+        // Auto-dismiss after 5 seconds
+        Task.Delay(5000).ContinueWith(_ =>
+        {
+            DismissNotification(notification.Id);
+        });
+    }
+
+    private void DismissNotification(int id)
+    {
+        var notification = notifications.FirstOrDefault(n => n.Id == id);
+        if (notification != null)
+        {
+            notifications.Remove(notification);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.UtcNow - timestamp;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+        return timestamp.ToString("MMM dd, yyyy");
+    }
+}
+
+<style>
+    .notifications-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        max-width: 400px;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease-in-out;
+    }
+
+    .notifications-container.show {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .notification {
+        display: flex;
+        align-items: flex-start;
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        background-color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        animation: slideIn 0.3s ease-in-out;
+    }
+
+    .notification.success {
+        border-left: 4px solid #4caf50;
+    }
+
+    .notification.warning {
+        border-left: 4px solid #ff9800;
+    }
+
+    .notification.error {
+        border-left: 4px solid #f44336;
+    }
+
+    .notification.info {
+        border-left: 4px solid #2196f3;
+    }
+
+    .notification-content {
+        flex: 1;
+        margin-right: 12px;
+    }
+
+    .notification-title {
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+
+    .notification-message {
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+
+    .notification-time {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .notification-dismiss {
+        background: none;
+        border: none;
+        padding: 4px;
+        cursor: pointer;
+        color: #999;
+        transition: color 0.2s;
+    }
+
+    .notification-dismiss:hover {
+        color: #666;
+    }
+
+    @@keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+</style>

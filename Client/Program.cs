@@ -11,7 +11,7 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // Configure server URL
-var serverUrl = builder.Configuration.GetValue<string>("ServerUrl") ?? "https://localhost:7001";
+var serverUrl = builder.Configuration.GetValue<string>("ServerUrl") ?? "https://localhost:7241";
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(serverUrl) });
 
 builder.Services.AddMudServices(config =>

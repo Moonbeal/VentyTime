@@ -1,0 +1,542 @@
+@page "/admin"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IAuthService AuthService
+@inject IUserService UserService
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@attribute [Authorize(Roles = "Admin")]
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">System Overview</h5>
+                    <div class="stats-list">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Users</span>
+                            <span class="stat-value">@statistics.TotalUsers</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Active Events</span>
+                            <span class="stat-value">@statistics.ActiveEvents</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Revenue</span>
+                            <span class="stat-value">$@statistics.TotalRevenue.ToString("F2")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Actions</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Users">
+                            <i class="fas fa-users"></i> Manage Users
+                        </button>
+                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Events">
+                            <i class="fas fa-calendar"></i> Manage Events
+                        </button>
+                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Reports">
+                            <i class="fas fa-chart-bar"></i> View Reports
+                        </button>
+                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Settings">
+                            <i class="fas fa-cog"></i> System Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-body">
+                    <ul class="nav nav-tabs">
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == AdminTab.Users ? "active" : "")"
+                                    @onclick="() => activeTab = AdminTab.Users">
+                                Users
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == AdminTab.Events ? "active" : "")"
+                                    @onclick="() => activeTab = AdminTab.Events">
+                                Events
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == AdminTab.Reports ? "active" : "")"
+                                    @onclick="() => activeTab = AdminTab.Reports">
+                                Reports
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(activeTab == AdminTab.Settings ? "active" : "")"
+                                    @onclick="() => activeTab = AdminTab.Settings">
+                                Settings
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content mt-3">
+                        @switch (activeTab)
+                        {
+                            case AdminTab.Users:
+                                <MudTable Items="@users" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                                    <HeaderContent>
+                                        <MudTh>Name</MudTh>
+                                        <MudTh>Email</MudTh>
+                                        <MudTh>Role</MudTh>
+                                        <MudTh>Status</MudTh>
+                                        <MudTh>Actions</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Name">@context.UserName</MudTd>
+                                        <MudTd DataLabel="Email">@context.Email</MudTd>
+                                        <MudTd DataLabel="Role">
+                                            <MudSelect T="UserRole" Value="@context.Role" ValueChanged="@(async (UserRole role) => await UpdateUserRole(context, role))">
+                                                @foreach (var role in Enum.GetValues<UserRole>())
+                                                {
+                                                    <MudSelectItem Value="@role">@role.ToString()</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </MudTd>
+                                        <MudTd DataLabel="Status">
+                                            <MudSwitch Checked="@context.IsActive" Color="@(context.IsActive ? Color.Success : Color.Error)"
+                                                      CheckedChanged="@(async (bool val) => await ToggleUserStatus(context))" />
+                                        </MudTd>
+                                        <MudTd>
+                                            <MudMenu Icon="@Icons.Material.Filled.MoreVert">
+                                                <MudMenuItem OnClick="@(() => ViewUserDetails(context))">View Details</MudMenuItem>
+                                                <MudMenuItem OnClick="@(() => DeleteUser(context.Id))">Delete</MudMenuItem>
+                                            </MudMenu>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                                break;
+
+                            case AdminTab.Events:
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" placeholder="Search events..."
+                                               @bind="eventSearchTerm" @bind:event="oninput" />
+                                        <select class="form-select" style="max-width: 200px;" @bind="eventStatusFilter">
+                                            <option value="">All Status</option>
+                                            <option value="upcoming">Upcoming</option>
+                                            <option value="ongoing">Ongoing</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="cancelled">Cancelled</option>
+                                        </select>
+                                        <button class="btn btn-outline-secondary" @onclick="SearchEvents">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Title</th>
+                                                <th>Organizer</th>
+                                                <th>Date</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var evt in filteredEvents)
+                                            {
+                                                <tr>
+                                                    <td>@evt.Title</td>
+                                                    <td>@evt.OrganizerName</td>
+                                                    <td>@evt.StartDate.ToShortDateString()</td>
+                                                    <td>
+                                                        @if (evt.IsFinished)
+                                                        {
+                                                            <span class="badge bg-secondary">Completed</span>
+                                                        }
+                                                        else if (evt.HasStarted)
+                                                        {
+                                                            <span class="badge bg-primary">Ongoing</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-success">Upcoming</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <div class="btn-group">
+                                                            <button class="btn btn-sm btn-outline-primary" 
+                                                                    @onclick="() => ViewEventDetails(evt.Id)">
+                                                                <i class="fas fa-eye"></i>
+                                                            </button>
+                                                            <button class="btn btn-sm btn-outline-danger" 
+                                                                    @onclick="() => CancelEvent(evt)">
+                                                                <i class="fas fa-times"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                                break;
+
+                            case AdminTab.Reports:
+                                <div class="row">
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h5 class="card-title">User Growth</h5>
+                                                <div class="chart-container">
+                                                    <!-- Add chart component here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h5 class="card-title">Event Statistics</h5>
+                                                <div class="chart-container">
+                                                    <!-- Add chart component here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h5 class="card-title">Revenue Report</h5>
+                                                <div class="mb-3">
+                                                    <div class="btn-group">
+                                                        <button class="btn btn-outline-primary" @onclick="() => GenerateReport(ReportPeriod.Daily)">
+                                                            Daily
+                                                        </button>
+                                                        <button class="btn btn-outline-primary" @onclick="() => GenerateReport(ReportPeriod.Weekly)">
+                                                            Weekly
+                                                        </button>
+                                                        <button class="btn btn-outline-primary" @onclick="() => GenerateReport(ReportPeriod.Monthly)">
+                                                            Monthly
+                                                        </button>
+                                                        <button class="btn btn-outline-primary" @onclick="() => GenerateReport(ReportPeriod.Yearly)">
+                                                            Yearly
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="chart-container">
+                                                    <!-- Add chart component here -->
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                break;
+
+                            case AdminTab.Settings:
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>General Settings</h5>
+                                        <div class="mb-3">
+                                            <label class="form-label">Site Name</label>
+                                            <input type="text" class="form-control" @bind="settings.SiteName" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Contact Email</label>
+                                            <input type="email" class="form-control" @bind="settings.ContactEmail" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Maximum Event Capacity</label>
+                                            <input type="number" class="form-control" @bind="settings.MaxEventCapacity" />
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>Email Settings</h5>
+                                        <div class="mb-3">
+                                            <label class="form-label">SMTP Server</label>
+                                            <input type="text" class="form-control" @bind="settings.SmtpServer" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">SMTP Port</label>
+                                            <input type="number" class="form-control" @bind="settings.SmtpPort" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">SMTP Username</label>
+                                            <input type="text" class="form-control" @bind="settings.SmtpUsername" />
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">SMTP Password</label>
+                                            <input type="password" class="form-control" @bind="settings.SmtpPassword" />
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <button class="btn btn-primary" @onclick="SaveSettings">Save Settings</button>
+                                    </div>
+                                </div>
+                                break;
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private enum AdminTab
+    {
+        Users,
+        Events,
+        Reports,
+        Settings
+    }
+
+    private enum ReportPeriod
+    {
+        Daily,
+        Weekly,
+        Monthly,
+        Yearly
+    }
+
+    private AdminTab activeTab = AdminTab.Users;
+    private string userSearchTerm = "";
+    private string eventSearchTerm = "";
+    private string eventStatusFilter = "";
+    private List<ApplicationUser> users = new();
+    private List<Event> events = new();
+    private SystemSettings settings = new();
+    private AdminStatistics statistics = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        await LoadSettings();
+        await LoadStatistics();
+    }
+
+    private async Task LoadData()
+    {
+        users = await UserService.GetAllUsersAsync();
+        events = await EventService.GetEventsAsync();
+    }
+
+    private async Task LoadSettings()
+    {
+        // Load system settings
+        settings = new SystemSettings
+        {
+            SiteName = "VentyTime",
+            ContactEmail = "admin@ventytime.com",
+            MaxEventCapacity = 1000,
+            SmtpServer = "smtp.ventytime.com",
+            SmtpPort = 587
+        };
+    }
+
+    private async Task LoadStatistics()
+    {
+        statistics = new AdminStatistics
+        {
+            TotalUsers = users.Count,
+            ActiveEvents = events.Count(e => !e.IsFinished),
+            TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
+        };
+    }
+
+    private IEnumerable<ApplicationUser> filteredUsers =>
+        users.Where(u =>
+            string.IsNullOrEmpty(userSearchTerm) ||
+            u.UserName.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+            u.Email.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<Event> filteredEvents
+    {
+        get
+        {
+            var filtered = events.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(eventSearchTerm))
+            {
+                filtered = filtered.Where(e =>
+                    e.Title.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    e.OrganizerName.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            switch (eventStatusFilter)
+            {
+                case "upcoming":
+                    filtered = filtered.Where(e => !e.HasStarted);
+                    break;
+                case "ongoing":
+                    filtered = filtered.Where(e => e.HasStarted && !e.IsFinished);
+                    break;
+                case "completed":
+                    filtered = filtered.Where(e => e.IsFinished);
+                    break;
+            }
+
+            return filtered;
+        }
+    }
+
+    private async Task SearchUsers()
+    {
+        // Refresh user list with search term
+        await LoadData();
+    }
+
+    private async Task SearchEvents()
+    {
+        // Refresh event list with search term and filter
+        await LoadData();
+    }
+
+    private async Task UpdateUserRole(ApplicationUser user, UserRole newRole)
+    {
+        try
+        {
+            var result = await UserService.UpdateUserRoleAsync(user.Id, newRole);
+            if (result)
+            {
+                Snackbar.Add($"User role updated to {newRole}", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update user role", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ToggleUserStatus(ApplicationUser user)
+    {
+        try
+        {
+            var result = await UserService.UpdateUserStatusAsync(user);
+            if (result)
+            {
+                Snackbar.Add($"User status updated", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update user status", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ViewUserDetails(ApplicationUser user)
+    {
+        NavigationManager.NavigateTo($"/users/{user.Id}");
+    }
+
+    private void ViewEventDetails(int eventId)
+    {
+        NavigationManager.NavigateTo($"/event/{eventId}");
+    }
+
+    private async Task CancelEvent(Event evt)
+    {
+        // Implement event cancellation logic
+        await LoadData();
+    }
+
+    private async Task GenerateReport(ReportPeriod period)
+    {
+        // Implement report generation logic
+    }
+
+    private async Task SaveSettings()
+    {
+        // Save system settings
+    }
+
+    private async Task DeleteUser(string userId)
+    {
+        try
+        {
+            var result = await UserService.DeleteUserAsync(userId);
+            if (result)
+            {
+                Snackbar.Add("User deleted successfully", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to delete user", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private class SystemSettings
+    {
+        public string SiteName { get; set; } = "";
+        public string ContactEmail { get; set; } = "";
+        public int MaxEventCapacity { get; set; }
+        public string SmtpServer { get; set; } = "";
+        public int SmtpPort { get; set; }
+        public string SmtpUsername { get; set; } = "";
+        public string SmtpPassword { get; set; } = "";
+    }
+
+    private class AdminStatistics
+    {
+        public int TotalUsers { get; set; }
+        public int ActiveEvents { get; set; }
+        public decimal TotalRevenue { get; set; }
+    }
+}
+
+<style>
+    .stats-list {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .stat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+
+    .stat-value {
+        font-weight: bold;
+        color: #0d6efd;
+    }
+
+    .chart-container {
+        height: 300px;
+        margin-top: 1rem;
+    }
+
+    .table td {
+        vertical-align: middle;
+    }
+</style>

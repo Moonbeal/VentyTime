@@ -23,6 +23,12 @@ namespace VentyTime.Shared.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        public bool IsActive { get; set; } = true;
+
+        public UserRole Role { get; set; } = UserRole.User;
+
+        public DateTime? LastLoginAt { get; set; }
+
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
     }

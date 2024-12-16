@@ -1,14 +1,14 @@
 @using MudBlazor
 
-<MudPaper Class="chat-window @(IsOpen ? "open" : "")" Elevation="8">
+<MudPaper Class=@($"chat-window {(IsOpen ? "open" : "")}") Elevation="8">
     <div class="chat-header gradient-header d-flex justify-space-between align-center pa-3">
         <div class="d-flex align-center">
             <MudAvatar Color="Color.Secondary" Class="mr-3">
                 <MudIcon Icon="@Icons.Material.Filled.SupportAgent" />
             </MudAvatar>
             <div>
-                <MudText Typo="Typo.subtitle1" Color="Color.White">Event Assistant</MudText>
-                <MudText Typo="Typo.caption" Color="Color.White">Online</MudText>
+                <MudText Typo="Typo.subtitle1" Style="color: white">Event Assistant</MudText>
+                <MudText Typo="Typo.caption" Style="color: white">Online</MudText>
             </div>
         </div>
         <MudIconButton Icon="@Icons.Material.Filled.Close" 
@@ -43,10 +43,10 @@
     </div>
 </MudPaper>
 
-<MudFab Color="Color.Secondary" 
-        StartIcon="@Icons.Material.Filled.SupportAgent" 
-        OnClick="@(() => IsOpen = !IsOpen)"
-        Class="chat-fab @(IsOpen ? "hidden" : "")" />
+<MudFab Color="Color.Primary"
+        Class=@($"chat-fab {(IsOpen ? "hidden" : "")}")
+        OnClick="@(() => IsOpen = true)"
+        Icon="@Icons.Material.Filled.Chat" />
 
 <style>
     .chat-window {

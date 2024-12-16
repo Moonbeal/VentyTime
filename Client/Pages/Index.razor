@@ -89,7 +89,7 @@
         }
         else if (selectedEvent != null)
         {
-            <EventDetails Event="selectedEvent" 
+            <VentyTime.Client.Components.EventDetails Event="selectedEvent" 
                          OnJoinClick="@(() => OnJoinEvent(selectedEvent))"
                          OnTeamClick="@(() => OnJoinTeam(selectedEvent))" />
         }
@@ -99,7 +99,8 @@
                 @foreach (var eventItem in events)
                 {
                     <MudPaper @onclick="@(() => SelectEvent(eventItem))" 
-                             Class="pa-4 rounded-lg event-card @(selectedEvent?.Id == eventItem.Id ? "selected" : "")">
+                              Class="@($"pa-4 rounded-lg event-card {(selectedEvent?.Id == eventItem.Id ? "selected" : "")}")"
+                              Elevation="3">
                         <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">@eventItem.Title</MudText>
                         <div class="d-flex gap-2 mb-2">
                             <MudChip Color="Color.Primary" Size="Size.Small">@eventItem.Category</MudChip>

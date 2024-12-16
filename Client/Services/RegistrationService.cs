@@ -26,13 +26,13 @@ namespace VentyTime.Client.Services
             _authService = authService;
         }
 
-        public async Task<bool> RegisterForEventAsync(int eventId)
+        public async Task<RegistrationResponse> RegisterForEventAsync(int eventId)
         {
             try
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
+                    return new RegistrationResponse(false, "User not authenticated");
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -41,29 +41,29 @@ namespace VentyTime.Client.Services
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Successfully registered for the event!", Severity.Success);
-                    return true;
+                    return new RegistrationResponse(true, "Successfully registered for the event!");
                 }
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
                     _snackbar.Add(error, Severity.Error);
-                    return false;
+                    return new RegistrationResponse(false, error);
                 }
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
-                return false;
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                return new RegistrationResponse(false, ex.Message);
             }
         }
 
-        public async Task<bool> UnregisterFromEventAsync(int eventId)
+        public async Task<RegistrationResponse> UnregisterFromEventAsync(int eventId)
         {
             try
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
+                    return new RegistrationResponse(false, "User not authenticated");
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -72,19 +72,19 @@ namespace VentyTime.Client.Services
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Successfully unregistered from the event!", Severity.Success);
-                    return true;
+                    return new RegistrationResponse(true, "Successfully unregistered from the event!");
                 }
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
                     _snackbar.Add(error, Severity.Error);
-                    return false;
+                    return new RegistrationResponse(false, error);
                 }
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
-                return false;
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                return new RegistrationResponse(false, ex.Message);
             }
         }
 
@@ -94,7 +94,7 @@ namespace VentyTime.Client.Services
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
+                    return false;
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -102,7 +102,7 @@ namespace VentyTime.Client.Services
                 var response = await _httpClient.PostAsync($"api/registrations/{eventId}/cancel", null);
                 if (response.IsSuccessStatusCode)
                 {
-                    _snackbar.Add("Successfully cancelled registration for the event!", Severity.Success);
+                    _snackbar.Add("Successfully cancelled registration!", Severity.Success);
                     return true;
                 }
                 else
@@ -114,7 +114,7 @@ namespace VentyTime.Client.Services
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
                 return false;
             }
         }
@@ -123,22 +123,19 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var userId = await _authService.GetUserId();
-                if (string.IsNullOrEmpty(userId)) return new List<Registration>();
-
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
+                    return new List<Registration>();
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var response = await _httpClient.GetFromJsonAsync<List<Registration>>($"api/registrations/user");
-                return response ?? new List<Registration>();
+                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>("api/registrations/user");
+                return registrations ?? new List<Registration>();
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
                 return new List<Registration>();
             }
         }
@@ -149,17 +146,17 @@ namespace VentyTime.Client.Services
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
+                    return new List<Registration>();
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var response = await _httpClient.GetFromJsonAsync<List<Registration>>($"api/registrations/event/{eventId}");
-                return response ?? new List<Registration>();
+                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>($"api/registrations/event/{eventId}");
+                return registrations ?? new List<Registration>();
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
                 return new List<Registration>();
             }
         }
@@ -184,18 +181,66 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<bool> IsUserRegisteredAsync(int eventId)
+        public async Task<RegistrationResponse> IsUserRegisteredAsync(int eventId)
         {
             try
             {
                 var userId = await _authService.GetUserId();
                 var registration = await GetRegistrationAsync(eventId, userId);
-                return registration != null;
+                if (registration != null)
+                {
+                    return new RegistrationResponse(true, "User is registered for the event!");
+                }
+                else
+                {
+                    return new RegistrationResponse(false, "User is not registered for the event!");
+                }
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                return new RegistrationResponse(false, ex.Message);
+            }
+        }
+
+        public async Task<bool> IsRegisteredForEventAsync(int eventId)
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                    return false;
+
+                _httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/isregistered");
+                return response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<bool>();
+            }
+            catch (Exception ex)
+            {
+                _snackbar.Add($"Error checking registration status: {ex.Message}", Severity.Error);
                 return false;
+            }
+        }
+
+        public async Task<int> GetRegisteredUsersCountAsync(int eventId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/count");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<int>();
+                }
+                
+                _snackbar.Add("Error getting registered users count", Severity.Error);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                return 0;
             }
         }
     }
