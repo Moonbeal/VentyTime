@@ -1,0 +1,100 @@
+@using VentyTime.Shared.Models
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-height: 500px; overflow-y: auto;">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Register for @Event.Title</MudText>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registration.Name" 
+                                Label="Full Name" 
+                                Variant="Variant.Outlined" 
+                                Required="true"/>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registration.Email" 
+                                Label="Email" 
+                                Variant="Variant.Outlined" 
+                                Required="true"
+                                InputType="InputType.Email"/>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registration.Phone" 
+                                Label="Phone Number" 
+                                Variant="Variant.Outlined"/>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="registration.Comments" 
+                                Label="Additional Comments" 
+                                Variant="Variant.Outlined" 
+                                Lines="3"/>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudCheckBox @bind-Checked="registration.AcceptTerms" 
+                                Label="I agree to the terms and conditions" 
+                                Required="true"
+                                Color="Color.Primary"/>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Price: $@Event.Price
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="Submit" 
+                  Disabled="!IsValid"
+                  Class="gradient-button">
+            Register
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .gradient-button {
+        background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    }
+</style>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Event Event { get; set; } = default!;
+    
+    private RegistrationForm registration = new();
+    
+    private bool IsValid => !string.IsNullOrWhiteSpace(registration.Name) &&
+                          !string.IsNullOrWhiteSpace(registration.Email) &&
+                          registration.AcceptTerms;
+    
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+    
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(registration));
+    }
+    
+    private class RegistrationForm
+    {
+        public string Name { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Phone { get; set; } = "";
+        public string Comments { get; set; } = "";
+        public bool AcceptTerms { get; set; }
+    }
+}

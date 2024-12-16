@@ -1,115 +1,132 @@
-@using MudBlazor
+@using VentyTime.Client.Theme
 @inherits LayoutComponentBase
-@inject IDialogService DialogService
 @inject NavigationManager NavigationManager
-@inject IUserService UserService
+@inject IAuthService AuthService
 
-<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_theme"/>
+<MudThemeProvider Theme="CustomTheme.DefaultTheme"/>
 <MudDialogProvider/>
 <MudSnackbarProvider/>
 
 <MudLayout>
-    <MudAppBar Elevation="1" Color="Color.Primary">
-        <MudLink Href="" Color="Color.Surface" Underline="Underline.None">
-            <MudText Typo="Typo.h5" Color="Color.Surface" Class="ml-4 font-weight-bold">VentyTime</MudText>
-        </MudLink>
-        <MudSpacer />
-
-        <MudHidden Breakpoint="Breakpoint.SmAndDown">
-            <MudButton Href="/" Variant="Variant.Text" Color="Color.Surface" Class="mx-2">Home</MudButton>
-            <MudButton Href="/events" Variant="Variant.Text" Color="Color.Surface" Class="mx-2">Events</MudButton>
-            <AuthorizeView>
-                <Authorized>
-                    <MudButton Href="/create-event" Variant="Variant.Text" Color="Color.Surface" Class="mx-2">Create Event</MudButton>
-                </Authorized>
-            </AuthorizeView>
-        </MudHidden>
-        
-        <AuthorizeView>
-            <Authorized>
-                <MudMenu ActivationEvent="MouseEvent.LeftClick" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                    <ActivatorContent>
-                        <MudAvatar Color="Color.Secondary" Class="ma-2">
-                            <MudIcon Icon="@Icons.Material.Filled.Person" />
-                        </MudAvatar>
-                    </ActivatorContent>
-                    <ChildContent>
-                        <MudMenuItem Href="/profile">Profile</MudMenuItem>
-                        <MudMenuItem Href="/my-events">My Events</MudMenuItem>
-                        <MudMenuItem Href="/my-registrations">My Registrations</MudMenuItem>
-                        <MudDivider />
-                        <MudMenuItem OnClick="Logout">Logout</MudMenuItem>
-                    </ChildContent>
-                </MudMenu>
-            </Authorized>
-            <NotAuthorized>
-                <MudButton Href="/login" Variant="Variant.Text" Color="Color.Surface" Class="mr-2">Login</MudButton>
-                <MudButton Href="/register" Variant="Variant.Filled" Color="Color.Secondary" Class="mr-4">Sign Up</MudButton>
-            </NotAuthorized>
-        </AuthorizeView>
-        
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
-                      Color="Color.Surface" 
-                      OnClick="@ToggleTheme"
-                      Class="mr-4"/>
-
-        <MudHidden Breakpoint="Breakpoint.MdAndUp">
-            <MudMenu Icon="@Icons.Material.Filled.Menu" Color="Color.Surface" Edge="Edge.End">
-                <MudMenuItem Href="/">Home</MudMenuItem>
-                <MudMenuItem Href="/events">Events</MudMenuItem>
-                <AuthorizeView>
-                    <Authorized>
-                        <MudMenuItem Href="/create-event">Create Event</MudMenuItem>
-                    </Authorized>
-                </AuthorizeView>
-            </MudMenu>
-        </MudHidden>
+    <MudAppBar Elevation="0" Class="gradient-appbar">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+            <MudGrid>
+                <MudItem xs="3" Class="d-flex align-center">
+                    <MudLink Href="" Color="Color.Inherit" Class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-2"/>
+                        <MudText Typo="Typo.h5">Eventify</MudText>
+                    </MudLink>
+                </MudItem>
+                <MudItem xs="6" Class="d-flex justify-center align-center">
+                    <MudStack Row="true" Spacing="6">
+                        <MudLink Href="" Color="Color.Inherit" Class="nav-link">Discover</MudLink>
+                        <MudLink Href="create-event" Color="Color.Inherit" Class="nav-link">Create Event</MudLink>
+                        <MudLink Href="my-events" Color="Color.Inherit" Class="nav-link">My Events</MudLink>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="3" Class="d-flex justify-end align-center">
+                    <AuthorizeView>
+                        <Authorized>
+                            <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Class="nav-icon">
+                                <MudBadge Color="Color.Secondary" Content="3" Overlap="true" Class="mx-6 my-4">
+                                    <MudIcon Icon="@Icons.Material.Filled.Notifications"/>
+                                </MudBadge>
+                            </MudIconButton>
+                            <MudIconButton Icon="@Icons.Material.Filled.Chat" Color="Color.Inherit" Class="nav-icon"/>
+                            <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                <ActivatorContent>
+                                    <MudAvatar Color="Color.Secondary" Class="nav-avatar">
+                                        <MudIcon Icon="@Icons.Material.Filled.Person"/>
+                                    </MudAvatar>
+                                </ActivatorContent>
+                                <ChildContent>
+                                    <MudMenuItem>
+                                        <div class="d-flex align-center py-2">
+                                            <MudAvatar Color="Color.Secondary" Size="Size.Small" Class="mr-3">
+                                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small"/>
+                                            </MudAvatar>
+                                            <div>
+                                                <MudText Typo="Typo.subtitle2">Profile Settings</MudText>
+                                                <MudText Typo="Typo.caption">Manage your account</MudText>
+                                            </div>
+                                        </div>
+                                    </MudMenuItem>
+                                    <MudDivider/>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.ConfirmationNumber">My Tickets</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Bookmark">Saved Events</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Settings">Settings</MudMenuItem>
+                                    <MudDivider/>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Sign Out</MudMenuItem>
+                                </ChildContent>
+                            </MudMenu>
+                        </Authorized>
+                        <NotAuthorized>
+                            <MudButton Color="Color.Inherit" OnClick="@(() => NavigationManager.NavigateTo("/login"))">Login</MudButton>
+                            <MudButton Color="Color.Inherit" OnClick="@(() => NavigationManager.NavigateTo("/register"))">Register</MudButton>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
     </MudAppBar>
 
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-16">
             @Body
         </MudContainer>
     </MudMainContent>
+    
+    <EventAssistant />
 </MudLayout>
 
+<style>
+    .gradient-appbar {
+        background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    }
+
+    .nav-link {
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-icon {
+        margin: 0 0.25rem;
+        transition: all 0.2s;
+    }
+
+    .nav-icon:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-avatar {
+        cursor: pointer;
+        margin-left: 0.5rem;
+        transition: all 0.2s;
+    }
+
+    .nav-avatar:hover {
+        opacity: 0.9;
+    }
+
+    ::deep .mud-button-root.mud-icon-button {
+        padding: 8px;
+    }
+
+    ::deep .mud-menu {
+        min-width: 220px;
+    }
+</style>
+
 @code {
-    private bool _isDarkMode;
-    private MudTheme _theme = new MudTheme();
-
-    protected override void OnInitialized()
-    {
-        _theme.Palette = new Palette
-        {
-            Primary = Colors.Blue.Default,
-            Secondary = Colors.Pink.Default,
-            AppbarBackground = Colors.Blue.Default,
-            Background = Colors.Grey.Lighten5,
-            DrawerBackground = Colors.Grey.Lighten5,
-            DrawerText = "rgba(0,0,0, 0.7)",
-            Success = Colors.Green.Default
-        };
-
-        _theme.PaletteDark = new PaletteDark
-        {
-            Primary = Colors.Blue.Darken1,
-            Secondary = Colors.Pink.Lighten1,
-            Background = "#1a1a1a",
-            Surface = "#252525",
-            DrawerBackground = "#1a1a1a",
-            DrawerText = "rgba(255,255,255, 0.7)",
-            Success = Colors.Green.Darken1
-        };
-    }
-
-    private void ToggleTheme()
-    {
-        _isDarkMode = !_isDarkMode;
-    }
-
     private async Task Logout()
     {
-        await UserService.LogoutAsync();
-        NavigationManager.NavigateTo("/");
+        // Add logout logic here
+        NavigationManager.NavigateTo("/login");
     }
 }

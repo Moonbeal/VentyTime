@@ -1,158 +1,223 @@
 @page "/"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
 @using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@using MudBlazor
+@using VentyTime.Client.Components
+
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 
-<div class="hero-section mb-8 py-8" style="background: var(--mud-palette-primary-lighten);">
-    <MudContainer MaxWidth="MaxWidth.Large">
-        <MudGrid>
-            <MudItem xs="12" md="6" Class="d-flex flex-column justify-center">
-                <MudText Typo="Typo.h2" Color="Color.Primary" Class="font-weight-bold mb-4">
-                    Discover Amazing Events Near You
-                </MudText>
-                <MudText Typo="Typo.h6" Color="Color.Dark" Class="mb-8">
-                    Join exciting events, meet new people, and create unforgettable memories with VentyTime
-                </MudText>
-                <div class="d-flex gap-4 flex-wrap">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                             Href="/events">Browse Events</MudButton>
-                    <AuthorizeView>
-                        <Authorized>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large"
-                                     Href="/create-event">Create Event</MudButton>
-                        </Authorized>
-                        <NotAuthorized>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large"
-                                     Href="/register">Join Now</MudButton>
-                        </NotAuthorized>
-                    </AuthorizeView>
-                </div>
+<PageTitle>Events - Eventify</PageTitle>
+
+<div class="hero-section">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <div class="text-center mb-8">
+            <MudText Typo="Typo.h2" Class="gradient-text mb-4">Discover Amazing Events</MudText>
+            <MudText Typo="Typo.body1" Class="mb-6">Join our community and participate in exciting events. Whether you're an organizer<br />or participant, there's something for everyone.</MudText>
+            <div class="d-flex justify-center gap-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gradient-button">Get Started</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">Browse Events</MudButton>
+            </div>
+        </div>
+
+        <MudGrid Class="mb-8">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Class="pa-4 text-center rounded-lg stats-card">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Primary" Size="Size.Large" Class="mb-2"/>
+                    <MudText Typo="Typo.h4" Color="Color.Primary"><b>150+</b></MudText>
+                    <MudText Typo="Typo.subtitle1">Active Events</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Ongoing events this month</MudText>
+                </MudPaper>
             </MudItem>
-            <MudItem xs="12" md="6" Class="d-flex align-center justify-center">
-                <MudImage Src="images/hero-image.svg" Alt="Events illustration" Class="hero-image" />
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Class="pa-4 text-center rounded-lg stats-card">
+                    <MudIcon Icon="@Icons.Material.Filled.Group" Color="Color.Primary" Size="Size.Large" Class="mb-2"/>
+                    <MudText Typo="Typo.h4" Color="Color.Primary"><b>10k+</b></MudText>
+                    <MudText Typo="Typo.subtitle1">Community</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Active participants</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Class="pa-4 text-center rounded-lg stats-card">
+                    <MudIcon Icon="@Icons.Material.Filled.ThumbUp" Color="Color.Primary" Size="Size.Large" Class="mb-2"/>
+                    <MudText Typo="Typo.h4" Color="Color.Primary"><b>95%</b></MudText>
+                    <MudText Typo="Typo.subtitle1">Success Rate</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Event satisfaction rate</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Class="pa-4 text-center rounded-lg stats-card">
+                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Color="Color.Primary" Size="Size.Large" Class="mb-2"/>
+                    <MudText Typo="Typo.h4" Color="Color.Primary"><b>50+</b></MudText>
+                    <MudText Typo="Typo.subtitle1">Locations</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Cities worldwide</MudText>
+                </MudPaper>
             </MudItem>
         </MudGrid>
+
+        <MudPaper Elevation="0" Class="pa-4 mb-8 search-section">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="searchTerm" Label="Search events..." Variant="Variant.Outlined" 
+                                AdornmentIcon="@Icons.Material.Filled.Search" Adornment="Adornment.Start"/>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string" Label="All Categories" @bind-Value="selectedCategory" Variant="Variant.Outlined">
+                        <MudSelectItem Value="@string.Empty">All Categories</MudSelectItem>
+                        @foreach (var category in categories)
+                        {
+                            <MudSelectItem Value="@category">@category</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="gradient-button">More Filters</MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (events == null)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+        else if (!events.Any())
+        {
+            <MudAlert Severity="Severity.Info">No events found.</MudAlert>
+        }
+        else if (selectedEvent != null)
+        {
+            <EventDetails Event="selectedEvent" 
+                         OnJoinClick="@(() => OnJoinEvent(selectedEvent))"
+                         OnTeamClick="@(() => OnJoinTeam(selectedEvent))" />
+        }
+        else
+        {
+            <div class="events-grid">
+                @foreach (var eventItem in events)
+                {
+                    <MudPaper @onclick="@(() => SelectEvent(eventItem))" 
+                             Class="pa-4 rounded-lg event-card @(selectedEvent?.Id == eventItem.Id ? "selected" : "")">
+                        <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-2">@eventItem.Title</MudText>
+                        <div class="d-flex gap-2 mb-2">
+                            <MudChip Color="Color.Primary" Size="Size.Small">@eventItem.Category</MudChip>
+                            <MudChip Color="Color.Secondary" Size="Size.Small">$@eventItem.Price</MudChip>
+                        </div>
+                        <div class="d-flex gap-2 align-center mb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small"/>
+                            <MudText Typo="Typo.body2">@eventItem.StartDate.ToShortDateString()</MudText>
+                        </div>
+                        <div class="d-flex gap-2 align-center mb-2">
+                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small"/>
+                            <MudText Typo="Typo.body2">@eventItem.Location</MudText>
+                        </div>
+                        <MudProgressLinear Color="Color.Secondary" 
+                                         Value="@(((double)eventItem.CurrentParticipants / eventItem.MaxAttendees) * 100)" 
+                                         Class="my-2" />
+                        <MudText Typo="Typo.caption" Align="Align.End">
+                            @eventItem.CurrentParticipants/@eventItem.MaxAttendees spots filled
+                        </MudText>
+                    </MudPaper>
+                }
+            </div>
+        }
     </MudContainer>
 </div>
 
-<MudContainer MaxWidth="MaxWidth.Large">
-    <MudGrid>
-        <MudItem xs="12" md="8">
-            <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-4">Upcoming Events</MudText>
-
-            @if (events == null)
-            {
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-            }
-            else if (!events.Any())
-            {
-                <MudAlert Severity="Severity.Info">No events found. Be the first to create one!</MudAlert>
-            }
-            else
-            {
-                <MudGrid>
-                    @foreach (var evt in events.Take(6))
-                    {
-                        <MudItem xs="12" sm="6">
-                            <MudCard Elevation="2" Class="event-card" @onclick="@(() => NavigateToEvent(evt.Id))">
-                                <MudCardMedia Image="@(string.IsNullOrEmpty(evt.ImageUrl) ? "images/event-placeholder.jpg" : evt.ImageUrl)" 
-                                            Height="200" />
-                                <MudCardContent>
-                                    <MudText Typo="Typo.h6" Class="mb-2">@evt.Title</MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-                                        @evt.StartDate.ToString("D") at @evt.StartTime.ToString("t")
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-2 text-truncate">
-                                        @evt.Description
-                                    </MudText>
-                                </MudCardContent>
-                                <MudCardActions>
-                                    <MudButton Variant="Variant.Text" Color="Color.Primary" 
-                                             @onclick="@(() => NavigateToEvent(evt.Id))">Learn More</MudButton>
-                                </MudCardActions>
-                            </MudCard>
-                        </MudItem>
-                    }
-                </MudGrid>
-
-                @if (events.Count > 6)
-                {
-                    <div class="d-flex justify-center mt-4">
-                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
-                                 Href="/events">View All Events</MudButton>
-                    </div>
-                }
-            }
-        </MudItem>
-
-        <MudItem xs="12" md="4">
-            <MudPaper Class="pa-4" Elevation="0">
-                <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Quick Links</MudText>
-                <MudList Clickable="true">
-                    <MudListItem Href="/events" Icon="@Icons.Material.Filled.Event">
-                        Browse All Events
-                    </MudListItem>
-                    <AuthorizeView>
-                        <Authorized>
-                            <MudListItem Href="/create-event" Icon="@Icons.Material.Filled.Add">
-                                Create New Event
-                            </MudListItem>
-                            <MudListItem Href="/my-events" Icon="@Icons.Material.Filled.EventNote">
-                                My Events
-                            </MudListItem>
-                            <MudListItem Href="/my-registrations" Icon="@Icons.Material.Filled.BookmarkBorder">
-                                My Registrations
-                            </MudListItem>
-                        </Authorized>
-                        <NotAuthorized>
-                            <MudListItem Href="/register" Icon="@Icons.Material.Filled.PersonAdd">
-                                Create Account
-                            </MudListItem>
-                            <MudListItem Href="/login" Icon="@Icons.Material.Filled.Login">
-                                Sign In
-                            </MudListItem>
-                        </NotAuthorized>
-                    </AuthorizeView>
-                </MudList>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
-</MudContainer>
-
 <style>
     .hero-section {
-        background-size: cover;
-        background-position: center;
+        background: linear-gradient(135deg, #f3e8ff 0%, #ffffff 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
     }
 
-    .hero-image {
-        max-width: 100%;
-        height: auto;
+    .gradient-text {
+        background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: bold;
     }
 
-    .event-card {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        cursor: pointer;
+    .gradient-button {
+        background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    }
+
+    .stats-card {
+        background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+        border: 1px solid rgba(139, 92, 246, 0.1);
         transition: transform 0.2s;
     }
 
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .search-section {
+        background: white;
+        border: 1px solid rgba(139, 92, 246, 0.1);
+        border-radius: 12px;
+    }
+
+    .events-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .event-card {
+        background: white;
+        border: 1px solid rgba(139, 92, 246, 0.1);
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
     .event-card:hover {
-        transform: translateY(-4px);
+        transform: translateY(-3px);
+        box-shadow: 0 4px 25px rgba(139, 92, 246, 0.1);
+    }
+
+    .event-card.selected {
+        border: 2px solid #8B5CF6;
     }
 </style>
 
 @code {
+    private string searchTerm = "";
+    private string selectedCategory = "";
     private List<Event> events = new();
+    private Event? selectedEvent;
+    private List<string> categories = new() { "Art", "Music", "Dance", "Technology", "Business", "Sports", "Education" };
 
     protected override async Task OnInitializedAsync()
     {
         events = await EventService.GetEventsAsync();
     }
 
-    private void NavigateToEvent(int eventId)
+    private void SelectEvent(Event eventItem)
     {
-        NavigationManager.NavigateTo($"/event/{eventId}");
+        selectedEvent = eventItem;
+    }
+
+    private async Task OnJoinEvent(Event eventItem)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Event", eventItem }
+        };
+
+        var dialog = await DialogService.ShowAsync<EventRegistrationDialog>("Register for Event", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private async Task OnJoinTeam(Event eventItem)
+    {
+        // Implement team joining logic
     }
 }

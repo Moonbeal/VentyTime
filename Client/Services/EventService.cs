@@ -1,99 +1,71 @@
 using System.Net.Http.Json;
 using VentyTime.Shared.Models;
 
-namespace VentyTime.Client.Services;
-
-public class EventService : IEventService
+namespace VentyTime.Client.Services
 {
-    private readonly HttpClient _httpClient;
-
-    public EventService(HttpClient httpClient)
+    public class EventService : IEventService
     {
-        _httpClient = httpClient;
-    }
+        private readonly HttpClient _httpClient;
 
-    public async Task<List<Event>> GetEventsAsync()
-    {
-        try
+        public EventService(HttpClient httpClient)
         {
-            var events = await _httpClient.GetFromJsonAsync<List<Event>>("api/event");
-            return events ?? new List<Event>();
+            _httpClient = httpClient;
         }
-        catch
-        {
-            return new List<Event>();
-        }
-    }
 
-    public async Task<Event?> GetEventByIdAsync(int id)
-    {
-        try
+        public async Task<List<Event>> GetEventsAsync()
         {
-            return await _httpClient.GetFromJsonAsync<Event>($"api/event/{id}");
+            return await _httpClient.GetFromJsonAsync<List<Event>>("api/events") ?? new List<Event>();
         }
-        catch
-        {
-            return null;
-        }
-    }
 
-    public async Task<Event?> CreateEventAsync(Event eventModel)
-    {
-        try
+        public async Task<Event?> GetEventByIdAsync(int id)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/event", eventModel);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<Event>();
-            }
-            return null;
+            return await _httpClient.GetFromJsonAsync<Event>($"api/events/{id}");
         }
-        catch
-        {
-            return null;
-        }
-    }
 
-    public async Task<Event?> UpdateEventAsync(Event eventModel)
-    {
-        try
+        public async Task<Event> CreateEventAsync(Event eventItem)
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/event/{eventModel.Id}", eventModel);
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<Event>();
-            }
-            return null;
+            var response = await _httpClient.PostAsJsonAsync("api/events", eventItem);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to create event");
         }
-        catch
-        {
-            return null;
-        }
-    }
 
-    public async Task<bool> DeleteEventAsync(int id)
-    {
-        try
+        public async Task<Event> UpdateEventAsync(Event eventItem)
         {
-            var response = await _httpClient.DeleteAsync($"api/event/{id}");
+            var response = await _httpClient.PutAsJsonAsync($"api/events/{eventItem.Id}", eventItem);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
+        }
+
+        public async Task<bool> DeleteEventAsync(int id)
+        {
+            var response = await _httpClient.DeleteAsync($"api/events/{id}");
             return response.IsSuccessStatusCode;
         }
-        catch
-        {
-            return false;
-        }
-    }
 
-    public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
-    {
-        try
+        public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
         {
-            var events = await _httpClient.GetFromJsonAsync<List<Event>>($"api/event/organizer/{organizerId}");
-            return events ?? new List<Event>();
+            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/organizer/{organizerId}") ?? new List<Event>();
         }
-        catch
+
+        public async Task<List<Event>> SearchEventsAsync(string searchTerm)
         {
-            return new List<Event>();
+            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/search?q={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
+        }
+
+        public async Task<List<Event>> GetUpcomingEventsAsync()
+        {
+            return await _httpClient.GetFromJsonAsync<List<Event>>("api/events/upcoming") ?? new List<Event>();
+        }
+
+        public async Task<List<Event>> GetPopularEventsAsync(int count = 5)
+        {
+            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/popular?count={count}") ?? new List<Event>();
+        }
+
+        public async Task<bool> IsEventFullAsync(int eventId)
+        {
+            var @event = await GetEventByIdAsync(eventId);
+            return @event?.IsFull ?? false;
         }
     }
 }

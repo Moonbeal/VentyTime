@@ -8,38 +8,43 @@ namespace VentyTime.Shared.Models
     {
         public int Id { get; set; }
 
-        [Required(ErrorMessage = "Title is required")]
-        [StringLength(100, ErrorMessage = "Title cannot be longer than 100 characters")]
-        public string Title { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "Description is required")]
-        public string Description { get; set; } = string.Empty;
-
-        [Required(ErrorMessage = "Start date is required")]
-        public DateTime StartDate { get; set; }
-
-        [Required(ErrorMessage = "Start time is required")]
-        public TimeSpan StartTime { get; set; }
-
-        [Required(ErrorMessage = "Location is required")]
-        public string Location { get; set; } = string.Empty;
-
-        public string ImageUrl { get; set; } = string.Empty;
+        [Required]
+        public string Title { get; set; } = "";
 
         [Required]
-        public string OrganizerId { get; set; } = string.Empty;
+        public string Description { get; set; } = "";
+
+        [Required]
+        public string Category { get; set; } = "";
+
+        [Required]
+        public decimal Price { get; set; }
+
+        [Required]
+        public DateTime StartDate { get; set; }
+
+        [Required]
+        public TimeSpan StartTime { get; set; }
+
+        [Required]
+        public string Location { get; set; } = "";
+
+        [Required]
+        public int MaxAttendees { get; set; }
+
+        public string? ImageUrl { get; set; }
+
+        [Required]
+        public string OrganizerId { get; set; } = "";
 
         public virtual ApplicationUser? Organizer { get; set; }
 
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
 
-        [Required(ErrorMessage = "Price is required")]
-        [Range(0, double.MaxValue, ErrorMessage = "Price must be greater than or equal to 0")]
-        public decimal Price { get; set; }
-
-        [Required(ErrorMessage = "Maximum attendees is required")]
-        [Range(0, int.MaxValue, ErrorMessage = "Maximum attendees must be greater than or equal to 0")]
-        public int MaxAttendees { get; set; }
+        public bool IsFull => MaxAttendees > 0 && Registrations.Count >= MaxAttendees;
+        public bool HasStarted => DateTime.Now > StartDate.Add(StartTime);
+        public bool IsFinished => HasStarted && DateTime.Now > StartDate.Add(StartTime).AddHours(4); // Assuming events last 4 hours
+        public int CurrentParticipants => Registrations.Count;
 
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
 

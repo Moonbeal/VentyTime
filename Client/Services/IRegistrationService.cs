@@ -1,11 +1,13 @@
 using VentyTime.Shared.Models;
 
-namespace VentyTime.Client.Services;
-
-public interface IRegistrationService
+namespace VentyTime.Client.Services
 {
-    Task<bool> RegisterForEventAsync(int eventId);
-    Task<bool> CancelRegistrationAsync(int eventId);
-    Task<List<Registration>> GetEventRegistrationsAsync(int eventId);
-    Task<List<Registration>> GetUserRegistrationsAsync(string userId);
+    public interface IRegistrationService
+    {
+        Task<bool> RegisterForEventAsync(int eventId);
+        Task<bool> UnregisterFromEventAsync(int eventId);
+        Task<bool> CancelRegistrationAsync(int eventId);
+        Task<List<Registration>> GetUserRegistrationsAsync();
+        Task<List<Registration>> GetEventRegistrationsAsync(int eventId);
+    }
 }

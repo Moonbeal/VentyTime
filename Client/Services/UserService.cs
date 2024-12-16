@@ -263,16 +263,162 @@ public class UserService : IUserService
         }
     }
 
-    private async Task<string?> GetAuthTokenAsync()
+    // Chat methods
+    public async Task<List<Conversation>> GetConversationsAsync()
     {
         try
         {
-            return await _localStorage.GetItemAsync<string>("authToken");
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new List<Conversation>();
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var result = await _http.GetFromJsonAsync<List<Conversation>>("api/chat/conversations");
+            return result ?? new List<Conversation>();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error getting auth token: {ex.Message}");
-            return null;
+            Console.WriteLine($"Error getting conversations: {ex.Message}");
+            return new List<Conversation>();
         }
+    }
+
+    public async Task<List<Message>> GetMessagesAsync(int conversationId)
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new List<Message>();
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var result = await _http.GetFromJsonAsync<List<Message>>($"api/chat/messages/{conversationId}");
+            return result ?? new List<Message>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting messages: {ex.Message}");
+            return new List<Message>();
+        }
+    }
+
+    public async Task SendMessageAsync(int conversationId, string content)
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return;
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var message = new Message
+            {
+                ConversationId = conversationId,
+                Content = content,
+                Timestamp = DateTime.Now
+            };
+
+            await _http.PostAsJsonAsync("api/chat/messages", message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+            throw;
+        }
+    }
+
+    // User profile methods
+    public async Task<User> GetCurrentUserAsync()
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new User();
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var result = await _http.GetFromJsonAsync<User>("api/users/current");
+            return result ?? new User();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting current user: {ex.Message}");
+            throw;
+        }
+    }
+
+    public async Task<List<Event>> GetUserEventsAsync()
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new List<Event>();
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var result = await _http.GetFromJsonAsync<List<Event>>("api/users/events");
+            return result ?? new List<Event>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting user events: {ex.Message}");
+            return new List<Event>();
+        }
+    }
+
+    public async Task<List<Event>> GetCreatedEventsAsync()
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return new List<Event>();
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var result = await _http.GetFromJsonAsync<List<Event>>("api/users/created-events");
+            return result ?? new List<Event>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting created events: {ex.Message}");
+            return new List<Event>();
+        }
+    }
+
+    public async Task UpdateUserAsync(User user, string newPassword)
+    {
+        try
+        {
+            var token = await GetAuthTokenAsync();
+            if (string.IsNullOrEmpty(token)) return;
+
+            _http.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var updateRequest = new
+            {
+                user.Username,
+                user.Email,
+                NewPassword = newPassword
+            };
+
+            await _http.PutAsJsonAsync("api/users/current", updateRequest);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating user: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task<string> GetAuthTokenAsync()
+    {
+        return await _localStorage.GetItemAsync<string>("authToken");
     }
 }

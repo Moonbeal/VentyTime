@@ -196,7 +196,7 @@
                 if (user != null)
                 {
                     organizedEvents = await EventService.GetEventsByOrganizerIdAsync(userId);
-                    registrations = await RegistrationService.GetUserRegistrationsAsync(userId);
+                    registrations = await RegistrationService.GetUserRegistrationsAsync();
                 }
             }
         }

@@ -1,90 +1,105 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
 
-namespace VentyTime.Server.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class RegistrationController : ControllerBase
+namespace VentyTime.Server.Controllers
 {
-    private readonly ApplicationDbContext _context;
-
-    public RegistrationController(ApplicationDbContext context)
+    [ApiController]
+    [Route("api/[controller]s")]
+    public class RegistrationController : ControllerBase
     {
-        _context = context;
-    }
+        private readonly ApplicationDbContext _context;
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Registration>>> GetRegistrations()
-    {
-        return await _context.Registrations
-            .Include(r => r.Event)
-            .Include(r => r.User)
-            .ToListAsync();
-    }
-
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Registration>> GetRegistration(int id)
-    {
-        var registration = await _context.Registrations
-            .Include(r => r.Event)
-            .Include(r => r.User)
-            .FirstOrDefaultAsync(r => r.Id == id);
-
-        if (registration == null)
+        public RegistrationController(ApplicationDbContext context)
         {
-            return NotFound();
+            _context = context;
         }
 
-        return registration;
-    }
-
-    [HttpPost]
-    public async Task<ActionResult<Registration>> CreateRegistration(Registration registration)
-    {
-        var existingRegistration = await _context.Registrations
-            .FirstOrDefaultAsync(r => r.EventId == registration.EventId && r.UserId == registration.UserId);
-
-        if (existingRegistration != null)
+        [HttpGet("event/{eventId}")]
+        public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
         {
-            return BadRequest("User is already registered for this event.");
+            return await _context.Registrations
+                .Include(r => r.User)
+                .Where(r => r.EventId == eventId)
+                .ToListAsync();
         }
 
-        var @event = await _context.Events.FindAsync(registration.EventId);
-        if (@event == null)
+        [HttpGet("user/{userId}")]
+        public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations(string userId)
         {
-            return BadRequest("Event not found.");
+            return await _context.Registrations
+                .Include(r => r.Event)
+                .Where(r => r.UserId == userId)
+                .ToListAsync();
         }
 
-        var currentRegistrations = await _context.Registrations
-            .CountAsync(r => r.EventId == registration.EventId && !r.CancelledAt.HasValue);
-
-        if (currentRegistrations >= @event.MaxAttendees)
+        [Authorize]
+        [HttpPost("event/{eventId}")]
+        public async Task<IActionResult> RegisterForEvent(int eventId)
         {
-            return BadRequest("Event is already full.");
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            var @event = await _context.Events
+                .Include(e => e.Registrations)
+                .FirstOrDefaultAsync(e => e.Id == eventId);
+
+            if (@event == null)
+            {
+                return NotFound("Event not found");
+            }
+
+            if (@event.IsFull)
+            {
+                return BadRequest("Event is full");
+            }
+
+            if (@event.Registrations.Any(r => r.UserId == userId))
+            {
+                return BadRequest("Already registered for this event");
+            }
+
+            var registration = new Registration
+            {
+                EventId = eventId,
+                UserId = userId,
+                RegistrationDate = DateTime.UtcNow
+            };
+
+            _context.Registrations.Add(registration);
+            await _context.SaveChangesAsync();
+
+            return Ok();
         }
 
-        _context.Registrations.Add(registration);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetRegistration), new { id = registration.Id }, registration);
-    }
-
-    [HttpPut("{id}/cancel")]
-    public async Task<IActionResult> CancelRegistration(int id)
-    {
-        var registration = await _context.Registrations.FindAsync(id);
-
-        if (registration == null)
+        [Authorize]
+        [HttpDelete("{registrationId}")]
+        public async Task<IActionResult> CancelRegistration(int registrationId)
         {
-            return NotFound();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            var registration = await _context.Registrations
+                .FirstOrDefaultAsync(r => r.Id == registrationId && r.UserId == userId);
+
+            if (registration == null)
+            {
+                return NotFound("Registration not found");
+            }
+
+            _context.Registrations.Remove(registration);
+            await _context.SaveChangesAsync();
+
+            return Ok();
         }
-
-        registration.CancelledAt = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-
-        return NoContent();
     }
 }

@@ -1,0 +1,72 @@
+@using VentyTime.Shared.Models
+@inject ISnackbar Snackbar
+
+<MudCard Class="event-card glass-card ma-2">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6" Class="gradient-text">@Event.Title</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@Event.Category</MudText>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            <MudChip Color="Color.Primary" Size="Size.Small">
+                @Event.CurrentParticipants/@Event.MaxAttendees
+            </MudChip>
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudText Typo="Typo.body2" Class="mb-2">@Event.Description</MudText>
+        <MudStack Row="true" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+            <MudText Typo="Typo.body2">@Event.StartDate.ToShortDateString()</MudText>
+        </MudStack>
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+            <MudText Typo="Typo.body2">@Event.Location</MudText>
+        </MudStack>
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" />
+            <MudText Typo="Typo.body2">@Event.Price.ToString("C")</MudText>
+        </MudStack>
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+            <MudText Typo="Typo.body2">@Event.StartTime.ToString(@"hh\:mm")</MudText>
+        </MudStack>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => OnViewDetails.InvokeAsync(Event))">View Details</MudButton>
+        @if (Event.CurrentParticipants < Event.MaxAttendees && !Event.IsFull)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="gradient-button" OnClick="@(() => OnRegister.InvokeAsync(Event))">Join Event</MudButton>
+        }
+    </MudCardActions>
+    <MudProgressLinear Color="Color.Primary" Value="@((double)Event.CurrentParticipants / Event.MaxAttendees * 100)" Class="my-2" />
+</MudCard>
+
+@code {
+    [Parameter]
+    public required Event Event { get; set; }
+
+    [Parameter]
+    public EventCallback<Event> OnViewDetails { get; set; }
+
+    [Parameter]
+    public EventCallback<Event> OnRegister { get; set; }
+}
+
+<style>
+    .event-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .event-card :deep(.mud-card-content) {
+        flex-grow: 1;
+    }
+
+    @@media (max-width: 768px) {
+        .event-card {
+            margin-bottom: 1rem;
+        }
+    }
+</style>

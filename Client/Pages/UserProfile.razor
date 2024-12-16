@@ -1,0 +1,302 @@
+@page "/profile"
+@using VentyTime.Shared.Models
+@using Microsoft.AspNetCore.Authorization
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@attribute [Authorize]
+
+<div class="profile-page fade-in">
+    <div class="profile-container glass-card">
+        <div class="profile-sidebar">
+            <div class="profile-header">
+                <MudAvatar Size="Size.Large" Color="Color.Primary">
+                    @(_user?.Username?[0] ?? 'U')
+                </MudAvatar>
+                <h2 class="mt-3">@(_user?.Username ?? "User")</h2>
+                <p class="text-secondary">@(_user?.Email ?? "")</p>
+            </div>
+
+            <div class="profile-stats">
+                <div class="stat-item">
+                    <div class="stat-value">@(_upcomingEvents?.Count ?? 0)</div>
+                    <div class="stat-label">Upcoming Events</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">@(_pastEvents?.Count ?? 0)</div>
+                    <div class="stat-label">Past Events</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">@(_createdEvents?.Count ?? 0)</div>
+                    <div class="stat-label">Created Events</div>
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          OnClick="@(() => _editDialog = true)"
+                          Class="gradient-button">
+                    Edit Profile
+                </MudButton>
+            </div>
+        </div>
+
+        <div class="profile-content">
+            <MudTabs Elevation="0" Color="Color.Primary" Class="mt-4">
+                <MudTabPanel Text="Upcoming Events">
+                    @if (_upcomingEvents == null || !_upcomingEvents.Any())
+                    {
+                        <div class="empty-state">
+                            <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Large" />
+                            <p>No upcoming events</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="events-grid">
+                            @foreach (var evt in _upcomingEvents)
+                            {
+                                <EventCard Event="evt" />
+                            }
+                        </div>
+                    }
+                </MudTabPanel>
+
+                <MudTabPanel Text="Past Events">
+                    @if (_pastEvents == null || !_pastEvents.Any())
+                    {
+                        <div class="empty-state">
+                            <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Large" />
+                            <p>No past events</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="events-grid">
+                            @foreach (var evt in _pastEvents)
+                            {
+                                <EventCard Event="evt" />
+                            }
+                        </div>
+                    }
+                </MudTabPanel>
+
+                <MudTabPanel Text="Created Events">
+                    @if (_createdEvents == null || !_createdEvents.Any())
+                    {
+                        <div class="empty-state">
+                            <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Large" />
+                            <p>No created events</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="events-grid">
+                            @foreach (var evt in _createdEvents)
+                            {
+                                <EventCard Event="evt" />
+                            }
+                        </div>
+                    }
+                </MudTabPanel>
+            </MudTabs>
+        </div>
+    </div>
+</div>
+
+<MudDialog @bind-IsVisible="_editDialog" Options="dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Edit Profile</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_user.Username"
+                     Label="Username"
+                     Required="true"
+                     RequiredError="Username is required" />
+        <MudTextField @bind-Value="_user.Email"
+                     Label="Email"
+                     Required="true"
+                     RequiredError="Email is required"
+                     Class="mt-3" />
+        <MudTextField @bind-Value="_newPassword"
+                     Label="New Password"
+                     Type="InputType.Password"
+                     Class="mt-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _editDialog = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  OnClick="SaveProfile"
+                  Class="gradient-button">
+            Save Changes
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .profile-page {
+        padding: 2rem;
+        min-height: calc(100vh - var(--header-height));
+    }
+
+    .profile-container {
+        display: flex;
+        gap: 2rem;
+    }
+
+    .profile-sidebar {
+        width: 300px;
+        padding: 2rem;
+        text-align: center;
+    }
+
+    .profile-header {
+        margin-bottom: 2rem;
+    }
+
+    .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-item {
+        padding: 1rem;
+        border-radius: 8px;
+        background: var(--surface-gradient);
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    .profile-content {
+        flex: 1;
+        padding: 2rem;
+    }
+
+    .events-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+
+    .empty-state :deep(.mud-icon) {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .profile-page {
+            padding: 1rem;
+        }
+
+        .profile-container {
+            flex-direction: column;
+        }
+
+        .profile-sidebar {
+            width: 100%;
+            padding: 1rem;
+        }
+
+        .profile-content {
+            padding: 1rem;
+        }
+
+        .events-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+@code {
+    private User _user = new();
+    private List<Event> _upcomingEvents = new();
+    private List<Event> _pastEvents = new();
+    private List<Event> _createdEvents = new();
+    private string _newPassword = "";
+    private bool _editDialog;
+
+    private DialogOptions dialogOptions = new()
+    {
+        CloseOnEscapeKey = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserProfile();
+        await LoadEvents();
+    }
+
+    private async Task LoadUserProfile()
+    {
+        try
+        {
+            _user = await UserService.GetCurrentUserAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load user profile", Severity.Error);
+        }
+    }
+
+    private async Task LoadEvents()
+    {
+        try
+        {
+            var allEvents = await UserService.GetUserEventsAsync();
+            var now = DateTime.Now;
+            
+            _upcomingEvents = allEvents
+                .Where(e => e.GetDateTime() > now)
+                .OrderBy(e => e.GetDateTime())
+                .ToList();
+                
+            _pastEvents = allEvents
+                .Where(e => e.GetDateTime() <= now)
+                .OrderByDescending(e => e.GetDateTime())
+                .ToList();
+
+            _createdEvents = await UserService.GetCreatedEventsAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load events", Severity.Error);
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        try
+        {
+            await UserService.UpdateUserAsync(_user, _newPassword);
+            _editDialog = false;
+            Snackbar.Add("Profile updated successfully", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Failed to update profile", Severity.Error);
+        }
+    }
+}

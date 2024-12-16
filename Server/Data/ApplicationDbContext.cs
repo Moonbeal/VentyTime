@@ -9,28 +9,39 @@ namespace VentyTime.Server.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
+            Events = Set<Event>();
+            Registrations = Set<Registration>();
         }
 
-        public DbSet<Event> Events { get; set; } = null!;
-        public DbSet<Registration> Registrations { get; set; } = null!;
+        public DbSet<Event> Events { get; set; }
+        public DbSet<Registration> Registrations { get; set; }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder builder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(builder);
 
-            modelBuilder.Entity<Event>()
+            builder.Entity<Event>()
+                .HasOne(e => e.Organizer)
+                .WithMany(u => u.OrganizedEvents)
+                .HasForeignKey(e => e.OrganizerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Event>()
                 .Property(e => e.Price)
-                .HasColumnType("decimal(18,2)");
+                .HasPrecision(18, 2);
 
-            modelBuilder.Entity<Event>()
-                .HasMany(e => e.Registrations)
-                .WithOne(r => r.Event)
+            builder.Entity<Registration>()
+                .HasKey(r => new { r.EventId, r.UserId });
+
+            builder.Entity<Registration>()
+                .HasOne(r => r.Event)
+                .WithMany(e => e.Registrations)
                 .HasForeignKey(r => r.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<Registration>()
+            builder.Entity<Registration>()
                 .HasOne(r => r.User)
-                .WithMany()
+                .WithMany(u => u.Registrations)
                 .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         }

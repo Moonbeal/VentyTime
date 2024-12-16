@@ -1,0 +1,38 @@
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IRegistrationService RegistrationService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText>Are you sure you want to register for "@Event.Title"?</MudText>
+        <MudText Typo="Typo.body2">Date: @Event.StartDate.ToShortDateString()</MudText>
+        <MudText Typo="Typo.body2">Time: @Event.StartDate.ToShortTimeString()</MudText>
+        <MudText Typo="Typo.body2">Price: @Event.Price.ToString("C")</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="RegisterForEvent">Register</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Event Event { get; set; } = default!;
+
+    private async Task RegisterForEvent()
+    {
+        try
+        {
+            await RegistrationService.RegisterForEventAsync(Event.Id);
+            Snackbar.Add("Successfully registered for the event!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to register: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
