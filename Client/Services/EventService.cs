@@ -62,10 +62,23 @@ namespace VentyTime.Client.Services
             return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/popular?count={count}") ?? new List<Event>();
         }
 
-        public async Task<bool> IsEventFullAsync(int eventId)
+        public async Task<bool> IsEventFullAsync(int id)
         {
-            var @event = await GetEventByIdAsync(eventId);
+            var @event = await GetEventByIdAsync(id);
             return @event?.IsFull ?? false;
+        }
+
+        public async Task<bool> CancelEventAsync(int id)
+        {
+            var response = await _httpClient.PostAsync($"api/events/{id}/cancel", null);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<byte[]> GenerateReportAsync(ReportPeriod period)
+        {
+            var response = await _httpClient.GetAsync($"api/events/report/{period}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync();
         }
     }
 }

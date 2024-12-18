@@ -1,5 +1,6 @@
 @page "/login"
-@using VentyTime.Shared.Models
+@using VentyTime.Shared.Models.Auth
+@using System.ComponentModel.DataAnnotations
 @inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
@@ -12,92 +13,79 @@
             <MudText Typo="Typo.body1" Color="Color.Secondary" Class="text-center">Sign in to continue to VentyTime</MudText>
         </div>
 
-        <EditForm Model="@loginRequest" OnValidSubmit="HandleLogin">
-            <DataAnnotationsValidator />
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudText Typo="Typo.h4" Class="mb-4">Login</MudText>
 
-            <MudCard Elevation="0">
-                <MudCardContent>
-                    <MudTextField @bind-Value="loginRequest.Email"
-                                Label="Email"
-                                Variant="Variant.Outlined"
-                                InputType="InputType.Email"
-                                Required="true"
-                                RequiredError="Email is required"
-                                Class="mb-4"
-                                Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.Email" />
+            <MudTextField @bind-Value="loginRequest.Email"
+                         Label="Email"
+                         Required="true"
+                         RequiredError="Email is required!"
+                         Validation="@(new EmailAddressAttribute() {ErrorMessage = "The email address is invalid"})" />
 
-                    <MudTextField @bind-Value="loginRequest.Password"
-                                Label="Password"
-                                Variant="Variant.Outlined"
-                                Required="true"
-                                RequiredError="Password is required"
-                                InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                                Class="mb-4"
-                                Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.Lock"
-                                AdornmentColor="Color.Primary"
-                                AppendAdornment="true"
-                                AppendAdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                                OnAppendAdornmentClick="() => _showPassword = !_showPassword" />
+            <MudTextField @bind-Value="loginRequest.Password"
+                         Label="Password"
+                         Required="true"
+                         RequiredError="Password is required!"
+                         InputType="@PasswordInput"
+                         Adornment="Adornment.End"
+                         AdornmentIcon="@PasswordInputIcon"
+                         OnAdornmentClick="TogglePasswordVisibility" />
 
-                    <ValidationSummary />
+            <div class="d-flex justify-space-between align-center mt-4">
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          DisableElevation="true"
+                          OnClick="HandleLogin"
+                          Class="ml-auto">
+                    Login
+                </MudButton>
+            </div>
 
-                    @if (!string.IsNullOrEmpty(errorMessage))
-                    {
-                        <MudAlert Severity="Severity.Error" 
-                                 Variant="Variant.Filled" 
-                                 Class="my-4">
-                            @errorMessage
-                        </MudAlert>
-                    }
+            <MudDivider Class="my-4" />
 
-                    <MudButton ButtonType="ButtonType.Submit"
-                              Variant="Variant.Filled"
-                              Color="Color.Primary"
-                              Size="Size.Large"
-                              FullWidth="true"
-                              Class="mt-6 rounded-lg py-3"
-                              Style="font-weight: 500;">
-                        Sign In
-                    </MudButton>
-                </MudCardContent>
-            </MudCard>
-        </EditForm>
-
-        <div class="d-flex justify-center mt-6">
             <MudText Align="Align.Center">
-                Don't have an account? 
-                <MudLink Href="/register" Color="Color.Primary">Sign up</MudLink>
+                Don't have an account?
+                <MudLink Href="/register">Register here</MudLink>
             </MudText>
-        </div>
+        </MudForm>
     </MudPaper>
 </MudContainer>
 
 @code {
+    MudForm form;
+    bool success;
     private LoginRequest loginRequest = new();
-    private string? errorMessage;
-    private bool _showPassword = false;
+    bool PasswordVisibility;
+    InputType PasswordInput = InputType.Password;
+    string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+
+    void TogglePasswordVisibility()
+    {
+        @if (PasswordVisibility)
+        {
+            PasswordVisibility = false;
+            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+            PasswordInput = InputType.Password;
+        }
+        else
+        {
+            PasswordVisibility = true;
+            PasswordInputIcon = Icons.Material.Filled.Visibility;
+            PasswordInput = InputType.Text;
+        }
+    }
 
     private async Task HandleLogin()
     {
-        try
+        await form.Validate();
+
+        if (form.IsValid)
         {
-            errorMessage = null;
             var result = await UserService.LoginAsync(loginRequest);
             if (result)
             {
-                Snackbar.Add("Successfully logged in!", Severity.Success);
                 NavigationManager.NavigateTo("/");
             }
-            else
-            {
-                errorMessage = "Invalid email or password";
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
         }
     }
 }

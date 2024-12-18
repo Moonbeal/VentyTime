@@ -1,0 +1,30 @@
+@page "/redirect-to-login"
+@using Microsoft.AspNetCore.Components
+@inject NavigationManager NavigationManager
+
+<div class="redirect-container">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <p>Redirecting to login page...</p>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+}
+
+<style>
+    .redirect-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+
+    .redirect-container p {
+        margin-top: 1rem;
+        color: var(--mud-palette-primary);
+    }
+</style>

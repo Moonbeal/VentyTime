@@ -17,7 +17,8 @@ namespace VentyTime.Shared.Models
 
         public string FullName => $"{FirstName} {LastName}";
 
-        public string ProfilePictureUrl { get; set; } = string.Empty;
+        [Required]
+        public string ProfilePictureUrl { get; set; } = "/images/default-profile.png";
 
         public DateTime DateJoined { get; set; } = DateTime.Now;
 

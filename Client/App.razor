@@ -1,16 +1,52 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager NavigationManager
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @{
+                        if (context?.User?.Identity?.IsAuthenticated != true)
+                        {
+                            NavigationManager.NavigateTo("/login", true);
+                        }
+                        else
+                        {
+                            <MudText>You are not authorized to access this resource.</MudText>
+                        }
+                    }
+                </NotAuthorized>
+                <Authorizing>
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </Authorizing>
+            </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
             <PageTitle>Not found</PageTitle>
             <LayoutView Layout="@typeof(MainLayout)">
-                <p role="alert">Sorry, there's nothing at this address.</p>
+                <MudText Typo="Typo.h4" Class="mb-4">404 - Page Not Found</MudText>
+                <MudText>Sorry, there's nothing at this address.</MudText>
+                <MudButton Class="mt-4" Variant="Variant.Filled" Color="Color.Primary" Link="/">Go Home</MudButton>
             </LayoutView>
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
+
+<style>
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 1rem;
+    }
+
+    .loading-container p {
+        margin-top: 1rem;
+        color: var(--mud-palette-primary);
+    }
+</style>

@@ -1,18 +1,20 @@
 using System.Net.Http.Headers;
 using Blazored.LocalStorage;
 
-namespace VentyTime.Client.Services
+namespace VentyTime.Client.Services;
+
+public class CustomAuthorizationMessageHandler : DelegatingHandler
 {
-    public class CustomAuthorizationMessageHandler : DelegatingHandler
+    private readonly ILocalStorageService _localStorage;
+
+    public CustomAuthorizationMessageHandler(ILocalStorageService localStorage)
     {
-        private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
+        _localStorage = localStorage;
+    }
 
-        public CustomAuthorizationMessageHandler(Blazored.LocalStorage.ILocalStorageService localStorage)
-        {
-            _localStorage = localStorage;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (request.Headers.Authorization == null)
         {
             var token = await _localStorage.GetItemAsync<string>("authToken");
 
@@ -20,8 +22,8 @@ namespace VentyTime.Client.Services
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
-
-            return await base.SendAsync(request, cancellationToken);
         }
+
+        return await base.SendAsync(request, cancellationToken);
     }
 }

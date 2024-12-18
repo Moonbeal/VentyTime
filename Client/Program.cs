@@ -1,56 +1,43 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using Microsoft.AspNetCore.Components.Authorization;
-using MudBlazor.Services;
-using Blazored.LocalStorage;
 using VentyTime.Client;
 using VentyTime.Client.Services;
-using VentyTime.Client.Theme;
-using Microsoft.Extensions.Logging;
+using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components.Authorization;
+using MudBlazor.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Add core services
-builder.Services.AddMudServices();
+// Register logging services first
+builder.Services.AddLogging();
+
+// Register Blazored LocalStorage
 builder.Services.AddBlazoredLocalStorage();
-builder.Services.AddAuthorizationCore();
-builder.Services.AddLogging(logging => 
-{
-    logging.SetMinimumLevel(LogLevel.Information);
-});
 
-// Register auth services
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
-
-// Register other services
-builder.Services.AddScoped<IAuthService, AuthService>();
-
-// Configure HttpClient with custom auth handler
-builder.Services.AddScoped<CustomAuthorizationMessageHandler>();
-
+// Register HTTP clients
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddHttpClient("VentyTime.ServerAPI", client => 
-{
-    client.BaseAddress = new Uri("https://localhost:7241");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
-})
-.AddHttpMessageHandler<CustomAuthorizationMessageHandler>();
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress));
 
 builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client => 
-{
-    client.BaseAddress = new Uri("https://localhost:7241");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
-});
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress));
 
-builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>()
-    .CreateClient("VentyTime.ServerAPI"));
+// Register MudBlazor services
+builder.Services.AddMudServices();
 
-// Add custom services
-builder.Services.AddScoped<IEventService, EventService>();
+// Register Authentication services in correct order
+builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Register other services
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+
+// Initialize the authentication state
+await host.RunAsync();

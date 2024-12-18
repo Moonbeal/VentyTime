@@ -25,9 +25,17 @@ namespace VentyTime.Server.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<Event>>> GetEvents()
         {
-            return await _context.Events
-                .Include(e => e.Organizer)
-                .ToListAsync();
+            try
+            {
+                return await _context.Events
+                    .Include(e => e.Organizer)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while fetching events.");
+                return StatusCode(500, "Internal server error");
+            }
         }
 
         [HttpGet("{id}")]

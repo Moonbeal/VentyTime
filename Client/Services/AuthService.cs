@@ -4,26 +4,31 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 using VentyTime.Shared.Models;
+using VentyTime.Shared.Models.Auth;
+using Microsoft.AspNetCore.Components;
 
 namespace VentyTime.Client.Services
 {
     public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
-        private readonly AuthenticationStateProvider _authStateProvider;
+        private readonly CustomAuthStateProvider _authStateProvider;
         private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
         private readonly ILogger<AuthService> _logger;
+        private readonly NavigationManager _navigationManager;
 
         public AuthService(
-            HttpClient httpClient, 
-            AuthenticationStateProvider authStateProvider, 
-            Blazored.LocalStorage.ILocalStorageService localStorage, 
-            ILogger<AuthService> logger)
+            IHttpClientFactory clientFactory,
+            AuthenticationStateProvider authStateProvider,
+            Blazored.LocalStorage.ILocalStorageService localStorage,
+            ILogger<AuthService> logger,
+            NavigationManager navigationManager)
         {
-            _httpClient = httpClient;
-            _authStateProvider = authStateProvider;
-            _localStorage = localStorage;
-            _logger = logger;
+            _httpClient = clientFactory.CreateClient("VentyTime.ServerAPI.NoAuth");
+            _authStateProvider = (CustomAuthStateProvider)authStateProvider;
+            _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -32,24 +37,24 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogInformation("Attempting to login user: {Email}", request.Email);
                 var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
-                if (response.IsSuccessStatusCode)
+                var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+                if (response.IsSuccessStatusCode && result?.Token != null)
                 {
-                    var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
-                    if (authResponse != null && authResponse.Success)
-                    {
-                        await _localStorage.SetItemAsync("authToken", authResponse.Token);
-                        ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
-                        _logger.LogInformation("User {Email} logged in successfully.", request.Email);
-                    }
-                    return authResponse ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
+                    await _localStorage.SetItemAsync("authToken", result.Token);
+                    await _authStateProvider.NotifyUserAuthentication(result.Token);
+                    _navigationManager.NavigateTo("/");
+                    _logger.LogInformation("User {Email} logged in successfully.", request.Email);
+                    return result;
                 }
+
                 _logger.LogWarning("Login failed for user: {Email}", request.Email);
-                return new AuthResponse(false, "Login failed", string.Empty);
+                return result ?? new AuthResponse { Success = false, Message = "An error occurred during login." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during login for user: {Email}", request.Email);
-                return new AuthResponse(false, $"Error during login: {ex.Message}", string.Empty);
+                return new AuthResponse { Success = false, Message = "An error occurred during login." };
             }
         }
 
@@ -59,113 +64,197 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogInformation("Attempting to register user: {Email}", request.Email);
                 var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
-                if (response.IsSuccessStatusCode)
+                var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+                if (response.IsSuccessStatusCode && result?.Token != null)
                 {
-                    var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
-                    if (authResponse != null && authResponse.Success)
-                    {
-                        await _localStorage.SetItemAsync("authToken", authResponse.Token);
-                        ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
-                        _logger.LogInformation("User {Email} registered successfully.", request.Email);
-                    }
-                    return authResponse ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
+                    await _localStorage.SetItemAsync("authToken", result.Token);
+                    await _authStateProvider.NotifyUserAuthentication(result.Token);
+                    _navigationManager.NavigateTo("/");
+                    _logger.LogInformation("User {Email} registered successfully.", request.Email);
+                    return result;
                 }
+
                 _logger.LogWarning("Registration failed for user: {Email}", request.Email);
-                return new AuthResponse(false, "Registration failed", string.Empty);
+                return result ?? new AuthResponse { Success = false, Message = "An error occurred during registration." };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration for user: {Email}", request.Email);
-                return new AuthResponse(false, $"Error during registration: {ex.Message}", string.Empty);
+                return new AuthResponse { Success = false, Message = "An error occurred during registration." };
             }
         }
 
-        public async Task LogoutAsync()
+        public async Task<bool> LogoutAsync()
         {
-            await _localStorage.RemoveItemAsync("authToken");
-            ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
-            await _httpClient.PostAsync("api/auth/logout", null);
-        }
-
-        public async Task<User> GetCurrentUserAsync()
-        {
-            try 
+            try
             {
-                var authState = await _authStateProvider.GetAuthenticationStateAsync();
-                if (authState.User.Identity?.IsAuthenticated != true)
-                    return new User();
-
-                var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
-                    return new User();
-
-                var response = await _httpClient.GetAsync($"api/users/{userId}");
-                if (response.IsSuccessStatusCode)
-                {
-                    var user = await response.Content.ReadFromJsonAsync<User>();
-                    return user ?? new User();
-                }
-                return new User();
+                await _authStateProvider.NotifyUserLogout();
+                _navigationManager.NavigateTo("/");
+                _logger.LogInformation("User logged out successfully.");
+                return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return new User();
+                _logger.LogError(ex, "Error during logout");
+                return false;
             }
         }
 
         public async Task<bool> IsAuthenticated()
         {
-            var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            return authState.User.Identity?.IsAuthenticated ?? false;
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                return !string.IsNullOrEmpty(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking authentication status");
+                return false;
+            }
+        }
+
+        public async Task<User> GetCurrentUserAsync()
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                    return null;
+
+                var response = await _httpClient.GetAsync("api/auth/current-user");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<User>();
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user");
+                return null;
+            }
         }
 
         public async Task<UserRole> GetUserRole()
         {
-            var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            var roleString = authState.User.FindFirst(ClaimTypes.Role)?.Value;
-            return roleString != null ? Enum.Parse<UserRole>(roleString) : UserRole.None;
+            try
+            {
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                if (user.Identity?.IsAuthenticated != true)
+                    return UserRole.None;
+
+                if (user.IsInRole("Admin"))
+                    return UserRole.Admin;
+                
+                return UserRole.User;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user role");
+                return UserRole.None;
+            }
         }
 
         public async Task<bool> UpdateProfileAsync(UpdateProfileRequest request)
         {
-            var response = await _httpClient.PutAsJsonAsync("api/users/profile", request);
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync("api/auth/update-profile", request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile");
+                return false;
+            }
         }
 
         public async Task<bool> ChangePasswordAsync(ChangePasswordRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/users/change-password", request);
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return false;
+            }
         }
 
         public async Task<bool> RequestPasswordResetAsync(string email)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/users/reset-password-request", new { Email = email });
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("api/auth/request-password-reset", new { Email = email });
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error requesting password reset");
+                return false;
+            }
         }
 
         public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/users/reset-password", request);
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("api/auth/reset-password", request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting password");
+                return false;
+            }
         }
 
         public async Task<string> GetUserId()
         {
-            var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            return authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+            try
+            {
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                return authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user ID");
+                return null;
+            }
         }
 
         public async Task<string> GetUsername()
         {
-            var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            return authState.User.FindFirst(ClaimTypes.Name)?.Value ?? string.Empty;
+            try
+            {
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                return authState.User.FindFirst(ClaimTypes.Name)?.Value;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting username");
+                return null;
+            }
         }
 
         public async Task<string> GetToken()
         {
-            var authState = await _authStateProvider.GetAuthenticationStateAsync();
-            return authState.User.FindFirst("access_token")?.Value ?? string.Empty;
+            try
+            {
+                return await _localStorage.GetItemAsync<string>("authToken");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting token");
+                return null;
+            }
         }
     }
 }

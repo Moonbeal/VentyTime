@@ -1,19 +1,25 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Extensions.Logging;
+using Blazored.LocalStorage;
 
 namespace VentyTime.Client.Services;
 
 public class CustomAuthStateProvider : AuthenticationStateProvider
 {
     private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
-    private readonly AuthenticationState _anonymous;
+    private readonly JwtSecurityTokenHandler _tokenHandler;
+    private readonly ILogger<CustomAuthStateProvider> _logger;
 
-    public CustomAuthStateProvider(Blazored.LocalStorage.ILocalStorageService localStorage)
+    public CustomAuthStateProvider(
+        Blazored.LocalStorage.ILocalStorageService localStorage,
+        ILogger<CustomAuthStateProvider> logger)
     {
-        _localStorage = localStorage;
-        _anonymous = new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+        _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
+        _tokenHandler = new JwtSecurityTokenHandler();
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -21,89 +27,67 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         try
         {
             var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (string.IsNullOrEmpty(token))
+            {
+                return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+            }
 
-            if (string.IsNullOrWhiteSpace(token))
-                return _anonymous;
+            var tokenContent = _tokenHandler.ReadJwtToken(token);
+            var claims = tokenContent.Claims.ToList();
 
-            return CreateAuthenticationState(token);
+            // Add the token itself as a claim
+            claims.Add(new Claim("access_token", token));
+
+            var identity = new ClaimsIdentity(claims, "jwt");
+            var user = new ClaimsPrincipal(identity);
+            return new AuthenticationState(user);
         }
-        catch
+        catch (Exception ex)
         {
-            return _anonymous;
+            _logger.LogError(ex, "Error getting authentication state");
+            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
         }
     }
 
-    public void NotifyUserAuthentication(string token)
-    {
-        var authState = Task.FromResult(CreateAuthenticationState(token));
-        NotifyAuthenticationStateChanged(authState);
-    }
-
-    public void NotifyUserLogout()
-    {
-        var authState = Task.FromResult(_anonymous);
-        NotifyAuthenticationStateChanged(authState);
-    }
-
-    public async Task LogoutAsync()
-    {
-        await _localStorage.RemoveItemAsync("authToken");
-        NotifyUserLogout();
-    }
-
-    private AuthenticationState CreateAuthenticationState(string token)
+    public async Task NotifyUserAuthentication(string token)
     {
         try
         {
-            var claims = ParseClaimsFromJwt(token);
-            var identity = new ClaimsIdentity(claims, "jwt");
-            return new AuthenticationState(new ClaimsPrincipal(identity));
+            if (string.IsNullOrEmpty(token))
+                throw new ArgumentNullException(nameof(token));
+
+            await _localStorage.SetItemAsync("authToken", token);
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(GetClaimsFromToken(token), "jwt"));
+            var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
+            NotifyAuthenticationStateChanged(authState);
         }
-        catch
+        catch (Exception ex)
         {
-            return _anonymous;
+            _logger.LogError(ex, "Error during user authentication notification");
+            throw;
         }
     }
 
-    private static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
+    public async Task NotifyUserLogout()
     {
-        var claims = new List<Claim>();
-        var payload = jwt.Split('.')[1];
-        var jsonBytes = ParseBase64WithoutPadding(payload);
-        var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
-
-        if (keyValuePairs != null)
+        try
         {
-            keyValuePairs.TryGetValue(ClaimTypes.Role, out object? roles);
-
-            if (roles != null)
-            {
-                if (roles.ToString()?.StartsWith("[") == true)
-                {
-                    var parsedRoles = JsonSerializer.Deserialize<string[]>(roles.ToString()!);
-                    claims.AddRange(parsedRoles!.Select(role => new Claim(ClaimTypes.Role, role)));
-                }
-                else
-                {
-                    claims.Add(new Claim(ClaimTypes.Role, roles.ToString()!));
-                }
-
-                keyValuePairs.Remove(ClaimTypes.Role);
-            }
-
-            claims.AddRange(keyValuePairs.Select(kvp => new Claim(kvp.Key, kvp.Value.ToString()!)));
+            await _localStorage.RemoveItemAsync("authToken");
+            var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
+            NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(anonymousUser)));
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during user logout notification");
+            throw;
+        }
+    }
 
+    private IEnumerable<Claim> GetClaimsFromToken(string token)
+    {
+        var tokenContent = _tokenHandler.ReadJwtToken(token);
+        var claims = tokenContent.Claims.ToList();
+        claims.Add(new Claim("access_token", token));
         return claims;
-    }
-
-    private static byte[] ParseBase64WithoutPadding(string base64)
-    {
-        switch (base64.Length % 4)
-        {
-            case 2: base64 += "=="; break;
-            case 3: base64 += "="; break;
-        }
-        return Convert.FromBase64String(base64);
     }
 }

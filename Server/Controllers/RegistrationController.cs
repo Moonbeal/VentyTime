@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
+using VentyTime.Shared.Models.Auth;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
