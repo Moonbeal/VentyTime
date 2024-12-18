@@ -342,12 +342,15 @@
 
     private async Task LoadStatistics()
     {
-        statistics = new AdminStatistics
+        if (users != null && events != null)
         {
-            TotalUsers = users.Count,
-            ActiveEvents = events.Count(e => !e.IsFinished),
-            TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
-        };
+            statistics = new AdminStatistics
+            {
+                TotalUsers = users.Count,
+                ActiveEvents = events.Count(e => !e.IsFinished),
+                TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
+            };
+        }
     }
 
     private IEnumerable<ApplicationUser> filteredUsers =>

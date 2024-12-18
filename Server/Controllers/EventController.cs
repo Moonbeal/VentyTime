@@ -9,6 +9,7 @@ namespace VentyTime.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]s")]
+    [Authorize]
     public class EventController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -21,6 +22,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<Event>>> GetEvents()
         {
             return await _context.Events
@@ -43,7 +45,6 @@ namespace VentyTime.Server.Controllers
             return @event;
         }
 
-        [Authorize]
         [HttpPost]
         public async Task<ActionResult<Event>> CreateEvent(Event @event)
         {
@@ -60,7 +61,6 @@ namespace VentyTime.Server.Controllers
             return CreatedAtAction(nameof(GetEvent), new { id = @event.Id }, @event);
         }
 
-        [Authorize]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateEvent(int id, Event @event)
         {
@@ -101,7 +101,6 @@ namespace VentyTime.Server.Controllers
             return NoContent();
         }
 
-        [Authorize]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteEvent(int id)
         {
@@ -123,7 +122,6 @@ namespace VentyTime.Server.Controllers
             return NoContent();
         }
 
-        [Authorize]
         [HttpPost("{id}/register")]
         public async Task<IActionResult> RegisterForEvent(int id)
         {
@@ -165,7 +163,6 @@ namespace VentyTime.Server.Controllers
             return Ok();
         }
 
-        [Authorize]
         [HttpPost("{id}/unregister")]
         public async Task<IActionResult> UnregisterFromEvent(int id)
         {

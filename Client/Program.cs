@@ -2,38 +2,55 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor.Services;
+using Blazored.LocalStorage;
 using VentyTime.Client;
 using VentyTime.Client.Services;
 using VentyTime.Client.Theme;
+using Microsoft.Extensions.Logging;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configure server URL
-var serverUrl = builder.Configuration.GetValue<string>("ServerUrl") ?? "https://localhost:7241";
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(serverUrl) });
-
-builder.Services.AddMudServices(config =>
+// Add core services
+builder.Services.AddMudServices();
+builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddAuthorizationCore();
+builder.Services.AddLogging(logging => 
 {
-    config.SnackbarConfiguration.PositionClass = MudBlazor.Defaults.Classes.Position.BottomRight;
-    config.SnackbarConfiguration.PreventDuplicates = false;
-    config.SnackbarConfiguration.NewestOnTop = false;
-    config.SnackbarConfiguration.ShowCloseIcon = true;
-    config.SnackbarConfiguration.VisibleStateDuration = 5000;
-    config.SnackbarConfiguration.HideTransitionDuration = 500;
-    config.SnackbarConfiguration.ShowTransitionDuration = 500;
+    logging.SetMinimumLevel(LogLevel.Information);
 });
 
-// Add custom services
+// Register auth services
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+
+// Register other services
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Configure HttpClient with custom auth handler
+builder.Services.AddScoped<CustomAuthorizationMessageHandler>();
+
+builder.Services.AddHttpClient("VentyTime.ServerAPI", client => 
+{
+    client.BaseAddress = new Uri("https://localhost:7241");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
+})
+.AddHttpMessageHandler<CustomAuthorizationMessageHandler>();
+
+builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client => 
+{
+    client.BaseAddress = new Uri("https://localhost:7241");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
+});
+
+builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>()
+    .CreateClient("VentyTime.ServerAPI"));
+
+// Add custom services
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
-builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
-builder.Services.AddScoped<CustomAuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(provider => 
-    provider.GetRequiredService<CustomAuthStateProvider>());
-builder.Services.AddAuthorizationCore();
 
 await builder.Build().RunAsync();

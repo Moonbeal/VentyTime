@@ -44,7 +44,7 @@
 @code {
     private List<NotificationMessage> notifications = new();
     private IDisposable? notificationSubscription;
-    private int selectedNotificationId;
+    private int selectedNotificationId = 0;
 
     protected override void OnInitialized()
     {

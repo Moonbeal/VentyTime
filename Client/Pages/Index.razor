@@ -18,8 +18,8 @@
             <MudText Typo="Typo.h2" Class="gradient-text mb-4">Discover Amazing Events</MudText>
             <MudText Typo="Typo.body1" Class="mb-6">Join our community and participate in exciting events. Whether you're an organizer<br />or participant, there's something for everyone.</MudText>
             <div class="d-flex justify-center gap-4">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gradient-button">Get Started</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large">Browse Events</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="gradient-button" OnClick="@(() => NavigationManager.NavigateTo("/register"))">Get Started</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" OnClick="@(() => NavigationManager.NavigateTo("/events"))">Browse Events</MudButton>
             </div>
         </div>
 

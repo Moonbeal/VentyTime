@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
+using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Logging;
 using VentyTime.Shared.Models;
 
 namespace VentyTime.Client.Services
@@ -9,27 +11,44 @@ namespace VentyTime.Client.Services
     {
         private readonly HttpClient _httpClient;
         private readonly AuthenticationStateProvider _authStateProvider;
+        private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(HttpClient httpClient, AuthenticationStateProvider authStateProvider)
+        public AuthService(
+            HttpClient httpClient, 
+            AuthenticationStateProvider authStateProvider, 
+            Blazored.LocalStorage.ILocalStorageService localStorage, 
+            ILogger<AuthService> logger)
         {
             _httpClient = httpClient;
             _authStateProvider = authStateProvider;
+            _localStorage = localStorage;
+            _logger = logger;
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("api/registration/login", request);
+                _logger.LogInformation("Attempting to login user: {Email}", request.Email);
+                var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadFromJsonAsync<AuthResponse>() 
-                        ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
+                    var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                    if (authResponse != null && authResponse.Success)
+                    {
+                        await _localStorage.SetItemAsync("authToken", authResponse.Token);
+                        ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
+                        _logger.LogInformation("User {Email} logged in successfully.", request.Email);
+                    }
+                    return authResponse ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
                 }
+                _logger.LogWarning("Login failed for user: {Email}", request.Email);
                 return new AuthResponse(false, "Login failed", string.Empty);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error during login for user: {Email}", request.Email);
                 return new AuthResponse(false, $"Error during login: {ex.Message}", string.Empty);
             }
         }
@@ -38,24 +57,34 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("api/registration/register", request);
+                _logger.LogInformation("Attempting to register user: {Email}", request.Email);
+                var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadFromJsonAsync<AuthResponse>() 
-                        ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
+                    var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                    if (authResponse != null && authResponse.Success)
+                    {
+                        await _localStorage.SetItemAsync("authToken", authResponse.Token);
+                        ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
+                        _logger.LogInformation("User {Email} registered successfully.", request.Email);
+                    }
+                    return authResponse ?? new AuthResponse(false, "Failed to deserialize response", string.Empty);
                 }
+                _logger.LogWarning("Registration failed for user: {Email}", request.Email);
                 return new AuthResponse(false, "Registration failed", string.Empty);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error during registration for user: {Email}", request.Email);
                 return new AuthResponse(false, $"Error during registration: {ex.Message}", string.Empty);
             }
         }
 
         public async Task LogoutAsync()
         {
-            await _httpClient.PostAsync("api/registration/logout", null);
-            // Perform any additional logout operations here
+            await _localStorage.RemoveItemAsync("authToken");
+            ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
+            await _httpClient.PostAsync("api/auth/logout", null);
         }
 
         public async Task<User> GetCurrentUserAsync()

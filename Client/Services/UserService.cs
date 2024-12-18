@@ -10,13 +10,13 @@ namespace VentyTime.Client.Services;
 public class UserService : IUserService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILocalStorageService _localStorage;
+    private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
     private readonly AuthenticationStateProvider _authStateProvider;
     private readonly ISnackbar _snackbar;
 
     public UserService(
         HttpClient httpClient,
-        ILocalStorageService localStorage,
+        Blazored.LocalStorage.ILocalStorageService localStorage,
         AuthenticationStateProvider authStateProvider,
         ISnackbar snackbar)
     {

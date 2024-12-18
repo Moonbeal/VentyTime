@@ -1,110 +1,149 @@
-@page "/events/create"
+@page "/create-event"
 @using VentyTime.Shared.Models
 @inject IEventService EventService
-@inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IUserService UserService
+@attribute [Authorize]
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+<MudContainer MaxWidth="MaxWidth.Medium" Class="my-8">
     <MudPaper Elevation="3" Class="pa-6 rounded-lg">
-        <MudForm @ref="form" @bind-IsValid="@success">
-            <div class="d-flex justify-space-between align-center mb-6">
-                <MudText Typo="Typo.h3" Color="Color.Primary">Create Event</MudText>
-            </div>
+        <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-6">Create New Event</MudText>
 
-            <MudGrid>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid Spacing="3">
                 <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.Title" 
+                    <MudTextField @bind-Value="eventModel.Title"
                                 Label="Event Title"
+                                Variant="Variant.Outlined"
                                 Required="true"
-                                RequiredError="Title is required"
-                                Variant="Variant.Outlined" />
+                                RequiredError="Title is required!"
+                                Immediate="true"
+                                Counter="100"
+                                MaxLength="100"
+                                HelperText="Give your event a catchy title" />
                 </MudItem>
 
                 <MudItem xs="12">
                     <MudTextField @bind-Value="eventModel.Description"
                                 Label="Description"
+                                Variant="Variant.Outlined"
                                 Required="true"
-                                RequiredError="Description is required"
-                                Lines="3"
-                                Variant="Variant.Outlined" />
+                                RequiredError="Description is required!"
+                                Lines="4"
+                                Counter="500"
+                                MaxLength="500"
+                                HelperText="Describe your event in detail" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudDatePicker Date="@eventModel.StartDate"
-                                 DateChanged="@((DateTime? date) => eventModel.StartDate = date ?? DateTime.Today)"
-                                 Label="Start Date"
-                                 Required="true"
-                                 RequiredError="Start date is required"
-                                 Variant="Variant.Outlined" />
+                    <MudSelect T="string" 
+                              Label="Category" 
+                              @bind-Value="eventModel.Category"
+                              Required="true"
+                              RequiredError="Category is required!"
+                              AnchorOrigin="Origin.BottomCenter"
+                              Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Music")">Music</MudSelectItem>
+                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                        <MudSelectItem Value="@("Technology")">Technology</MudSelectItem>
+                        <MudSelectItem Value="@("Food")">Food & Drinks</MudSelectItem>
+                        <MudSelectItem Value="@("Art")">Art & Culture</MudSelectItem>
+                        <MudSelectItem Value="@("Business")">Business</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                    </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudTimePicker Time="@eventModel.StartTime"
-                                 TimeChanged="@((TimeSpan? time) => eventModel.StartTime = time ?? DateTime.Now.TimeOfDay)"
-                                 Label="Start Time"
-                                 Required="true"
-                                 RequiredError="Start time is required"
-                                 Variant="Variant.Outlined" />
-                </MudItem>
-
-                <MudItem xs="12">
                     <MudTextField @bind-Value="eventModel.Location"
                                 Label="Location"
+                                Variant="Variant.Outlined"
                                 Required="true"
-                                RequiredError="Location is required"
-                                Variant="Variant.Outlined" />
+                                RequiredError="Location is required!"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.LocationOn" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Value="eventModel.StartDate"
+                                 Label="Event Date"
+                                 Required="true"
+                                 RequiredError="Date is required!"
+                                 DisablePastDates="true"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTimePicker @bind-Value="eventModel.StartTime"
+                                 Label="Start Time"
+                                 Required="true"
+                                 RequiredError="Time is required!"
+                                 AmPm="true"
+                                 Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="eventModel.Price"
+                                   Label="Price ($)"
+                                   Required="true"
+                                   RequiredError="Price is required!"
+                                   Min="0"
+                                   Format="N2"
+                                   Variant="Variant.Outlined"
+                                   Adornment="Adornment.Start"
+                                   AdornmentText="$"
+                                   HelperText="Set to 0 for free events" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="eventModel.MaxAttendees"
+                                   Label="Capacity"
+                                   Required="true"
+                                   RequiredError="Capacity is required!"
+                                   Min="0"
+                                   Variant="Variant.Outlined"
+                                   HelperText="Set to 0 for unlimited capacity" />
                 </MudItem>
 
                 <MudItem xs="12">
                     <MudTextField @bind-Value="eventModel.ImageUrl"
-                                Label="Image URL"
-                                Variant="Variant.Outlined" />
-                </MudItem>
-
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.Price"
-                                Label="Price"
-                                Required="true"
-                                RequiredError="Price is required"
+                                Label="Event Image URL"
                                 Variant="Variant.Outlined"
-                                AdornmentText="$"
-                                Adornment="Adornment.Start" />
+                                HelperText="Add an image to make your event stand out"
+                                Adornment="Adornment.Start"
+                                AdornmentIcon="@Icons.Material.Filled.Image" />
                 </MudItem>
 
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.MaxAttendees"
-                                Label="Maximum Attendees (0 for unlimited)"
-                                Required="true"
-                                RequiredError="Maximum attendees is required"
-                                Variant="Variant.Outlined" />
-                </MudItem>
+                @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+                {
+                    <MudItem xs="12">
+                        <MudPaper Elevation="0" Class="d-flex justify-center pa-4">
+                            <MudImage Src="@eventModel.ImageUrl"
+                                     Alt="Event preview"
+                                     Elevation="25"
+                                     Class="rounded-lg"
+                                     ObjectFit="ObjectFit.Cover"
+                                     Width="400"
+                                     Height="250" />
+                        </MudPaper>
+                    </MudItem>
+                }
 
-                <MudItem xs="12">
-                    <MudPaper Class="pa-4 mt-4">
-                        <MudText Typo="Typo.h6" Class="mb-4">Event Preview</MudText>
-                        @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
-                        {
-                            <img src="@eventModel.ImageUrl"
-                                 alt="Event preview"
-                                 class="rounded-lg mb-4"
-                                 style="object-fit: cover; height: 200px; width: 100%;" />
-                        }
-                        else
-                        {
-                            <div class="d-flex align-center justify-center rounded-lg mb-4" style="height: 200px; background-color: var(--mud-palette-background-grey)">
-                                <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Secondary" Size="Size.Large" />
-                            </div>
-                        }
-                    </MudPaper>
-                </MudItem>
+                <MudItem xs="12" Class="d-flex justify-space-between align-center mt-4">
+                    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/events"))"
+                              Variant="Variant.Outlined"
+                              Color="Color.Secondary"
+                              Size="Size.Large"
+                              StartIcon="@Icons.Material.Filled.ArrowBack">
+                        Back
+                    </MudButton>
 
-                <MudItem xs="12" Class="d-flex justify-center mt-4">
-                    <MudButton Variant="Variant.Filled"
+                    <MudButton OnClick="CreateEventAsync"
+                              Disabled="!success"
+                              Variant="Variant.Filled"
                               Color="Color.Primary"
                               Size="Size.Large"
-                              OnClick="CreateEventAsync"
-                              Disabled="!success">
+                              EndIcon="@Icons.Material.Filled.Send">
                         Create Event
                     </MudButton>
                 </MudItem>
@@ -121,31 +160,36 @@
         StartDate = DateTime.Today,
         StartTime = DateTime.Now.TimeOfDay,
         Price = 0,
-        MaxAttendees = 0
+        MaxAttendees = 50,
+        Category = "Other"
     };
 
     private async Task CreateEventAsync()
     {
         try
         {
-            var userId = await UserService.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId))
+            await form?.Validate();
+            if (form?.IsValid ?? false)
             {
-                Snackbar.Add("Please log in to create events", Severity.Warning);
-                return;
-            }
+                var userId = await UserService.GetCurrentUserIdAsync();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    Snackbar.Add("Please log in to create events", Severity.Warning);
+                    return;
+                }
 
-            eventModel.OrganizerId = userId;
-            var result = await EventService.CreateEventAsync(eventModel);
-            
-            if (result != null)
-            {
-                Snackbar.Add("Event created successfully!", Severity.Success);
-                NavigationManager.NavigateTo($"/events/{result.Id}");
-            }
-            else
-            {
-                Snackbar.Add("Failed to create event", Severity.Error);
+                eventModel.OrganizerId = userId;
+                var result = await EventService.CreateEventAsync(eventModel);
+                
+                if (result != null)
+                {
+                    Snackbar.Add("Event created successfully!", Severity.Success);
+                    NavigationManager.NavigateTo("/events");
+                }
+                else
+                {
+                    Snackbar.Add("Failed to create event", Severity.Error);
+                }
             }
         }
         catch (Exception ex)

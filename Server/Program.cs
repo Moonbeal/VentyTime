@@ -32,9 +32,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", builder =>
-        builder.AllowAnyOrigin()
+        builder.WithOrigins("https://localhost:7241", "http://localhost:7240")
                .AllowAnyMethod()
-               .AllowAnyHeader());
+               .AllowAnyHeader()
+               .AllowCredentials());
 });
 
 // Add DbContext
@@ -89,8 +90,8 @@ app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
-app.UseRouting();
 app.UseCors("AllowAll");
+app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -100,6 +101,6 @@ app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 // Add health check endpoint
-app.MapGet("/api/health", () => "Healthy");
+app.MapGet("/api/health", () => Results.Ok("Healthy"));
 
 app.Run();
