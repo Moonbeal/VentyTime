@@ -18,14 +18,15 @@ namespace VentyTime.Client.Services
         private readonly NavigationManager _navigationManager;
 
         public AuthService(
-            IHttpClientFactory clientFactory,
+            HttpClient httpClient,
             AuthenticationStateProvider authStateProvider,
             Blazored.LocalStorage.ILocalStorageService localStorage,
             ILogger<AuthService> logger,
             NavigationManager navigationManager)
         {
-            _httpClient = clientFactory.CreateClient("VentyTime.ServerAPI.NoAuth");
-            _authStateProvider = (CustomAuthStateProvider)authStateProvider;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _authStateProvider = (CustomAuthStateProvider)authStateProvider 
+                ?? throw new ArgumentNullException(nameof(authStateProvider));
             _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
@@ -48,12 +49,13 @@ namespace VentyTime.Client.Services
                     return result;
                 }
 
-                _logger.LogWarning("Login failed for user: {Email}", request.Email);
-                return result ?? new AuthResponse { Success = false, Message = "An error occurred during login." };
+                _logger.LogWarning("Login failed for user {Email}. Status code: {StatusCode}", 
+                    request.Email, response.StatusCode);
+                return new AuthResponse { Success = false, Message = "Login failed." };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during login for user: {Email}", request.Email);
+                _logger.LogError(ex, "Error occurred while logging in user {Email}", request.Email);
                 return new AuthResponse { Success = false, Message = "An error occurred during login." };
             }
         }
@@ -75,12 +77,13 @@ namespace VentyTime.Client.Services
                     return result;
                 }
 
-                _logger.LogWarning("Registration failed for user: {Email}", request.Email);
-                return result ?? new AuthResponse { Success = false, Message = "An error occurred during registration." };
+                _logger.LogWarning("Registration failed for user {Email}. Status code: {StatusCode}", 
+                    request.Email, response.StatusCode);
+                return new AuthResponse { Success = false, Message = "Registration failed." };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during registration for user: {Email}", request.Email);
+                _logger.LogError(ex, "Error occurred while registering user {Email}", request.Email);
                 return new AuthResponse { Success = false, Message = "An error occurred during registration." };
             }
         }
@@ -89,6 +92,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
+                await _localStorage.RemoveItemAsync("authToken");
                 await _authStateProvider.NotifyUserLogout();
                 _navigationManager.NavigateTo("/");
                 _logger.LogInformation("User logged out successfully.");
@@ -96,7 +100,7 @@ namespace VentyTime.Client.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during logout");
+                _logger.LogError(ex, "Error occurred during logout");
                 return false;
             }
         }
@@ -115,13 +119,15 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<User> GetCurrentUserAsync()
+        public async Task<User?> GetCurrentUserAsync()
         {
             try
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
+                {
                     return null;
+                }
 
                 var response = await _httpClient.GetAsync("api/auth/current-user");
                 if (response.IsSuccessStatusCode)
@@ -129,34 +135,13 @@ namespace VentyTime.Client.Services
                     return await response.Content.ReadFromJsonAsync<User>();
                 }
 
+                _logger.LogWarning("Failed to get user info. Status code: {StatusCode}", response.StatusCode);
                 return null;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting current user");
+                _logger.LogError(ex, "Error getting user info");
                 return null;
-            }
-        }
-
-        public async Task<UserRole> GetUserRole()
-        {
-            try
-            {
-                var authState = await _authStateProvider.GetAuthenticationStateAsync();
-                var user = authState.User;
-
-                if (user.Identity?.IsAuthenticated != true)
-                    return UserRole.None;
-
-                if (user.IsInRole("Admin"))
-                    return UserRole.Admin;
-                
-                return UserRole.User;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting user role");
-                return UserRole.None;
             }
         }
 
@@ -165,7 +150,14 @@ namespace VentyTime.Client.Services
             try
             {
                 var response = await _httpClient.PutAsJsonAsync("api/auth/update-profile", request);
-                return response.IsSuccessStatusCode;
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("User profile updated successfully");
+                    return true;
+                }
+
+                _logger.LogWarning("Failed to update profile. Status code: {StatusCode}", response.StatusCode);
+                return false;
             }
             catch (Exception ex)
             {
@@ -179,7 +171,14 @@ namespace VentyTime.Client.Services
             try
             {
                 var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
-                return response.IsSuccessStatusCode;
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Password changed successfully");
+                    return true;
+                }
+
+                _logger.LogWarning("Failed to change password. Status code: {StatusCode}", response.StatusCode);
+                return false;
             }
             catch (Exception ex)
             {
@@ -193,11 +192,19 @@ namespace VentyTime.Client.Services
             try
             {
                 var response = await _httpClient.PostAsJsonAsync("api/auth/request-password-reset", new { Email = email });
-                return response.IsSuccessStatusCode;
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Password reset requested for {Email}", email);
+                    return true;
+                }
+
+                _logger.LogWarning("Failed to request password reset for {Email}. Status code: {StatusCode}", 
+                    email, response.StatusCode);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error requesting password reset");
+                _logger.LogError(ex, "Error requesting password reset for {Email}", email);
                 return false;
             }
         }
@@ -207,7 +214,14 @@ namespace VentyTime.Client.Services
             try
             {
                 var response = await _httpClient.PostAsJsonAsync("api/auth/reset-password", request);
-                return response.IsSuccessStatusCode;
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Password reset successfully for token");
+                    return true;
+                }
+
+                _logger.LogWarning("Failed to reset password. Status code: {StatusCode}", response.StatusCode);
+                return false;
             }
             catch (Exception ex)
             {
@@ -216,12 +230,26 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<string> GetUserId()
+        public async Task<UserRole> GetUserRole()
         {
             try
             {
-                var authState = await _authStateProvider.GetAuthenticationStateAsync();
-                return authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var user = await GetCurrentUserAsync();
+                return user?.Role ?? UserRole.User;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user role");
+                return UserRole.User;
+            }
+        }
+
+        public async Task<string?> GetUserId()
+        {
+            try
+            {
+                var user = await GetCurrentUserAsync();
+                return user?.Id;
             }
             catch (Exception ex)
             {
@@ -230,12 +258,12 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<string> GetUsername()
+        public async Task<string?> GetUsername()
         {
             try
             {
-                var authState = await _authStateProvider.GetAuthenticationStateAsync();
-                return authState.User.FindFirst(ClaimTypes.Name)?.Value;
+                var user = await GetCurrentUserAsync();
+                return user?.Username;
             }
             catch (Exception ex)
             {
@@ -244,7 +272,7 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<string> GetToken()
+        public async Task<string?> GetToken()
         {
             try
             {

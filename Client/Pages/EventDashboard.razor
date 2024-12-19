@@ -43,6 +43,10 @@
                             <span class="stat-label">Revenue</span>
                             <span class="stat-value">$@statistics.TotalRevenue.ToString("F2")</span>
                         </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Completed Events</span>
+                            <span class="stat-value">@statistics.CompletedEvents</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -237,7 +241,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadEvents();
-        await LoadStatistics();
+        LoadStatistics();
     }
 
     private async Task LoadEvents()
@@ -251,7 +255,7 @@
         }
     }
 
-    private async Task LoadStatistics()
+    private void LoadStatistics()
     {
         // In a real application, you would call a service to get these statistics
         statistics = new DashboardStatistics
@@ -259,7 +263,8 @@
             TotalEvents = upcomingEvents.Count + pastEvents.Count,
             ActiveEvents = upcomingEvents.Count,
             TotalRegistrations = upcomingEvents.Sum(e => e.CurrentParticipants) + pastEvents.Sum(e => e.CurrentParticipants),
-            TotalRevenue = upcomingEvents.Sum(e => e.Price * e.CurrentParticipants) + pastEvents.Sum(e => e.Price * e.CurrentParticipants)
+            TotalRevenue = upcomingEvents.Sum(e => e.Price * e.CurrentParticipants) + pastEvents.Sum(e => e.Price * e.CurrentParticipants),
+            CompletedEvents = pastEvents.Count
         };
     }
 
@@ -296,13 +301,13 @@
         {
             await EventService.DeleteEventAsync(selectedEvent.Id);
             await LoadEvents();
-            await LoadStatistics();
+            LoadStatistics();
         }
         showDeleteConfirmation = false;
         selectedEvent = null;
     }
 
-    private async Task ExportEventData(int eventId)
+    private void ExportEventData(int eventId)
     {
         // Implement export functionality
     }
@@ -313,6 +318,7 @@
         public int ActiveEvents { get; set; }
         public int TotalRegistrations { get; set; }
         public decimal TotalRevenue { get; set; }
+        public int CompletedEvents { get; set; }
     }
 }
 

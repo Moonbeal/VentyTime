@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
+using VentyTime.Shared.Models;
 
 namespace VentyTime.Server.Models
 {
@@ -8,13 +9,12 @@ namespace VentyTime.Server.Models
     {
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;
-        public string Role { get; set; } = "User";
-        public DateTime LastLoginAt { get; set; } = DateTime.UtcNow;
+        public UserRole Role { get; set; } = UserRole.User;
+        public DateTime? LastLoginAt { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
         public bool IsActive { get; set; } = true;
         public string? ProfilePictureUrl { get; set; }
-        public DateTime DateJoined { get; set; } = DateTime.UtcNow;
 
         public string FullName => $"{FirstName} {LastName}".Trim();
 

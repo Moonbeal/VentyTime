@@ -18,6 +18,7 @@
 
             <MudTextField @bind-Value="registerRequest.Username"
                          Label="Username"
+                         For="@(() => registerRequest.Username)"
                          Required="true"
                          RequiredError="Username is required!" 
                          Variant="Variant.Outlined"
@@ -30,8 +31,10 @@
 
             <MudTextField @bind-Value="registerRequest.Email"
                          Label="Email"
+                         For="@(() => registerRequest.Email)"
                          Required="true"
                          RequiredError="Email is required!"
+                         InputType="InputType.Email"
                          Validation="@(new EmailAddressAttribute() {ErrorMessage = "The email address is invalid"})"
                          Variant="Variant.Outlined"
                          Adornment="Adornment.Start"
@@ -43,6 +46,7 @@
 
             <MudTextField @bind-Value="registerRequest.Password"
                          Label="Password"
+                         For="@(() => registerRequest.Password)"
                          Required="true"
                          RequiredError="Password is required!"
                          InputType="@PasswordInput"
@@ -57,6 +61,7 @@
 
             <MudTextField @bind-Value="registerRequest.ConfirmPassword"
                          Label="Confirm Password"
+                         For="@(() => registerRequest.ConfirmPassword)"
                          Required="true"
                          RequiredError="Password confirmation is required!"
                          InputType="@PasswordInput"
@@ -93,7 +98,7 @@
 </MudContainer>
 
 @code {
-    MudForm form;
+    MudForm? form;
     bool success;
     private RegisterRequest registerRequest = new();
     bool PasswordVisibility;
@@ -124,9 +129,9 @@
 
     private async Task HandleRegistration()
     {
-        await form.Validate();
+        await form?.Validate();
 
-        if (form.IsValid)
+        if (form?.IsValid ?? false)
         {
             var result = await UserService.RegisterAsync(registerRequest);
             if (result)

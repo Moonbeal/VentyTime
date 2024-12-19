@@ -149,7 +149,7 @@ public class UserService : IUserService
                     await _localStorage.SetItemAsync("authToken", authResponse.Token);
                     await _localStorage.SetItemAsync("userId", authResponse.UserId);
                     await _localStorage.SetItemAsync("userRole", authResponse.Role.ToString());
-                    ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
+                    await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
                     _snackbar.Add("Successfully logged in!", Severity.Success);
                     return true;
                 }
@@ -198,7 +198,7 @@ public class UserService : IUserService
                     await _localStorage.SetItemAsync("authToken", authResponse.Token);
                     await _localStorage.SetItemAsync("userId", authResponse.UserId);
                     await _localStorage.SetItemAsync("userRole", authResponse.Role.ToString());
-                    ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
+                    await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
                     _snackbar.Add("Successfully registered!", Severity.Success);
                     return true;
                 }
@@ -231,7 +231,7 @@ public class UserService : IUserService
     public async Task LogoutAsync()
     {
         await _localStorage.RemoveItemAsync("authToken");
-        ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
+        await ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
         _snackbar.Add("Successfully logged out!", Severity.Success);
     }
 

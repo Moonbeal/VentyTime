@@ -80,5 +80,34 @@ namespace VentyTime.Client.Services
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync();
         }
+
+        public async Task<ApiResponse<string>> UploadEventImage(StreamContent imageContent)
+        {
+            try
+            {
+                using var content = new MultipartFormDataContent { { imageContent, "file", "image.jpg" } };
+
+                var response = await _httpClient.PostAsync("api/events/upload-image", content);
+                if (response.IsSuccessStatusCode)
+                {
+                    var imageUrl = await response.Content.ReadAsStringAsync();
+                    return new ApiResponse<string> { IsSuccessful = true, Data = imageUrl };
+                }
+                
+                return new ApiResponse<string> 
+                { 
+                    IsSuccessful = false, 
+                    Message = await response.Content.ReadAsStringAsync() 
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<string> 
+                { 
+                    IsSuccessful = false, 
+                    Message = ex.Message 
+                };
+            }
+        }
     }
 }

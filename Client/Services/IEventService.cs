@@ -16,5 +16,6 @@ namespace VentyTime.Client.Services
         Task<List<Event>> GetUpcomingEventsAsync();
         Task<List<Event>> GetPopularEventsAsync(int count = 5);
         Task<bool> IsEventFullAsync(int id);
+        Task<ApiResponse<string>> UploadEventImage(StreamContent imageContent);
     }
 }

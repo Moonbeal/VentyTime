@@ -18,12 +18,15 @@
 
             <MudTextField @bind-Value="loginRequest.Email"
                          Label="Email"
+                         For="@(() => loginRequest.Email)"
                          Required="true"
                          RequiredError="Email is required!"
+                         InputType="InputType.Email"
                          Validation="@(new EmailAddressAttribute() {ErrorMessage = "The email address is invalid"})" />
 
             <MudTextField @bind-Value="loginRequest.Password"
                          Label="Password"
+                         For="@(() => loginRequest.Password)"
                          Required="true"
                          RequiredError="Password is required!"
                          InputType="@PasswordInput"
@@ -52,7 +55,7 @@
 </MudContainer>
 
 @code {
-    MudForm form;
+    MudForm? form;
     bool success;
     private LoginRequest loginRequest = new();
     bool PasswordVisibility;

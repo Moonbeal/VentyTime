@@ -17,12 +17,11 @@ builder.Services.AddLogging();
 builder.Services.AddBlazoredLocalStorage();
 
 // Register HTTP clients
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-builder.Services.AddHttpClient("VentyTime.ServerAPI", client => 
-    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress));
-
-builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client => 
-    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress));
+builder.Services.AddScoped(sp => 
+{
+    var client = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+    return client;
+});
 
 // Register MudBlazor services
 builder.Services.AddMudServices();
@@ -37,7 +36,4 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 
-var host = builder.Build();
-
-// Initialize the authentication state
-await host.RunAsync();
+await builder.Build().RunAsync();

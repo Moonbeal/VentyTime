@@ -5,7 +5,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
-using VentyTime.Server.HealthChecks;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Components.WebAssembly.Server;
@@ -18,6 +17,18 @@ builder.Services.AddRazorPages();
 
 // Add Blazor WebAssembly
 builder.Services.AddEndpointsApiExplorer();
+
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:7241")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
 
 // Configure response compression
 builder.Services.AddResponseCompression(opts =>
@@ -40,21 +51,19 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Configure Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
+    options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 6;
-    options.User.RequireUniqueEmail = true;
-    options.SignIn.RequireConfirmedEmail = false;
+    options.Password.RequiredLength = 8;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? 
-    throw new InvalidOperationException("JWT Key not found in configuration."));
+var key = Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key not found."));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -63,74 +72,22 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
         ValidateIssuer = true,
         ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
-    };
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            var accessToken = context.Request.Query["access_token"];
-            var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken))
-            {
-                context.Token = accessToken;
-            }
-            return Task.CompletedTask;
-        }
+        ClockSkew = TimeSpan.Zero
     };
 });
 
-// Configure CORS
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", builder =>
-        builder.AllowAnyOrigin()
-               .AllowAnyMethod()
-               .AllowAnyHeader()
-               .WithExposedHeaders("Content-Disposition"));
-});
-
-// Add Health Checks
-builder.Services.AddHealthChecks()
-    .AddCheck<SqlConnectionHealthCheck>("SQL Server Connection", tags: new[] { "db" });
-
-// Add Swagger
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "VentyTime API", Version = "v1" });
-    
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme.",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
+// Configure authorization
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -139,8 +96,6 @@ if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
     app.UseDeveloperExceptionPage();
-    app.UseSwagger();
-    app.UseSwaggerUI();
 }
 else
 {
@@ -148,28 +103,32 @@ else
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// Use response compression
+app.UseResponseCompression();
+
+// Use CORS before routing
+app.UseCors();
+
+// Use static files and Blazor
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
+// Use routing and authorization
 app.UseRouting();
-
-app.UseCors("AllowAll");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Map controllers and Blazor
 app.MapRazorPages();
 app.MapControllers();
-app.MapHealthChecks("/health");
 app.MapFallbackToFile("index.html");
 
-try
+// Ensure database is created and migrations are applied
+using (var scope = app.Services.CreateScope())
 {
-    // Ensure database is created and migrations are applied
-    using (var scope = app.Services.CreateScope())
+    var services = scope.ServiceProvider;
+    try
     {
-        var services = scope.ServiceProvider;
         var context = services.GetRequiredService<ApplicationDbContext>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
@@ -177,52 +136,40 @@ try
         // Ensure database is created
         context.Database.EnsureCreated();
 
-        // Apply any pending migrations
-        if (context.Database.GetPendingMigrations().Any())
+        // Add roles if they don't exist
+        if (!await roleManager.RoleExistsAsync("Admin"))
         {
-            context.Database.Migrate();
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+        }
+        if (!await roleManager.RoleExistsAsync("User"))
+        {
+            await roleManager.CreateAsync(new IdentityRole("User"));
         }
 
-        // Seed roles
-        if (!roleManager.RoleExistsAsync("Admin").Result)
+        // Add admin user if it doesn't exist
+        var adminEmail = "admin@ventytime.com";
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+        if (adminUser == null)
         {
-            var role = new IdentityRole("Admin");
-            roleManager.CreateAsync(role).Wait();
-        }
-
-        if (!roleManager.RoleExistsAsync("User").Result)
-        {
-            var role = new IdentityRole("User");
-            roleManager.CreateAsync(role).Wait();
-        }
-
-        // Seed admin user
-        if (!userManager.Users.Any())
-        {
-            var adminUser = new ApplicationUser
+            adminUser = new ApplicationUser
             {
-                UserName = "admin@ventytime.com",
-                Email = "admin@ventytime.com",
+                UserName = adminEmail,
+                Email = adminEmail,
                 EmailConfirmed = true,
-                FirstName = "Admin",
-                LastName = "User",
-                Role = UserRole.Admin,
-                CreatedAt = DateTime.UtcNow,
-                LastLoginAt = DateTime.UtcNow
+                Role = UserRole.Admin
             };
-
-            var result = userManager.CreateAsync(adminUser, "Admin123!").Result;
+            var result = await userManager.CreateAsync(adminUser, "Admin123!");
             if (result.Succeeded)
             {
-                userManager.AddToRoleAsync(adminUser, "Admin").Wait();
+                await userManager.AddToRoleAsync(adminUser, "Admin");
             }
         }
     }
-}
-catch (Exception ex)
-{
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
-    logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while seeding the database.");
+    }
 }
 
 app.Run();

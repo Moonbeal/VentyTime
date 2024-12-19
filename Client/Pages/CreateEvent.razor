@@ -4,6 +4,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IUserService UserService
+@inject IJSRuntime JSRuntime
 @attribute [Authorize]
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="my-8">
@@ -15,6 +16,7 @@
                 <MudItem xs="12">
                     <MudTextField @bind-Value="eventModel.Title"
                                 Label="Event Title"
+                                For="@(() => eventModel.Title)"
                                 Variant="Variant.Outlined"
                                 Required="true"
                                 RequiredError="Title is required!"
@@ -27,6 +29,7 @@
                 <MudItem xs="12">
                     <MudTextField @bind-Value="eventModel.Description"
                                 Label="Description"
+                                For="@(() => eventModel.Description)"
                                 Variant="Variant.Outlined"
                                 Required="true"
                                 RequiredError="Description is required!"
@@ -39,6 +42,7 @@
                 <MudItem xs="12" sm="6">
                     <MudSelect T="string" 
                               Label="Category" 
+                              For="@(() => eventModel.Category)"
                               @bind-Value="eventModel.Category"
                               Required="true"
                               RequiredError="Category is required!"
@@ -57,6 +61,7 @@
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="eventModel.Location"
                                 Label="Location"
+                                For="@(() => eventModel.Location)"
                                 Variant="Variant.Outlined"
                                 Required="true"
                                 RequiredError="Location is required!"
@@ -65,26 +70,33 @@
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudDatePicker @bind-Value="eventModel.StartDate"
+                    <MudDatePicker Date="eventModel.StartDate"
+                                 DateChanged="(date) => eventModel.StartDate = date.GetValueOrDefault()"
                                  Label="Event Date"
+                                 For="@(() => eventModel.StartDate)"
                                  Required="true"
                                  RequiredError="Date is required!"
                                  DisablePastDates="true"
+                                 DateFormat="dd/MM/yyyy"
                                  Variant="Variant.Outlined" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudTimePicker @bind-Value="eventModel.StartTime"
+                    <MudTimePicker Time="eventModel.StartTime"
+                                 TimeChanged="(time) => eventModel.StartTime = time.GetValueOrDefault()"
                                  Label="Start Time"
+                                 For="@(() => eventModel.StartTime)"
                                  Required="true"
                                  RequiredError="Time is required!"
                                  AmPm="true"
+                                 TimeFormat="hh:mm tt"
                                  Variant="Variant.Outlined" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
                     <MudNumericField @bind-Value="eventModel.Price"
                                    Label="Price ($)"
+                                   For="@(() => eventModel.Price)"
                                    Required="true"
                                    RequiredError="Price is required!"
                                    Min="0"
@@ -98,6 +110,7 @@
                 <MudItem xs="12" sm="6">
                     <MudNumericField @bind-Value="eventModel.MaxAttendees"
                                    Label="Capacity"
+                                   For="@(() => eventModel.MaxAttendees)"
                                    Required="true"
                                    RequiredError="Capacity is required!"
                                    Min="0"
@@ -106,28 +119,21 @@
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.ImageUrl"
-                                Label="Event Image URL"
-                                Variant="Variant.Outlined"
-                                HelperText="Add an image to make your event stand out"
-                                Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.Image" />
+                    <MudPaper Class="pa-4" Elevation="0">
+                        <InputFile id="fileInput" OnChange="OnInputFileChanged" hidden accept=".jpg,.jpeg,.png" />
+                        <MudButton HtmlTag="label"
+                                 Variant="Variant.Filled"
+                                 Color="Color.Primary"
+                                 StartIcon="@Icons.Material.Filled.CloudUpload"
+                                 for="fileInput">
+                            Upload Image
+                        </MudButton>
+                        @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+                        {
+                            <MudImage Src="@eventModel.ImageUrl" Alt="Event image" Width="200" Height="200" ObjectFit="ObjectFit.Cover" Class="mt-3" />
+                        }
+                    </MudPaper>
                 </MudItem>
-
-                @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
-                {
-                    <MudItem xs="12">
-                        <MudPaper Elevation="0" Class="d-flex justify-center pa-4">
-                            <MudImage Src="@eventModel.ImageUrl"
-                                     Alt="Event preview"
-                                     Elevation="25"
-                                     Class="rounded-lg"
-                                     ObjectFit="ObjectFit.Cover"
-                                     Width="400"
-                                     Height="250" />
-                        </MudPaper>
-                    </MudItem>
-                }
 
                 <MudItem xs="12" Class="d-flex justify-space-between align-center mt-4">
                     <MudButton OnClick="@(() => NavigationManager.NavigateTo("/events"))"
@@ -155,14 +161,34 @@
 @code {
     private MudForm? form;
     private bool success;
-    private Event eventModel = new()
+    private Event eventModel = new Event();
+    private IBrowserFile? selectedFile;
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
     {
-        StartDate = DateTime.Today,
-        StartTime = DateTime.Now.TimeOfDay,
-        Price = 0,
-        MaxAttendees = 50,
-        Category = "Other"
-    };
+        selectedFile = e.File;
+        if (selectedFile != null)
+        {
+            try
+            {
+                var imageContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 4096000)); // 4MB max
+                var response = await EventService.UploadEventImage(imageContent);
+                if (response.IsSuccessful)
+                {
+                    eventModel.ImageUrl = response.Data;
+                    Snackbar.Add("Image uploaded successfully!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to upload image. Please try again.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
+            }
+        }
+    }
 
     private async Task CreateEventAsync()
     {

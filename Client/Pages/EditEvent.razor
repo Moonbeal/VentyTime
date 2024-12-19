@@ -33,6 +33,7 @@
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.Title" 
                                             Label="Event Title"
+                                            For="@(() => eventModel.Title)"
                                             Required="true"
                                             RequiredError="Title is required"
                                             Variant="Variant.Outlined" />
@@ -41,6 +42,7 @@
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.Description"
                                             Label="Description"
+                                            For="@(() => eventModel.Description)"
                                             Required="true"
                                             RequiredError="Description is required"
                                             Lines="3"
@@ -48,53 +50,83 @@
                             </MudItem>
 
                             <MudItem xs="12" sm="6">
-                                <MudDatePicker Date="@eventModel.StartDate"
-                                             DateChanged="@((DateTime? date) => eventModel.StartDate = date ?? DateTime.Today)"
-                                             Label="Start Date"
-                                             Required="true"
-                                             RequiredError="Start date is required"
-                                             Variant="Variant.Outlined" />
+                                <MudSelect T="string" 
+                                          Label="Category" 
+                                          For="@(() => eventModel.Category)"
+                                          @bind-Value="eventModel.Category"
+                                          Required="true"
+                                          RequiredError="Category is required"
+                                          AnchorOrigin="Origin.BottomCenter"
+                                          Variant="Variant.Outlined">
+                                    <MudSelectItem Value="@("Music")">Music</MudSelectItem>
+                                    <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                                    <MudSelectItem Value="@("Technology")">Technology</MudSelectItem>
+                                    <MudSelectItem Value="@("Food")">Food & Drinks</MudSelectItem>
+                                </MudSelect>
                             </MudItem>
 
                             <MudItem xs="12" sm="6">
-                                <MudTimePicker Time="@eventModel.StartTime"
-                                             TimeChanged="@((TimeSpan? time) => eventModel.StartTime = time ?? DateTime.Now.TimeOfDay)"
-                                             Label="Start Time"
+                                <MudDatePicker Label="Date" 
+                                             For="@(() => eventModel.StartDate)"
+                                             Date="@eventModel.StartDate"
+                                             DateChanged="@((DateTime? date) => eventModel.StartDate = date ?? DateTime.Today)"
                                              Required="true"
-                                             RequiredError="Start time is required"
-                                             Variant="Variant.Outlined" />
+                                             RequiredError="Date is required"
+                                             Variant="Variant.Outlined"
+                                             DisableToolbar="false"
+                                             MinDate="@DateTime.Today" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTimePicker Label="Time"
+                                             For="@(() => eventModel.StartTime)"
+                                             Time="@eventModel.StartTime"
+                                             TimeChanged="@((TimeSpan? time) => eventModel.StartTime = time ?? DateTime.Now.TimeOfDay)"
+                                             Required="true"
+                                             RequiredError="Time is required"
+                                             Variant="Variant.Outlined"
+                                             AmPm="true" />
                             </MudItem>
 
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.Location"
                                             Label="Location"
+                                            For="@(() => eventModel.Location)"
+                                            Variant="Variant.Outlined"
                                             Required="true"
                                             RequiredError="Location is required"
-                                            Variant="Variant.Outlined" />
+                                            HelperText="Enter the event location" />
                             </MudItem>
 
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.ImageUrl"
                                             Label="Image URL"
+                                            For="@(() => eventModel.ImageUrl)"
                                             Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudNumericField @bind-Value="eventModel.MaxAttendees"
+                                               Label="Maximum Attendees (0 for unlimited)"
+                                               For="@(() => eventModel.MaxAttendees)"
+                                               Required="true"
+                                               RequiredError="Maximum attendees is required"
+                                               Min="0"
+                                               Max="1000"
+                                               Variant="Variant.Outlined"
+                                               HelperText="Maximum number of attendees" />
                             </MudItem>
 
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.Price"
                                             Label="Price"
+                                            For="@(() => eventModel.Price)"
+                                            Variant="Variant.Outlined"
                                             Required="true"
                                             RequiredError="Price is required"
-                                            Variant="Variant.Outlined"
+                                            Adornment="Adornment.Start"
                                             AdornmentText="$"
-                                            Adornment="Adornment.Start" />
-                            </MudItem>
-
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.MaxAttendees"
-                                            Label="Maximum Attendees (0 for unlimited)"
-                                            Required="true"
-                                            RequiredError="Maximum attendees is required"
-                                            Variant="Variant.Outlined" />
+                                            HelperText="Enter ticket price (0 for free events)" />
                             </MudItem>
 
                             <MudItem xs="12" Class="d-flex justify-center mt-4">

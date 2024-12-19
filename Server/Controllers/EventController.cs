@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IO;
 using System.Security.Claims;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
@@ -211,6 +212,43 @@ namespace VentyTime.Server.Controllers
                 .Include(e => e.Registrations)
                 .Where(e => e.Registrations.Any(r => r.UserId == userId))
                 .ToListAsync();
+        }
+
+        [HttpPost("upload-image")]
+        public async Task<ActionResult<string>> UploadEventImage([FromForm] IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("No file uploaded");
+
+            if (file.Length > 4 * 1024 * 1024) // 4MB limit
+                return BadRequest("File size exceeds 4MB limit");
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
+            var fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(fileExtension))
+                return BadRequest("Invalid file type. Only .jpg, .jpeg, and .png files are allowed.");
+
+            try
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "events");
+                Directory.CreateDirectory(uploadsFolder); // Ensure directory exists
+
+                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(fileStream);
+                }
+
+                var imageUrl = $"/uploads/events/{uniqueFileName}";
+                return Ok(imageUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading event image");
+                return StatusCode(500, "Error uploading file");
+            }
         }
 
         private bool EventExists(int id)
