@@ -24,7 +24,7 @@ namespace VentyTime.Shared.Models
         public DateTime StartDate { get; set; }
 
         [Required]
-        public TimeSpan StartTime { get; set; }
+        public TimeSpan? StartTime { get; set; }
 
         [Required]
         public string Location { get; set; } = "";
@@ -42,15 +42,15 @@ namespace VentyTime.Shared.Models
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
 
         public bool IsFull => MaxAttendees > 0 && Registrations.Count >= MaxAttendees;
-        public bool HasStarted => DateTime.Now > StartDate.Add(StartTime);
-        public bool IsFinished => HasStarted && DateTime.Now > StartDate.Add(StartTime).AddHours(4); // Assuming events last 4 hours
+        public bool HasStarted => DateTime.Now > StartDate.Add(StartTime ?? TimeSpan.Zero);
+        public bool IsFinished => HasStarted && DateTime.Now > StartDate.Add(StartTime ?? TimeSpan.Zero).AddHours(4); // Assuming events last 4 hours
         public int CurrentParticipants => Registrations.Count;
 
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
 
         public bool IsRegistrationOpen => MaxAttendees == 0 || Registrations.Count < MaxAttendees;
 
-        public DateTime GetDateTime() => StartDate.Date.Add(StartTime);
+        public DateTime GetDateTime() => StartDate.Date.Add(StartTime ?? TimeSpan.Zero);
 
         public bool IsActive { get; set; } = true;
 

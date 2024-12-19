@@ -64,7 +64,7 @@ namespace VentyTime.Server.Controllers
                     FirstName = model.FirstName,
                     LastName = model.LastName,
                     CreatedAt = DateTime.UtcNow,
-                    Role = UserRole.User
+                    Role = model.Role
                 };
 
                 _logger.LogInformation("Creating new user with email: {Email}", model.Email);
@@ -75,8 +75,8 @@ namespace VentyTime.Server.Controllers
                     _logger.LogInformation("User {Email} created successfully", model.Email);
 
                     // Add user to role
-                    await _userManager.AddToRoleAsync(user, UserRole.User.ToString());
-                    _logger.LogInformation("Added user {Email} to role: User", model.Email);
+                    await _userManager.AddToRoleAsync(user, model.Role.ToString());
+                    _logger.LogInformation("Added user {Email} to role: {Role}", model.Email, model.Role);
 
                     // Generate JWT token
                     var token = GenerateJwtToken(user);
@@ -169,21 +169,15 @@ namespace VentyTime.Server.Controllers
         {
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, user.Id),
-                new(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new(ClaimTypes.Email, user.Email ?? string.Empty),
-                new(ClaimTypes.Role, user.Role.ToString()),
-                new("FirstName", user.FirstName),
-                new("LastName", user.LastName)
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
+                new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
+                new Claim(ClaimTypes.Role, user.Role.ToString())
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                _configuration["JwtSettings:Key"] ?? 
-                throw new InvalidOperationException("JWT Key not found in configuration.")));
-
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"] ?? throw new InvalidOperationException()));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expires = DateTime.Now.AddDays(Convert.ToDouble(
-                _configuration["JwtSettings:ExpirationInDays"] ?? "7"));
+            var expires = DateTime.Now.AddDays(Convert.ToDouble(_configuration["JwtSettings:ExpirationInDays"]));
 
             var token = new JwtSecurityToken(
                 _configuration["JwtSettings:Issuer"],

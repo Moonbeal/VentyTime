@@ -20,6 +20,10 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped(sp => 
 {
     var client = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+    
+    // Add default headers for JSON content
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
     return client;
 });
 

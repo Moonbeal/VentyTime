@@ -81,32 +81,30 @@ namespace VentyTime.Client.Services
             return await response.Content.ReadAsByteArrayAsync();
         }
 
-        public async Task<ApiResponse<string>> UploadEventImage(StreamContent imageContent)
+        public async Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content)
         {
             try
             {
-                using var content = new MultipartFormDataContent { { imageContent, "file", "image.jpg" } };
-
+                Console.WriteLine("Sending image upload request...");
                 var response = await _httpClient.PostAsync("api/events/upload-image", content);
+                Console.WriteLine($"Upload response status: {response.StatusCode}");
+                
                 if (response.IsSuccessStatusCode)
                 {
                     var imageUrl = await response.Content.ReadAsStringAsync();
+                    imageUrl = imageUrl.Trim('"');
+                    Console.WriteLine($"Upload successful. Image URL: {imageUrl}");
                     return new ApiResponse<string> { IsSuccessful = true, Data = imageUrl };
                 }
                 
-                return new ApiResponse<string> 
-                { 
-                    IsSuccessful = false, 
-                    Message = await response.Content.ReadAsStringAsync() 
-                };
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Upload failed. Error: {errorMessage}");
+                return new ApiResponse<string> { IsSuccessful = false, Message = errorMessage };
             }
             catch (Exception ex)
             {
-                return new ApiResponse<string> 
-                { 
-                    IsSuccessful = false, 
-                    Message = ex.Message 
-                };
+                Console.WriteLine($"Upload error: {ex.Message}");
+                return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
             }
         }
     }

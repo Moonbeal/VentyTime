@@ -5,6 +5,7 @@
 @inject ISnackbar Snackbar
 @inject IUserService UserService
 @inject IJSRuntime JSRuntime
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @attribute [Authorize]
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="my-8">
@@ -23,6 +24,7 @@
                                 Immediate="true"
                                 Counter="100"
                                 MaxLength="100"
+                                id="event-title"
                                 HelperText="Give your event a catchy title" />
                 </MudItem>
 
@@ -36,6 +38,7 @@
                                 Lines="4"
                                 Counter="500"
                                 MaxLength="500"
+                                id="event-description"
                                 HelperText="Describe your event in detail" />
                 </MudItem>
 
@@ -47,13 +50,14 @@
                               Required="true"
                               RequiredError="Category is required!"
                               AnchorOrigin="Origin.BottomCenter"
+                              id="event-category"
                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Art & Culture")">Art & Culture</MudSelectItem>
+                        <MudSelectItem Value="@("Business")">Business</MudSelectItem>
+                        <MudSelectItem Value="@("Food & Drinks")">Food & Drinks</MudSelectItem>
                         <MudSelectItem Value="@("Music")">Music</MudSelectItem>
                         <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
                         <MudSelectItem Value="@("Technology")">Technology</MudSelectItem>
-                        <MudSelectItem Value="@("Food")">Food & Drinks</MudSelectItem>
-                        <MudSelectItem Value="@("Art")">Art & Culture</MudSelectItem>
-                        <MudSelectItem Value="@("Business")">Business</MudSelectItem>
                         <MudSelectItem Value="@("Other")">Other</MudSelectItem>
                     </MudSelect>
                 </MudItem>
@@ -66,31 +70,31 @@
                                 Required="true"
                                 RequiredError="Location is required!"
                                 Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.LocationOn" />
+                                AdornmentIcon="@Icons.Material.Filled.LocationOn"
+                                id="event-location" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudDatePicker Date="eventModel.StartDate"
-                                 DateChanged="(date) => eventModel.StartDate = date.GetValueOrDefault()"
-                                 Label="Event Date"
-                                 For="@(() => eventModel.StartDate)"
+                    <MudDatePicker Label="Event Date"
                                  Required="true"
                                  RequiredError="Date is required!"
                                  DisablePastDates="true"
                                  DateFormat="dd/MM/yyyy"
-                                 Variant="Variant.Outlined" />
+                                 Variant="Variant.Outlined"
+                                 Date="eventModel.StartDate"
+                                 DateChanged="date => { if (date.HasValue) eventModel.StartDate = date.Value; }"
+                                 id="event-date" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
-                    <MudTimePicker Time="eventModel.StartTime"
-                                 TimeChanged="(time) => eventModel.StartTime = time.GetValueOrDefault()"
-                                 Label="Start Time"
-                                 For="@(() => eventModel.StartTime)"
+                    <MudTimePicker Label="Start Time"
                                  Required="true"
                                  RequiredError="Time is required!"
                                  AmPm="true"
                                  TimeFormat="hh:mm tt"
-                                 Variant="Variant.Outlined" />
+                                 Variant="Variant.Outlined"
+                                 @bind-Time="@eventModel.StartTime"
+                                 id="event-time" />
                 </MudItem>
 
                 <MudItem xs="12" sm="6">
@@ -104,6 +108,7 @@
                                    Variant="Variant.Outlined"
                                    Adornment="Adornment.Start"
                                    AdornmentText="$"
+                                   id="event-price"
                                    HelperText="Set to 0 for free events" />
                 </MudItem>
 
@@ -115,6 +120,7 @@
                                    RequiredError="Capacity is required!"
                                    Min="0"
                                    Variant="Variant.Outlined"
+                                   id="event-capacity"
                                    HelperText="Set to 0 for unlimited capacity" />
                 </MudItem>
 
@@ -125,7 +131,7 @@
                                  Variant="Variant.Filled"
                                  Color="Color.Primary"
                                  StartIcon="@Icons.Material.Filled.CloudUpload"
-                                 for="fileInput">
+                                 For="fileInput">
                             Upload Image
                         </MudButton>
                         @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
@@ -161,7 +167,11 @@
 @code {
     private MudForm? form;
     private bool success;
-    private Event eventModel = new Event();
+    private Event eventModel = new Event
+    {
+        StartDate = DateTime.Now,
+        StartTime = TimeSpan.FromHours(12)
+    };
     private IBrowserFile? selectedFile;
 
     private async Task OnInputFileChanged(InputFileChangeEventArgs e)
@@ -171,8 +181,20 @@
         {
             try
             {
-                var imageContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 4096000)); // 4MB max
-                var response = await EventService.UploadEventImage(imageContent);
+                // Get the current auth token
+                var token = await LocalStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                {
+                    Snackbar.Add("Please log in to upload images", Severity.Warning);
+                    return;
+                }
+
+                using var content = new MultipartFormDataContent();
+                using var fileContent = new StreamContent(selectedFile.OpenReadStream(maxAllowedSize: 4096000));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(selectedFile.ContentType);
+                content.Add(fileContent, "file", selectedFile.Name);
+
+                var response = await EventService.UploadEventImage(content);
                 if (response.IsSuccessful)
                 {
                     eventModel.ImageUrl = response.Data;
@@ -180,7 +202,7 @@
                 }
                 else
                 {
-                    Snackbar.Add("Failed to upload image. Please try again.", Severity.Error);
+                    Snackbar.Add($"Failed to upload image: {response.Message}", Severity.Error);
                 }
             }
             catch (Exception ex)
@@ -205,22 +227,15 @@
                 }
 
                 eventModel.OrganizerId = userId;
-                var result = await EventService.CreateEventAsync(eventModel);
-                
-                if (result != null)
-                {
-                    Snackbar.Add("Event created successfully!", Severity.Success);
-                    NavigationManager.NavigateTo("/events");
-                }
-                else
-                {
-                    Snackbar.Add("Failed to create event", Severity.Error);
-                }
+                // Keep StartTime as TimeSpan, no need to convert to string
+                var createdEvent = await EventService.CreateEventAsync(eventModel);
+                Snackbar.Add("Event created successfully!", Severity.Success);
+                NavigationManager.NavigateTo($"/event/{createdEvent.Id}");
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
         }
     }
 }

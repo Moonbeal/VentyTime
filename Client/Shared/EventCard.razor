@@ -29,7 +29,7 @@
         </MudStack>
         <MudStack Row="true" Spacing="2" Class="mt-2">
             <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
-            <MudText Typo="Typo.body2">@Event.StartTime.ToString(@"hh\:mm")</MudText>
+            <MudText Typo="Typo.body2">@(Event.StartTime?.ToString("hh\\:mm") ?? "TBD")</MudText>
         </MudStack>
     </MudCardContent>
     <MudCardActions>

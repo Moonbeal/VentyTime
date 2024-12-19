@@ -23,7 +23,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:7241")
+        policy.WithOrigins("http://localhost:5000", "http://localhost:7241")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -51,12 +51,12 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Configure Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    options.SignIn.RequireConfirmedAccount = false;
+    options.Password.RequiredLength = 6;
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 8;
+    options.SignIn.RequireConfirmedEmail = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
@@ -87,7 +87,11 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Configure authorization
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireOrganizerRole", policy =>
+        policy.RequireRole(UserRole.Organizer.ToString(), UserRole.Admin.ToString()));
+});
 
 var app = builder.Build();
 
@@ -95,7 +99,6 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
-    app.UseDeveloperExceptionPage();
 }
 else
 {
@@ -103,15 +106,13 @@ else
     app.UseHsts();
 }
 
-// Use response compression
-app.UseResponseCompression();
+app.UseHttpsRedirection();
 
-// Use CORS before routing
-app.UseCors();
-
-// Use static files and Blazor
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
+
+// Use CORS before routing
+app.UseCors();  
 
 // Use routing and authorization
 app.UseRouting();
@@ -136,14 +137,15 @@ using (var scope = app.Services.CreateScope())
         // Ensure database is created
         context.Database.EnsureCreated();
 
-        // Add roles if they don't exist
-        if (!await roleManager.RoleExistsAsync("Admin"))
+        // Ensure roles are created
+        var roles = Enum.GetNames(typeof(UserRole));
+
+        foreach (var role in roles)
         {
-            await roleManager.CreateAsync(new IdentityRole("Admin"));
-        }
-        if (!await roleManager.RoleExistsAsync("User"))
-        {
-            await roleManager.CreateAsync(new IdentityRole("User"));
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                await roleManager.CreateAsync(new IdentityRole(role));
+            }
         }
 
         // Add admin user if it doesn't exist

@@ -143,7 +143,7 @@
 
     private string startTimeString
     {
-        get => eventModel?.StartTime.ToString(@"hh\:mm") ?? "00:00";
+        get => eventModel?.StartTime?.ToString("hh\\:mm") ?? "00:00";
         set
         {
             if (eventModel != null && TimeSpan.TryParse(value, out TimeSpan time))

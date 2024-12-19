@@ -169,7 +169,7 @@
                     </MudText>
                     <MudText Typo="Typo.body2" Class="mt-2">
                         <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" Size="Size.Small" />
-                        @eventModel.StartTime.ToString(@"hh\:mm")
+                        @(eventModel.StartTime?.ToString("hh\\:mm") ?? "TBD")
                     </MudText>
                     <MudText Typo="Typo.body2" Class="mt-2">
                         <MudIcon Icon="@Icons.Material.Filled.Place" Class="mr-2" Size="Size.Small" />

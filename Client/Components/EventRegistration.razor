@@ -45,7 +45,7 @@
                         </div>
                         <div class="mb-3">
                             <strong>Date & Time:</strong>
-                            <p>@eventModel.StartDate.ToLongDateString() at @eventModel.StartTime.ToString(@"hh\:mm tt")</p>
+                            <p>@eventModel.StartDate.ToLongDateString() at @(eventModel.StartTime?.ToString("hh\\:mm tt") ?? "TBD")</p>
                         </div>
                         <div class="mb-3">
                             <strong>Location:</strong>

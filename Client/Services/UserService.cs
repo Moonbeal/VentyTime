@@ -259,7 +259,7 @@ public class UserService : IUserService
     {
         var authState = await _authStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
-        return user.FindFirst(c => c.Type == "sub")?.Value ?? string.Empty;
+        return user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
     }
 
     public async Task<User> GetCurrentUserAsync()

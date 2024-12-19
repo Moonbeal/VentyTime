@@ -1,7 +1,7 @@
 @page "/register"
 @using VentyTime.Shared.Models.Auth
 @using System.ComponentModel.DataAnnotations
-@inject IUserService UserService
+@inject IAuthService AuthService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
@@ -14,20 +14,31 @@
         </div>
         
         <MudForm @ref="form" @bind-IsValid="@success">
-            <MudText Typo="Typo.h4" Class="mb-4">Register</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="registerRequest.FirstName"
+                                Label="First Name"
+                                For="@(() => registerRequest.FirstName)"
+                                Required="true"
+                                RequiredError="First name is required!"
+                                Variant="Variant.Outlined"
+                                id="firstName"
+                                name="firstName"
+                                Class="mb-4" />
+                </MudItem>
 
-            <MudTextField @bind-Value="registerRequest.Username"
-                         Label="Username"
-                         For="@(() => registerRequest.Username)"
-                         Required="true"
-                         RequiredError="Username is required!" 
-                         Variant="Variant.Outlined"
-                         Adornment="Adornment.Start"
-                         AdornmentIcon="@Icons.Material.Filled.Person"
-                         id="username"
-                         name="username"
-                         autocomplete="username"
-                         Class="mb-4" />
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="registerRequest.LastName"
+                                Label="Last Name"
+                                For="@(() => registerRequest.LastName)"
+                                Required="true"
+                                RequiredError="Last name is required!"
+                                Variant="Variant.Outlined"
+                                id="lastName"
+                                name="lastName"
+                                Class="mb-4" />
+                </MudItem>
+            </MudGrid>
 
             <MudTextField @bind-Value="registerRequest.Email"
                          Label="Email"
@@ -41,7 +52,6 @@
                          AdornmentIcon="@Icons.Material.Filled.Email"
                          id="email"
                          name="email"
-                         autocomplete="email"
                          Class="mb-4" />
 
             <MudTextField @bind-Value="registerRequest.Password"
@@ -56,7 +66,7 @@
                          Variant="Variant.Outlined"
                          id="password"
                          name="password"
-                         autocomplete="new-password"
+                         HelperText="Password must be at least 6 characters long and contain uppercase, lowercase, number and special character"
                          Class="mb-4" />
 
             <MudTextField @bind-Value="registerRequest.ConfirmPassword"
@@ -72,27 +82,37 @@
                          Variant="Variant.Outlined"
                          id="confirmPassword"
                          name="confirmPassword"
-                         autocomplete="new-password"
                          Class="mb-4" />
 
-            <MudItem xs="12">
-                <MudButton Variant="Variant.Filled"
-                          Color="Color.Primary"
-                          DisableElevation="true"
-                          OnClick="HandleRegistration"
-                          Class="ml-auto mt-4">
-                    Create Account
-                </MudButton>
-            </MudItem>
+            <MudSelect T="UserRole" 
+                      Label="Account Type" 
+                      @bind-Value="registerRequest.Role"
+                      Required="true"
+                      RequiredError="Account type is required!"
+                      Variant="Variant.Outlined"
+                      id="role"
+                      name="role"
+                      Class="mb-4">
+                <MudSelectItem Value="UserRole.User">User</MudSelectItem>
+                <MudSelectItem Value="UserRole.Organizer">Organizer</MudSelectItem>
+            </MudSelect>
 
-            <MudDivider Class="my-4" />
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Primary"
+                      DisableElevation="true"
+                      OnClick="HandleRegistration"
+                      Size="Size.Large"
+                      FullWidth="true"
+                      Class="mt-6">
+                Create Account
+            </MudButton>
 
-            <div class="d-flex justify-center mt-6">
-                <MudText Align="Align.Center">
-                    Already have an account? 
-                    <MudLink Href="/login" Color="Color.Primary">Sign in</MudLink>
-                </MudText>
-            </div>
+            <MudDivider Class="my-6" />
+
+            <MudText Align="Align.Center">
+                Already have an account? 
+                <MudLink Href="/login" Color="Color.Primary">Sign in</MudLink>
+            </MudText>
         </MudForm>
     </MudPaper>
 </MudContainer>
@@ -129,14 +149,17 @@
 
     private async Task HandleRegistration()
     {
-        await form?.Validate();
-
         if (form?.IsValid ?? false)
         {
-            var result = await UserService.RegisterAsync(registerRequest);
-            if (result)
+            var result = await AuthService.RegisterAsync(registerRequest);
+            if (result.Success)
             {
+                Snackbar.Add("Registration successful!", Severity.Success);
                 NavigationManager.NavigateTo("/");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Registration failed!", Severity.Error);
             }
         }
     }
