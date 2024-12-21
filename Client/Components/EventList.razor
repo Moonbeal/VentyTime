@@ -58,8 +58,7 @@
                             <h5 class="card-title">@evt.Title</h5>
                             <p class="card-text">@(evt.Description.Length > 100 ? evt.Description.Substring(0, 97) + "..." : evt.Description)</p>
                             <div class="event-details">
-                                <p><i class="fas fa-calendar"></i> @evt.StartDate.ToShortDateString()</p>
-                                <p><i class="fas fa-clock"></i> @(evt.StartTime?.ToString("hh\\:mm") ?? "TBD")</p>
+                                <p><i class="fas fa-calendar"></i> @evt.StartDate.ToLocalTime().ToString("f")</p>
                                 <p><i class="fas fa-map-marker-alt"></i> @evt.Location</p>
                                 <p><i class="fas fa-users"></i> @evt.CurrentParticipants/@(evt.MaxAttendees == 0 ? "∞" : evt.MaxAttendees.ToString())</p>
                             </div>

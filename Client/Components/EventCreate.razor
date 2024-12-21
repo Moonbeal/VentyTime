@@ -50,31 +50,41 @@
         </div>
 
         <div class="row mb-3">
-            <div class="col-md-6">
-                <label for="startDate" class="form-label">Start Date</label>
-                <InputDate id="startDate" class="form-control" @bind-Value="eventModel.StartDate" />
+            <div class="col-md-12">
+                <label for="startDate" class="form-label">Date and Time</label>
+                <div class="d-flex gap-2">
+                    <div class="flex-grow-1">
+                        <MudDatePicker Label="Date" 
+                                     Date="@eventModel.StartDate"
+                                     DateChanged="@((DateTime? date) => UpdateEventDate(date))"
+                                     Required="true"
+                                     Variant="Variant.Outlined"
+                                     DisableToolbar="false"
+                                     MinDate="@DateTime.Today" />
+                    </div>
+                    <div class="flex-grow-1">
+                        <MudTimePicker Label="Time"
+                                     Time="@eventModel.StartDate.TimeOfDay"
+                                     TimeChanged="@((TimeSpan? time) => UpdateEventTime(time))"
+                                     Required="true"
+                                     Variant="Variant.Outlined"
+                                     AmPm="true" />
+                    </div>
+                </div>
                 <ValidationMessage For="@(() => eventModel.StartDate)" />
             </div>
 
-            <div class="col-md-6">
-                <label for="startTime" class="form-label">Start Time</label>
-                <InputText id="startTime" class="form-control" type="time" @bind-Value="startTimeString" />
-                <ValidationMessage For="@(() => eventModel.StartTime)" />
-            </div>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-md-6">
+            <div class="col-md-12 mt-3">
                 <label for="location" class="form-label">Location</label>
                 <InputText id="location" class="form-control" @bind-Value="eventModel.Location" />
                 <ValidationMessage For="@(() => eventModel.Location)" />
             </div>
+        </div>
 
-            <div class="col-md-6">
-                <label for="maxAttendees" class="form-label">Maximum Attendees (0 for unlimited)</label>
-                <InputNumber id="maxAttendees" class="form-control" @bind-Value="eventModel.MaxAttendees" />
-                <ValidationMessage For="@(() => eventModel.MaxAttendees)" />
-            </div>
+        <div class="mb-3">
+            <label for="maxAttendees" class="form-label">Maximum Attendees (0 for unlimited)</label>
+            <InputNumber id="maxAttendees" class="form-control" @bind-Value="eventModel.MaxAttendees" />
+            <ValidationMessage For="@(() => eventModel.MaxAttendees)" />
         </div>
 
         <div class="mb-3">
@@ -96,28 +106,31 @@
 @code {
     private Event eventModel = new Event
     {
-        StartDate = DateTime.Today,
-        StartTime = TimeSpan.Zero,
+        StartDate = DateTime.Now,
         MaxAttendees = 0
     };
 
-    private string startTimeString
+    private void UpdateEventDate(DateTime? date)
     {
-        get => eventModel.StartTime?.ToString("hh\\:mm") ?? "09:00";
-        set
+        if (date.HasValue)
         {
-            if (TimeSpan.TryParse(value, out TimeSpan time))
-            {
-                eventModel.StartTime = time;
-            }
+            var time = eventModel.StartDate.TimeOfDay;
+            eventModel.StartDate = date.Value.Date.Add(time);
+        }
+    }
+
+    private void UpdateEventTime(TimeSpan? time)
+    {
+        if (time.HasValue)
+        {
+            eventModel.StartDate = eventModel.StartDate.Date.Add(time.Value);
         }
     }
 
     protected override async Task OnInitializedAsync()
     {
         // Set default values
-        eventModel.StartDate = DateTime.Today;
-        eventModel.StartTime = new TimeSpan(9, 0, 0); // Default to 9:00 AM
+        eventModel.StartDate = DateTime.Now.Date.AddHours(9); // Default to 9:00 AM today
     }
 
     private async Task HandleValidSubmit()

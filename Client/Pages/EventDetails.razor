@@ -56,7 +56,7 @@
                                     <MudIcon Icon="@Icons.Material.Filled.CalendarToday" 
                                             Class="mr-2" 
                                             Color="Color.Primary" />
-                                    @eventModel.GetDateTime().ToString("f")
+                                    @(eventModel.StartDate.ToLocalTime().ToString("f"))
                                 </MudText>
                             </MudItem>
 

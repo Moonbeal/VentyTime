@@ -1,0 +1,79 @@
+@page "/events"
+@using VentyTime.Shared.Models
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Events - VentyTime</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h3" Class="mb-4">Events</MudText>
+
+    @if (_events == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (!_events.Any())
+    {
+        <MudAlert Severity="Severity.Info">No events found.</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var evt in _events)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard>
+                        @if (!string.IsNullOrEmpty(evt.ImageUrl))
+                        {
+                            <MudCardMedia Image="@evt.ImageUrl" Height="200" />
+                        }
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5">@evt.Title</MudText>
+                            <MudText Typo="Typo.body2">@evt.Description</MudText>
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+                                @evt.Location
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                                @evt.StartDate.ToLocalTime().ToString("f")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                @evt.MaxAttendees spots available
+                            </MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" 
+                                      OnClick="@(() => NavigateToEventDetails(evt.Id))">
+                                View Details
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private List<Event>? _events;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _events = await EventService.GetEventsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error loading events: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private void NavigateToEventDetails(int eventId)
+    {
+        NavigationManager.NavigateTo($"/events/{eventId}");
+    }
+}

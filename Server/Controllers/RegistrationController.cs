@@ -75,19 +75,34 @@ namespace VentyTime.Server.Controllers
                 return Ok(new AuthResponse
                 {
                     Success = true,
+                    Message = "Registration successful",
                     Token = token,
-                    UserId = applicationUser.Id,
-                    Email = applicationUser.Email ?? string.Empty,
-                    Username = applicationUser.UserName ?? string.Empty,
-                    Role = UserRole.User,
-                    LastLoginAt = DateTime.UtcNow
+                    User = new UserDto
+                    {
+                        Id = applicationUser.Id,
+                        Email = applicationUser.Email!,
+                        FirstName = applicationUser.FirstName,
+                        LastName = applicationUser.LastName,
+                        AvatarUrl = applicationUser.AvatarUrl,
+                        Role = applicationUser.Role
+                    }
                 });
             }
 
             return BadRequest(new AuthResponse
             {
                 Success = false,
-                Message = string.Join(", ", result.Errors.Select(e => e.Description))
+                Message = "Registration failed",
+                Token = string.Empty,
+                User = new UserDto
+                {
+                    Id = string.Empty,
+                    Email = string.Empty,
+                    FirstName = string.Empty,
+                    LastName = string.Empty,
+                    AvatarUrl = string.Empty,
+                    Role = UserRole.User
+                }
             });
         }
 
@@ -99,7 +114,13 @@ namespace VentyTime.Server.Controllers
 
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
-                return BadRequest(new AuthResponse(false, "Invalid email or password"));
+                return BadRequest(new AuthResponse
+                {
+                    Success = false,
+                    Message = "Invalid email or password",
+                    Token = string.Empty,
+                    User = new UserDto()
+                });
 
             var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
 
@@ -110,15 +131,33 @@ namespace VentyTime.Server.Controllers
                 {
                     Success = true,
                     Token = token,
-                    UserId = user.Id,
-                    Email = user.Email ?? string.Empty,
-                    Username = user.UserName ?? string.Empty,
-                    Role = UserRole.User,
-                    LastLoginAt = DateTime.UtcNow
+                    User = new UserDto
+                    {
+                        Id = user.Id,
+                        Email = user.Email!,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        AvatarUrl = user.AvatarUrl,
+                        Role = user.Role
+                    }
                 });
             }
 
-            return BadRequest(new AuthResponse(false, "Invalid email or password"));
+            return BadRequest(new AuthResponse
+            {
+                Success = false,
+                Message = "Invalid email or password",
+                Token = string.Empty,
+                User = new UserDto
+                {
+                    Id = string.Empty,
+                    Email = string.Empty,
+                    FirstName = string.Empty,
+                    LastName = string.Empty,
+                    AvatarUrl = string.Empty,
+                    Role = UserRole.User
+                }
+            });
         }
 
         private string GenerateJwtToken(ApplicationUser user)

@@ -32,12 +32,15 @@ namespace VentyTime.Server.Migrations
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     FirstName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    ProfilePictureUrl = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
-                    DateJoined = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AvatarUrl = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: false),
+                    Bio = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    Location = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Website = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LastLoginAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     Role = table.Column<int>(type: "int", nullable: false),
-                    LastLoginAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
@@ -199,9 +202,10 @@ namespace VentyTime.Server.Migrations
                 name: "Registrations",
                 columns: table => new
                 {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
                     EventId = table.Column<int>(type: "int", nullable: false),
                     UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    Id = table.Column<int>(type: "int", nullable: false),
                     RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CancelledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     RegistrationDate = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -209,13 +213,13 @@ namespace VentyTime.Server.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Registrations", x => new { x.EventId, x.UserId });
+                    table.PrimaryKey("PK_Registrations", x => x.Id);
                     table.ForeignKey(
                         name: "FK_Registrations_AspNetUsers_UserId",
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Registrations_Events_EventId",
                         column: x => x.EventId,
@@ -267,6 +271,11 @@ namespace VentyTime.Server.Migrations
                 name: "IX_Events_OrganizerId",
                 table: "Events",
                 column: "OrganizerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Registrations_EventId",
+                table: "Registrations",
+                column: "EventId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Registrations_UserId",

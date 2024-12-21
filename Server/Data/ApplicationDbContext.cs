@@ -22,7 +22,10 @@ namespace VentyTime.Server.Data
             {
                 entity.Property(e => e.FirstName).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.LastName).HasMaxLength(50).IsRequired();
-                entity.Property(e => e.ProfilePictureUrl).HasMaxLength(2000);
+                entity.Property(e => e.AvatarUrl).HasMaxLength(2000);
+                entity.Property(e => e.Bio).HasMaxLength(500);
+                entity.Property(e => e.Location).HasMaxLength(100);
+                entity.Property(e => e.Website).HasMaxLength(200);
             });
 
             builder.Entity<Event>(entity =>
@@ -34,16 +37,45 @@ namespace VentyTime.Server.Data
                     .HasForeignKey(e => e.OrganizerId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-                entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
-                entity.Property(e => e.Description).HasMaxLength(2000);
-                entity.Property(e => e.Location).HasMaxLength(500);
-                entity.Property(e => e.Price).HasPrecision(18, 2);
-                entity.Property(e => e.Category).HasMaxLength(50);
+                entity.Property(e => e.Title)
+                    .HasMaxLength(100)
+                    .IsRequired();
+
+                entity.Property(e => e.Description)
+                    .HasMaxLength(500)
+                    .IsRequired();
+
+                entity.Property(e => e.Category)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.Property(e => e.Location)
+                    .HasMaxLength(200)
+                    .IsRequired();
+
+                entity.Property(e => e.StartDate)
+                    .IsRequired()
+                    .HasConversion(
+                        v => v,
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+                entity.Property(e => e.Price)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+
+                entity.Property(e => e.MaxAttendees)
+                    .IsRequired();
+
+                entity.Property(e => e.ImageUrl)
+                    .HasMaxLength(2000);
+
+                entity.Property(e => e.OrganizerId)
+                    .IsRequired();
             });
 
             builder.Entity<Registration>(entity =>
             {
-                entity.HasKey(r => new { r.EventId, r.UserId });
+                entity.HasKey(r => r.Id);
 
                 entity.HasOne(r => r.Event)
                     .WithMany(e => e.Registrations)
@@ -54,6 +86,13 @@ namespace VentyTime.Server.Data
                     .WithMany(u => u.Registrations)
                     .HasForeignKey(r => r.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(r => r.RegistrationDate)
+                    .IsRequired();
+
+                entity.Property(r => r.Status)
+                    .HasMaxLength(50)
+                    .IsRequired();
             });
         }
     }

@@ -24,9 +24,9 @@
     {
         <MudGrid>
             <MudItem xs="12" sm="4">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
+                <MudPaper Elevation="3" Class="pa-6">
                     <div class="d-flex flex-column align-center mb-6">
-                        <MudAvatar Size="Size.Large" Image="@(user?.ProfilePictureUrl ?? string.Empty)" />
+                        <MudAvatar Size="Size.Large" Image="@(user?.AvatarUrl ?? string.Empty)" />
                         <MudText Typo="Typo.h5" Class="mt-4">@(user?.UserName ?? "Unknown")</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary">Member since @(user?.CreatedAt.ToString("MMMM yyyy") ?? "Unknown")</MudText>
                     </div>
@@ -89,7 +89,7 @@
                         else
                         {
                             <MudList Clickable="true">
-                                @foreach (var registration in registrations.OrderBy(r => r?.Event?.GetDateTime() ?? DateTime.MaxValue))
+                                @foreach (var registration in registrations.OrderBy(r => r?.Event?.StartDate ?? DateTime.MaxValue))
                                 {
                                     <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{registration.EventId}"))">
                                         <div class="d-flex" style="gap: 16px;">
@@ -111,7 +111,7 @@
                                             <div class="d-flex flex-column justify-center">
                                                 <MudText Typo="Typo.h6">@(registration?.Event?.Title ?? "Unknown Event")</MudText>
                                                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                    @(registration?.Event?.GetDateTime().ToString("f") ?? "Date not set")
+                                                    @(registration?.Event?.StartDate.ToLocalTime().ToString("f") ?? "Date not set")
                                                 </MudText>
                                                 <MudText Typo="Typo.body2">@(registration?.Event?.Location ?? "Location not set")</MudText>
                                             </div>
@@ -141,7 +141,7 @@
                         else
                         {
                             <MudList Clickable="true">
-                                @foreach (var evt in organizedEvents.OrderByDescending(e => e?.GetDateTime() ?? DateTime.MinValue))
+                                @foreach (var evt in organizedEvents.OrderByDescending(e => e?.StartDate ?? DateTime.MinValue))
                                 {
                                     <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
                                         <div class="d-flex" style="gap: 16px;">
@@ -163,7 +163,7 @@
                                             <div class="d-flex flex-column justify-center">
                                                 <MudText Typo="Typo.h6">@(evt?.Title ?? "Unknown Event")</MudText>
                                                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                    @(evt?.GetDateTime().ToString("f") ?? "Date not set")
+                                                    @(evt?.StartDate.ToLocalTime().ToString("f") ?? "Date not set")
                                                 </MudText>
                                                 <MudText Typo="Typo.body2">@(evt?.Location ?? "Location not set")</MudText>
                                             </div>

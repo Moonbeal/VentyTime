@@ -131,23 +131,23 @@
                                 <MudTable Items="@filteredEvents" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                                     <HeaderContent>
                                         <MudTh>Title</MudTh>
-                                        <MudTh>Date</MudTh>
+                                        <MudTh>Date & Time</MudTh>
                                         <MudTh>Status</MudTh>
                                         <MudTh>Actions</MudTh>
                                     </HeaderContent>
                                     <RowTemplate>
                                         <MudTd DataLabel="Title">@context.Title</MudTd>
-                                        <MudTd DataLabel="Date">@context.StartDate.ToShortDateString()</MudTd>
+                                        <MudTd DataLabel="Date">@context.StartDate.ToLocalTime().ToString("f")</MudTd>
                                         <MudTd DataLabel="Status">
                                             @if (context.IsFull)
                                             {
                                                 <MudChip Color="Color.Error">Full</MudChip>
                                             }
-                                            else if (context.IsFinished)
+                                            else if (context.IsFinished())
                                             {
                                                 <MudChip Color="Color.Default">Finished</MudChip>
                                             }
-                                            else if (context.HasStarted)
+                                            else if (context.HasStarted())
                                             {
                                                 <MudChip Color="Color.Warning">In Progress</MudChip>
                                             }
@@ -162,7 +162,8 @@
                                                 View
                                             </MudButton>
                                             <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
-                                                     OnClick="@(() => CancelEvent(context))">
+                                                     OnClick="@(() => CancelEvent(context))"
+                                                     Disabled="@(context.HasStarted() || context.IsFinished())">
                                                 Cancel
                                             </MudButton>
                                         </MudTd>
@@ -262,7 +263,7 @@
             statistics = new SystemStatistics
             {
                 TotalUsers = users.Count,
-                ActiveEvents = events.Count(e => !e.IsFinished),
+                ActiveEvents = events.Count(e => !e.IsFinished()),
                 TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
             };
         }

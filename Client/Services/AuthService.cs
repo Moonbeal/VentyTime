@@ -51,12 +51,12 @@ namespace VentyTime.Client.Services
 
                 _logger.LogWarning("Login failed for user {Email}. Status code: {StatusCode}", 
                     request.Email, response.StatusCode);
-                return new AuthResponse { Success = false, Message = "Login failed." };
+                return new AuthResponse { Success = false, Message = "Login failed.", User = new UserDto() };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while logging in user {Email}", request.Email);
-                return new AuthResponse { Success = false, Message = "An error occurred during login." };
+                return new AuthResponse { Success = false, Message = "An error occurred during login.", User = new UserDto() };
             }
         }
 
@@ -66,9 +66,31 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogInformation("Attempting to register user: {Email}", request.Email);
                 var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
-                var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Registration failed for user {Email}. Status code: {StatusCode}, Error: {Error}", 
+                        request.Email, response.StatusCode, errorContent);
+                    return new AuthResponse 
+                    { 
+                        Success = false, 
+                        Message = $"Registration failed: {errorContent}",
+                        Token = string.Empty,
+                        User = new UserDto
+                        {
+                            Id = string.Empty,
+                            Email = string.Empty,
+                            FirstName = string.Empty,
+                            LastName = string.Empty,
+                            AvatarUrl = string.Empty,
+                            Role = UserRole.User
+                        }
+                    };
+                }
 
-                if (response.IsSuccessStatusCode && result?.Token != null)
+                var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+                if (result?.Token != null)
                 {
                     await _localStorage.SetItemAsync("authToken", result.Token);
                     await _authStateProvider.NotifyUserAuthentication(result.Token);
@@ -77,14 +99,41 @@ namespace VentyTime.Client.Services
                     return result;
                 }
 
-                _logger.LogWarning("Registration failed for user {Email}. Status code: {StatusCode}", 
-                    request.Email, response.StatusCode);
-                return new AuthResponse { Success = false, Message = "Registration failed." };
+                _logger.LogWarning("Registration failed for user {Email} - invalid response format", request.Email);
+                return new AuthResponse 
+                { 
+                    Success = false, 
+                    Message = "Registration failed: Invalid response from server",
+                    Token = string.Empty,
+                    User = new UserDto
+                    {
+                        Id = string.Empty,
+                        Email = string.Empty,
+                        FirstName = string.Empty,
+                        LastName = string.Empty,
+                        AvatarUrl = string.Empty,
+                        Role = UserRole.User
+                    }
+                };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while registering user {Email}", request.Email);
-                return new AuthResponse { Success = false, Message = "An error occurred during registration." };
+                return new AuthResponse 
+                { 
+                    Success = false, 
+                    Message = "An error occurred during registration.",
+                    Token = string.Empty,
+                    User = new UserDto
+                    {
+                        Id = string.Empty,
+                        Email = string.Empty,
+                        FirstName = string.Empty,
+                        LastName = string.Empty,
+                        AvatarUrl = string.Empty,
+                        Role = UserRole.User
+                    }
+                };
             }
         }
 

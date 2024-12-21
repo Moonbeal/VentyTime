@@ -12,11 +12,7 @@
     <div class="d-flex gap-4 mb-4 flex-wrap">
         <div class="d-flex align-center">
             <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
-            <MudText>@Event.StartDate.ToString("MMMM dd, yyyy")</MudText>
-        </div>
-        <div class="d-flex align-center">
-            <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
-            <MudText>@Event.StartTime?.ToString("hh\\:mm") PM - @Event.StartTime?.Add(TimeSpan.FromHours(3)).ToString("hh\\:mm") PM</MudText>
+            <MudText>@Event.StartDate.ToLocalTime().ToString("f")</MudText>
         </div>
         <div class="d-flex align-center">
             <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />

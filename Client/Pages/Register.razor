@@ -24,6 +24,7 @@
                                 Variant="Variant.Outlined"
                                 id="firstName"
                                 name="firstName"
+                                autocomplete="given-name"
                                 Class="mb-4" />
                 </MudItem>
 
@@ -36,6 +37,7 @@
                                 Variant="Variant.Outlined"
                                 id="lastName"
                                 name="lastName"
+                                autocomplete="family-name"
                                 Class="mb-4" />
                 </MudItem>
             </MudGrid>
@@ -52,6 +54,7 @@
                          AdornmentIcon="@Icons.Material.Filled.Email"
                          id="email"
                          name="email"
+                         autocomplete="email"
                          Class="mb-4" />
 
             <MudTextField @bind-Value="registerRequest.Password"
@@ -66,6 +69,7 @@
                          Variant="Variant.Outlined"
                          id="password"
                          name="password"
+                         autocomplete="new-password"
                          HelperText="Password must be at least 6 characters long and contain uppercase, lowercase, number and special character"
                          Class="mb-4" />
 
@@ -82,6 +86,7 @@
                          Variant="Variant.Outlined"
                          id="confirmPassword"
                          name="confirmPassword"
+                         autocomplete="new-password"
                          Class="mb-4" />
 
             <MudSelect T="UserRole" 
@@ -93,74 +98,87 @@
                       id="role"
                       name="role"
                       Class="mb-4">
-                <MudSelectItem Value="UserRole.User">User</MudSelectItem>
-                <MudSelectItem Value="UserRole.Organizer">Organizer</MudSelectItem>
+                <MudSelectItem Value="@(UserRole.User)">User</MudSelectItem>
+                <MudSelectItem Value="@(UserRole.Organizer)">Organizer</MudSelectItem>
             </MudSelect>
 
-            <MudButton Variant="Variant.Filled"
-                      Color="Color.Primary"
-                      DisableElevation="true"
-                      OnClick="HandleRegistration"
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
                       Size="Size.Large"
                       FullWidth="true"
-                      Class="mt-6">
-                Create Account
+                      OnClick="HandleRegistration"
+                      Disabled="@(!success)"
+                      Class="mt-4">
+                CREATE ACCOUNT
             </MudButton>
 
-            <MudDivider Class="my-6" />
-
-            <MudText Align="Align.Center">
-                Already have an account? 
-                <MudLink Href="/login" Color="Color.Primary">Sign in</MudLink>
-            </MudText>
+            <div class="d-flex justify-center mt-6">
+                <MudText>Already have an account?</MudText>
+                <MudLink Href="/login" Underline="Underline.Always" Class="ml-2">Login here</MudLink>
+            </div>
         </MudForm>
     </MudPaper>
 </MudContainer>
 
 @code {
-    MudForm? form;
-    bool success;
     private RegisterRequest registerRequest = new();
-    bool PasswordVisibility;
-    InputType PasswordInput = InputType.Password;
-    string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+    private bool success;
+    private MudForm? form;
 
-    void TogglePasswordVisibility()
+    private InputType PasswordInput = InputType.Password;
+    private string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+
+    private void TogglePasswordVisibility()
     {
-        @if (PasswordVisibility)
+        if (PasswordInput == InputType.Password)
         {
-            PasswordVisibility = false;
-            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-            PasswordInput = InputType.Password;
+            PasswordInput = InputType.Text;
+            PasswordInputIcon = Icons.Material.Filled.Visibility;
         }
         else
         {
-            PasswordVisibility = true;
-            PasswordInputIcon = Icons.Material.Filled.Visibility;
-            PasswordInput = InputType.Text;
+            PasswordInput = InputType.Password;
+            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
         }
     }
 
-    private IEnumerable<string> ConfirmPasswordValidation(string arg)
+    private IEnumerable<string> ConfirmPasswordValidation(string confirmPassword)
     {
-        if (registerRequest.Password != arg)
-            yield return "Passwords do not match";
+        if (confirmPassword != registerRequest.Password)
+            yield return "Passwords do not match!";
     }
 
     private async Task HandleRegistration()
     {
-        if (form?.IsValid ?? false)
+        try
         {
-            var result = await AuthService.RegisterAsync(registerRequest);
-            if (result.Success)
+            if (form != null)
             {
-                Snackbar.Add("Registration successful!", Severity.Success);
-                NavigationManager.NavigateTo("/");
+                await form.Validate();
+                
+                if (form.IsValid)
+                {
+                    var result = await AuthService.RegisterAsync(registerRequest);
+                    if (result.Success)
+                    {
+                        Snackbar.Add("Registration successful! Please login.", Severity.Success);
+                        NavigationManager.NavigateTo("/login");
+                    }
+                    else
+                    {
+                        Snackbar.Add(result.Message ?? "Registration failed. Please try again.", Severity.Error);
+                    }
+                }
+                else
+                {
+                    Snackbar.Add("Please fix the validation errors.", Severity.Warning);
+                }
             }
-            else
-            {
-                Snackbar.Add(result.Message ?? "Registration failed!", Severity.Error);
-            }
+        }
+        catch (Exception error)
+        {
+            Console.WriteLine($"Registration error: {error.Message}");
+            Snackbar.Add("An unexpected error occurred. Please try again.", Severity.Error);
         }
     }
 }

@@ -5,6 +5,8 @@ using VentyTime.Shared.Models;
 
 namespace VentyTime.Server.Models
 {
+    // This file is deprecated. Please use Shared.Models.ApplicationUser instead.
+    // This file will be removed in a future update.
     public class ApplicationUser : IdentityUser
     {
         public string FirstName { get; set; } = string.Empty;
@@ -15,6 +17,12 @@ namespace VentyTime.Server.Models
         public DateTime? UpdatedAt { get; set; }
         public bool IsActive { get; set; } = true;
         public string? ProfilePictureUrl { get; set; }
+
+        // Profile fields
+        public string AvatarUrl { get; set; } = "/images/default-profile.png";
+        public string Bio { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+        public string Website { get; set; } = string.Empty;
 
         public string FullName => $"{FirstName} {LastName}".Trim();
 

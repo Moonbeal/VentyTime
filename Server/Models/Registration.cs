@@ -1,4 +1,5 @@
 using System;
+using VentyTime.Shared.Models;
 
 namespace VentyTime.Server.Models
 {

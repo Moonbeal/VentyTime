@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Net.Http.Json;
 using VentyTime.Shared.Models;
 
@@ -14,32 +15,104 @@ namespace VentyTime.Client.Services
 
         public async Task<List<Event>> GetEventsAsync()
         {
-            return await _httpClient.GetFromJsonAsync<List<Event>>("api/events") ?? new List<Event>();
+            try
+            {
+                var response = await _httpClient.GetAsync("api/events");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting events: {ex.Message}");
+                return new List<Event>();
+            }
         }
 
         public async Task<Event?> GetEventByIdAsync(int id)
         {
-            return await _httpClient.GetFromJsonAsync<Event>($"api/events/{id}");
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/events/{id}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting event {id}: {ex.Message}");
+                return null;
+            }
         }
 
         public async Task<Event> CreateEventAsync(Event eventItem)
         {
-            var response = await _httpClient.PostAsJsonAsync("api/events", eventItem);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to create event");
+            try
+            {
+                Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
+                
+                // Get the local time zone offset in minutes
+                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+                
+                using var request = new HttpRequestMessage(HttpMethod.Post, "api/events");
+                request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
+                request.Content = JsonContent.Create(eventItem);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                
+                var createdEvent = await response.Content.ReadFromJsonAsync<Event>();
+                return createdEvent ?? throw new Exception("Created event is null");
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"HTTP error creating event: {ex.Message}");
+                if (ex.StatusCode != null)
+                {
+                    Console.WriteLine($"Status code: {ex.StatusCode}");
+                }
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating event: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                throw;
+            }
         }
 
         public async Task<Event> UpdateEventAsync(Event eventItem)
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/events/{eventItem.Id}", eventItem);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
+            try
+            {
+                // Get the local time zone offset in minutes
+                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+                
+                using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{eventItem.Id}");
+                request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
+                request.Content = JsonContent.Create(eventItem);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating event: {ex.Message}");
+                throw;
+            }
         }
 
         public async Task<bool> DeleteEventAsync(int id)
         {
-            var response = await _httpClient.DeleteAsync($"api/events/{id}");
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"api/events/{id}");
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting event: {ex.Message}");
+                return false;
+            }
         }
 
         public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
@@ -76,34 +149,36 @@ namespace VentyTime.Client.Services
 
         public async Task<byte[]> GenerateReportAsync(ReportPeriod period)
         {
-            var response = await _httpClient.GetAsync($"api/events/report/{period}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync();
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/events/report/{period}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsByteArrayAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating report: {ex.Message}");
+                throw;
+            }
         }
 
         public async Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content)
         {
             try
             {
-                Console.WriteLine("Sending image upload request...");
-                var response = await _httpClient.PostAsync("api/events/upload-image", content);
-                Console.WriteLine($"Upload response status: {response.StatusCode}");
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var imageUrl = await response.Content.ReadAsStringAsync();
-                    imageUrl = imageUrl.Trim('"');
-                    Console.WriteLine($"Upload successful. Image URL: {imageUrl}");
-                    return new ApiResponse<string> { IsSuccessful = true, Data = imageUrl };
-                }
-                
-                var errorMessage = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Upload failed. Error: {errorMessage}");
-                return new ApiResponse<string> { IsSuccessful = false, Message = errorMessage };
+                var response = await _httpClient.PostAsync("api/events/upload", content);
+                response.EnsureSuccessStatusCode();
+                var url = await response.Content.ReadAsStringAsync();
+                return new ApiResponse<string> { IsSuccessful = true, Data = url.Trim('"') };
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"HTTP error uploading image: {ex.Message}");
+                return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Upload error: {ex.Message}");
+                Console.WriteLine($"Error uploading image: {ex.Message}");
                 return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
             }
         }

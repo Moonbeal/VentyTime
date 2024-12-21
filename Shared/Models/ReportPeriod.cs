@@ -5,7 +5,6 @@ namespace VentyTime.Shared.Models
         Daily,
         Weekly,
         Monthly,
-        Yearly,
-        Custom
+        Yearly
     }
 }

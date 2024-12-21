@@ -10,6 +10,8 @@ public class LoginRequest
 
     [Required(ErrorMessage = "Password is required")]
     public string Password { get; set; } = string.Empty;
+
+    public bool RememberMe { get; set; }
 }
 
 public class RegisterRequest
@@ -42,23 +44,10 @@ public class RegisterRequest
 
 public class AuthResponse
 {
-    public bool Success { get; set; }
+    public bool Success { get; set; } = true;
     public string Message { get; set; } = string.Empty;
     public string Token { get; set; } = string.Empty;
-    public string UserId { get; set; } = string.Empty;
-    public string Username { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public UserRole Role { get; set; }
-    public DateTime LastLoginAt { get; set; }
-
-    public AuthResponse() { }
-
-    public AuthResponse(bool success, string message, string token = "")
-    {
-        Success = success;
-        Message = message;
-        Token = token;
-    }
+    public UserDto? User { get; set; }
 }
 
 public class ChangePasswordRequest

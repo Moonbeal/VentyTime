@@ -17,7 +17,7 @@
         <MudText Typo="Typo.body2" Class="mb-2">@Event.Description</MudText>
         <MudStack Row="true" Spacing="2">
             <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
-            <MudText Typo="Typo.body2">@Event.StartDate.ToShortDateString()</MudText>
+            <MudText Typo="Typo.body2">@Event.StartDate.ToLocalTime().ToString("f")</MudText>
         </MudStack>
         <MudStack Row="true" Spacing="2" Class="mt-2">
             <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
@@ -26,10 +26,6 @@
         <MudStack Row="true" Spacing="2" Class="mt-2">
             <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" />
             <MudText Typo="Typo.body2">@Event.Price.ToString("C")</MudText>
-        </MudStack>
-        <MudStack Row="true" Spacing="2" Class="mt-2">
-            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
-            <MudText Typo="Typo.body2">@(Event.StartTime?.ToString("hh\\:mm") ?? "TBD")</MudText>
         </MudStack>
     </MudCardContent>
     <MudCardActions>

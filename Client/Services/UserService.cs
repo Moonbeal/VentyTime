@@ -147,8 +147,8 @@ public class UserService : IUserService
                 if (authResponse?.Token != null)
                 {
                     await _localStorage.SetItemAsync("authToken", authResponse.Token);
-                    await _localStorage.SetItemAsync("userId", authResponse.UserId);
-                    await _localStorage.SetItemAsync("userRole", authResponse.Role.ToString());
+                    await _localStorage.SetItemAsync("userId", authResponse.User?.Id);
+                    await _localStorage.SetItemAsync("userRole", authResponse.User?.Role.ToString() ?? UserRole.User.ToString());
                     await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
                     _snackbar.Add("Successfully logged in!", Severity.Success);
                     return true;
@@ -196,8 +196,8 @@ public class UserService : IUserService
                 if (authResponse?.Token != null)
                 {
                     await _localStorage.SetItemAsync("authToken", authResponse.Token);
-                    await _localStorage.SetItemAsync("userId", authResponse.UserId);
-                    await _localStorage.SetItemAsync("userRole", authResponse.Role.ToString());
+                    await _localStorage.SetItemAsync("userId", authResponse.User?.Id);
+                    await _localStorage.SetItemAsync("userRole", authResponse.User?.Role.ToString() ?? UserRole.User.ToString());
                     await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
                     _snackbar.Add("Successfully registered!", Severity.Success);
                     return true;

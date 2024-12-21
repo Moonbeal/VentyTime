@@ -1,52 +1,31 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
+using System.Globalization;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
-using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.Components.WebAssembly.Server;
+using Microsoft.AspNetCore.Diagnostics;
+using System.Net;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Set default culture to English
+var cultureInfo = new CultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+
+// Configure Kestrel to listen on localhost only
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Listen(System.Net.IPAddress.Loopback, 5241); // HTTP port
+    serverOptions.Listen(System.Net.IPAddress.Loopback, 7241, configure => configure.UseHttps()); // HTTPS port
+});
+
 // Add services to the container.
-builder.Services.AddControllersWithViews();
-builder.Services.AddRazorPages();
-
-// Add Blazor WebAssembly
-builder.Services.AddEndpointsApiExplorer();
-
-// Configure CORS
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
-    {
-        policy.WithOrigins("http://localhost:5000", "http://localhost:7241")
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
-    });
-});
-
-// Configure response compression
-builder.Services.AddResponseCompression(opts =>
-{
-    opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
-        new[] { "application/octet-stream" });
-});
-
-// Configure logging
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-
-// Configure database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
-    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Configure Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -56,41 +35,52 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.SignIn.RequireConfirmedEmail = false;
+    options.SignIn.RequireConfirmedAccount = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key not found."));
+// Register Identity services
+builder.Services.AddScoped<UserManager<ApplicationUser>>();
+builder.Services.AddScoped<SignInManager<ApplicationUser>>();
+builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
+// Configure JWT Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false;
-    options.SaveToken = true;
-    options.TokenValidationParameters = new TokenValidationParameters
+    options.TokenValidationParameters = new()
     {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
         ValidateIssuer = true,
         ValidateAudience = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        ClockSkew = TimeSpan.Zero
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+        ValidAudience = builder.Configuration["JwtSettings:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Key"] ?? throw new InvalidOperationException("JWT Key is not configured")))
     };
 });
 
-// Configure authorization
-builder.Services.AddAuthorization(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
+builder.Services.AddRazorPages();
+
+// Configure CORS
+builder.Services.AddCors(options =>
 {
-    options.AddPolicy("RequireOrganizerRole", policy =>
-        policy.RequireRole(UserRole.Organizer.ToString(), UserRole.Admin.ToString()));
+    options.AddDefaultPolicy(builder =>
+        builder.SetIsOriginAllowed(_ => true)
+               .AllowAnyMethod()
+               .AllowAnyHeader()
+               .AllowCredentials());
 });
 
 var app = builder.Build();
@@ -99,32 +89,54 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
-}
-else
-{
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
+    app.UseDeveloperExceptionPage();
+    
+    // Enable detailed errors
+    app.UseExceptionHandler(builder =>
+    {
+        builder.Run(async context =>
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            var error = context.Features.Get<IExceptionHandlerFeature>();
+            if (error != null)
+            {
+                var ex = error.Error;
+                logger.LogError(ex, "Необроблена помилка: {Message}", ex.Message);
+                logger.LogError("Stack Trace: {StackTrace}", ex.StackTrace);
+                if (ex.InnerException != null)
+                {
+                    logger.LogError("Inner Exception: {Message}", ex.InnerException.Message);
+                    logger.LogError("Inner Stack Trace: {StackTrace}", ex.InnerException.StackTrace);
+                }
+
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "Внутрішня помилка сервера",
+                    details = ex.Message,
+                    stackTrace = ex.StackTrace
+                });
+            }
+        });
+    });
 }
 
 app.UseHttpsRedirection();
-
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
-
-// Use CORS before routing
-app.UseCors();  
-
-// Use routing and authorization
 app.UseRouting();
+
+app.UseCors();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Map controllers and Blazor
 app.MapRazorPages();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
 
-// Ensure database is created and migrations are applied
+// Ensure database is created and seeded
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -134,36 +146,15 @@ using (var scope = app.Services.CreateScope())
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        // Ensure database is created
-        context.Database.EnsureCreated();
+        context.Database.Migrate();
 
-        // Ensure roles are created
+        // Ensure roles exist
         var roles = Enum.GetNames(typeof(UserRole));
-
         foreach (var role in roles)
         {
             if (!await roleManager.RoleExistsAsync(role))
             {
                 await roleManager.CreateAsync(new IdentityRole(role));
-            }
-        }
-
-        // Add admin user if it doesn't exist
-        var adminEmail = "admin@ventytime.com";
-        var adminUser = await userManager.FindByEmailAsync(adminEmail);
-        if (adminUser == null)
-        {
-            adminUser = new ApplicationUser
-            {
-                UserName = adminEmail,
-                Email = adminEmail,
-                EmailConfirmed = true,
-                Role = UserRole.Admin
-            };
-            var result = await userManager.CreateAsync(adminUser, "Admin123!");
-            if (result.Succeeded)
-            {
-                await userManager.AddToRoleAsync(adminUser, "Admin");
             }
         }
     }

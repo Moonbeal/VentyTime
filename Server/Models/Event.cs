@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using VentyTime.Shared.Models;
 
 namespace VentyTime.Server.Models
 {

@@ -1,17 +1,16 @@
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
-using Microsoft.AspNetCore.Authorization;
 
 namespace VentyTime.Server.Controllers
 {
@@ -22,172 +21,248 @@ namespace VentyTime.Server.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
-        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IConfiguration configuration,
-            ILogger<AuthController> logger)
+            IConfiguration configuration)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
-            _logger = logger;
         }
 
         [HttpPost("register")]
-        [AllowAnonymous]
-        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest model)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest model)
         {
-            try
+            if (!ModelState.IsValid)
             {
-                _logger.LogInformation("Starting user registration process for email: {Email}", model.Email);
+                return BadRequest(ModelState);
+            }
 
-                if (!ModelState.IsValid)
+            var user = new ApplicationUser
+            {
+                UserName = model.Email,
+                Email = model.Email,
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            var result = await _userManager.CreateAsync(user, model.Password);
+            if (result.Succeeded)
+            {
+                // Add default role
+                await _userManager.AddToRoleAsync(user, "User");
+
+                // Generate email confirmation token
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+                // TODO: Send confirmation email
+                // For now, we'll auto-confirm the email
+                await _userManager.ConfirmEmailAsync(user, token);
+
+                // Sign in the user
+                await _signInManager.SignInAsync(user, isPersistent: false);
+
+                // Generate JWT token
+                var jwtToken = await GenerateJwtToken(user);
+
+                return Ok(new AuthResponse
                 {
-                    _logger.LogWarning("Invalid model state during registration");
-                    return BadRequest(ModelState);
-                }
-
-                var existingUser = await _userManager.FindByEmailAsync(model.Email);
-                if (existingUser != null)
-                {
-                    _logger.LogWarning("User with email {Email} already exists", model.Email);
-                    return BadRequest(new AuthResponse(false, "User with this email already exists"));
-                }
-
-                var user = new ApplicationUser
-                {
-                    UserName = model.Email,
-                    Email = model.Email,
-                    FirstName = model.FirstName,
-                    LastName = model.LastName,
-                    CreatedAt = DateTime.UtcNow,
-                    Role = model.Role
-                };
-
-                _logger.LogInformation("Creating new user with email: {Email}", model.Email);
-                var result = await _userManager.CreateAsync(user, model.Password);
-
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User {Email} created successfully", model.Email);
-
-                    // Add user to role
-                    await _userManager.AddToRoleAsync(user, model.Role.ToString());
-                    _logger.LogInformation("Added user {Email} to role: {Role}", model.Email, model.Role);
-
-                    // Generate JWT token
-                    var token = GenerateJwtToken(user);
-                    _logger.LogInformation("JWT token generated for user {Email}", model.Email);
-
-                    return Ok(new AuthResponse
+                    Token = jwtToken,
+                    User = new UserDto
                     {
-                        Token = token,
-                        UserId = user.Id,
-                        Username = user.UserName ?? string.Empty,
-                        Email = user.Email ?? string.Empty,
-                        Role = user.Role,
-                        LastLoginAt = DateTime.UtcNow,
-                        Success = true,
-                        Message = "Registration successful"
-                    });
-                }
-
-                _logger.LogError("Failed to create user {Email}. Errors: {Errors}", 
-                    model.Email, 
-                    string.Join(", ", result.Errors));
-
-                return BadRequest(new AuthResponse(false, 
-                    "Registration failed: " + string.Join(", ", result.Errors.Select(e => e.Description))));
+                        Id = user.Id,
+                        Email = user.Email!,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        AvatarUrl = user.AvatarUrl,
+                        Role = user.Role
+                    }
+                });
             }
-            catch (Exception ex)
+
+            foreach (var error in result.Errors)
             {
-                _logger.LogError(ex, "An unexpected error occurred during registration");
-                return StatusCode(500, new AuthResponse(false, "An unexpected error occurred"));
+                ModelState.AddModelError(string.Empty, error.Description);
             }
+
+            return BadRequest(ModelState);
         }
 
         [HttpPost("login")]
-        [AllowAnonymous]
-        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest model)
+        public async Task<IActionResult> Login([FromBody] LoginRequest model)
         {
-            try
+            if (!ModelState.IsValid)
             {
-                _logger.LogInformation("Starting login process for email: {Email}", model.Email);
+                return BadRequest(ModelState);
+            }
 
-                if (!ModelState.IsValid)
+            var user = await _userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+            {
+                return BadRequest(new { message = "Invalid email or password" });
+            }
+
+            if (!user.IsActive)
+            {
+                return BadRequest(new { message = "Your account has been deactivated" });
+            }
+
+            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: true);
+            if (result.Succeeded)
+            {
+                // Update last login time
+                user.LastLoginAt = DateTime.UtcNow;
+                user.UpdatedAt = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+
+                // Generate JWT token
+                var token = await GenerateJwtToken(user);
+
+                return Ok(new AuthResponse
                 {
-                    _logger.LogWarning("Invalid model state during login");
-                    return BadRequest(ModelState);
-                }
-
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user == null)
-                {
-                    _logger.LogWarning("User with email {Email} not found", model.Email);
-                    return Unauthorized(new AuthResponse(false, "Invalid email or password"));
-                }
-
-                var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User {Email} logged in successfully", model.Email);
-
-                    // Update last login time
-                    user.LastLoginAt = DateTime.UtcNow;
-                    await _userManager.UpdateAsync(user);
-
-                    // Generate JWT token
-                    var token = GenerateJwtToken(user);
-
-                    return Ok(new AuthResponse
+                    Token = token,
+                    User = new UserDto
                     {
-                        Token = token,
-                        UserId = user.Id,
-                        Username = user.UserName ?? string.Empty,
-                        Email = user.Email ?? string.Empty,
-                        Role = user.Role,
-                        LastLoginAt = user.LastLoginAt ?? DateTime.UtcNow,
-                        Success = true,
-                        Message = "Login successful"
-                    });
-                }
+                        Id = user.Id,
+                        Email = user.Email!,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        AvatarUrl = user.AvatarUrl,
+                        Role = user.Role
+                    }
+                });
+            }
 
-                _logger.LogWarning("Invalid password for user {Email}", model.Email);
-                return Unauthorized(new AuthResponse(false, "Invalid email or password"));
-            }
-            catch (Exception ex)
+            if (result.IsLockedOut)
             {
-                _logger.LogError(ex, "An unexpected error occurred during login");
-                return StatusCode(500, new AuthResponse(false, "An unexpected error occurred"));
+                return BadRequest(new { message = "Account locked. Please try again later." });
             }
+
+            return BadRequest(new { message = "Invalid email or password" });
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            await _signInManager.SignOutAsync();
+            return Ok(new { message = "Logged out successfully" });
+        }
+
+        private Task<string> GenerateJwtToken(ApplicationUser user)
         {
             var claims = new List<Claim>
             {
+                new(JwtRegisteredClaimNames.Sub, user.Email!),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new(ClaimTypes.NameIdentifier, user.Id),
-                new(ClaimTypes.Name, user.UserName ?? string.Empty),
-                new(ClaimTypes.Email, user.Email ?? string.Empty),
-                new(ClaimTypes.Role, user.Role.ToString())
+                new(ClaimTypes.Name, user.UserName!),
+                new(ClaimTypes.Email, user.Email!),
+                new("firstName", user.FirstName),
+                new("lastName", user.LastName),
+                new("role", user.Role.ToString())
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"] ?? throw new InvalidOperationException()));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var expires = DateTime.Now.AddDays(Convert.ToDouble(_configuration["JwtSettings:ExpirationInDays"]));
 
             var token = new JwtSecurityToken(
-                _configuration["JwtSettings:Issuer"],
-                _configuration["JwtSettings:Audience"],
-                claims,
+                issuer: _configuration["JwtSettings:Issuer"],
+                audience: _configuration["JwtSettings:Audience"],
+                claims: claims,
                 expires: expires,
-                signingCredentials: creds
-            );
+                signingCredentials: creds);
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return Task.FromResult(new JwtSecurityTokenHandler().WriteToken(token));
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public async Task<ActionResult<UserDto>> GetCurrentUser()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email!,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                AvatarUrl = user.AvatarUrl,
+                Role = user.Role
+            });
+        }
+
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest model)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            user.FirstName = model.FirstName;
+            user.LastName = model.LastName;
+            user.AvatarUrl = model.AvatarUrl ?? user.AvatarUrl;
+            user.Bio = model.Bio ?? user.Bio;
+            user.Location = model.Location ?? user.Location;
+            user.Website = model.Website ?? user.Website;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest(result.Errors);
+            }
+
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email!,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                AvatarUrl = user.AvatarUrl,
+                Role = user.Role
+            });
+        }
+
+        [Authorize]
+        [HttpPut("password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+            if (!result.Succeeded)
+            {
+                foreach (var error in result.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error.Description);
+                }
+                return BadRequest(ModelState);
+            }
+
+            return Ok(new { message = "Password changed successfully" });
         }
     }
 }

@@ -1,5 +1,5 @@
-using VentyTime.Shared.Models;
 using System.Net.Http;
+using VentyTime.Shared.Models;
 
 namespace VentyTime.Client.Services
 {
@@ -16,7 +16,7 @@ namespace VentyTime.Client.Services
         Task<List<Event>> GetPopularEventsAsync(int count = 5);
         Task<bool> IsEventFullAsync(int id);
         Task<bool> CancelEventAsync(int id);
-        Task<byte[]> GenerateReportAsync(ReportPeriod period);
         Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content);
+        Task<byte[]> GenerateReportAsync(ReportPeriod period);
     }
 }

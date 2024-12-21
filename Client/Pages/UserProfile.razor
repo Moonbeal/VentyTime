@@ -2,245 +2,173 @@
 @using VentyTime.Shared.Models
 @using VentyTime.Shared.Models.Auth
 @using VentyTime.Client.Services
+@using MudBlazor
 @inject IAuthService AuthService
 @inject IUserService UserService
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @attribute [Authorize]
 
-<div class="container mt-4">
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="profile-avatar-container">
+            @if (user != null)
+            {
+                <div class="d-flex flex-column align-items-center">
+                    <div class="mb-4">
+                        <MudAvatar Size="Size.Large" Style="width: 128px; height: 128px;">
+                            @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                            {
+                                <img src="@user.AvatarUrl" alt="@user.FullName" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
+                            }
+                        </MudAvatar>
+                    </div>
+
+                    <MudText Typo="Typo.h4" Class="mb-4">@user.FullName</MudText>
+
+                    <MudTabs Class="mt-4" Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                        <MudTabPanel Text="Organized Events">
+                            @if (user.OrganizedEvents?.Any() == true)
+                            {
+                                <div class="d-flex flex-wrap gap-4">
+                                    @foreach (var eventId in user.OrganizedEvents)
+                                    {
+                                        <EventCard EventId="@eventId.Id.ToString()" />
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <MudText>No organized events yet.</MudText>
+                            }
+                        </MudTabPanel>
+
+                        <MudTabPanel Text="Registered Events">
+                            @if (user.Registrations?.Any() == true)
+                            {
+                                <div class="d-flex flex-wrap gap-4">
+                                    @foreach (var registration in user.Registrations)
+                                    {
+                                        <EventCard EventId="@registration.EventId.ToString()" />
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <MudText>No registered events yet.</MudText>
+                            }
+                        </MudTabPanel>
+                    </MudTabs>
+                </div>
+            }
+        </div>
+    </div>
+
     @if (loading)
     {
-        <div class="text-center">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
+        <div class="text-center mt-4">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
         </div>
     }
     else if (user == null)
     {
-        <div class="alert alert-danger">
-            Unable to load user profile.
-        </div>
-    }
-    else
-    {
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body text-center">
-                        <div class="avatar-container mb-3">
-                            @if (!string.IsNullOrEmpty(user.AvatarUrl))
-                            {
-                                <img src="@user.AvatarUrl" alt="Profile picture" class="rounded-circle profile-avatar" />
-                            }
-                            else
-                            {
-                                <div class="default-avatar">
-                                    @(user.FirstName?.FirstOrDefault() ?? user.Username.FirstOrDefault())
-                                </div>
-                            }
-                            <button class="btn btn-sm btn-primary avatar-edit-button" @onclick="UpdateAvatar">
-                                <i class="fas fa-camera"></i>
-                            </button>
-                        </div>
-                        <h4>@user.FirstName @user.LastName</h4>
-                        <p class="text-muted">@user.Email</p>
-                        <p class="badge bg-primary">@user.Role</p>
-                    </div>
-                </div>
-
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <h5 class="card-title">Account Statistics</h5>
-                        <div class="stats-list">
-                            <div class="stat-item">
-                                <span class="stat-label">Member Since</span>
-                                <span class="stat-value">@user.CreatedAt.ToString("MMM yyyy")</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Events Organized</span>
-                                <span class="stat-value">@user.OrganizedEventIds.Count</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Events Attended</span>
-                                <span class="stat-value">@user.RegisteredEventIds.Count</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body">
-                        <ul class="nav nav-tabs">
-                            <li class="nav-item">
-                                <button class="nav-link @(activeTab == ProfileTab.PersonalInfo ? "active" : "")"
-                                        @onclick="() => activeTab = ProfileTab.PersonalInfo">
-                                    Personal Information
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link @(activeTab == ProfileTab.Security ? "active" : "")"
-                                        @onclick="() => activeTab = ProfileTab.Security">
-                                    Security
-                                </button>
-                            </li>
-                            <li class="nav-item">
-                                <button class="nav-link @(activeTab == ProfileTab.Notifications ? "active" : "")"
-                                        @onclick="() => activeTab = ProfileTab.Notifications">
-                                    Notifications
-                                </button>
-                            </li>
-                        </ul>
-
-                        <div class="tab-content mt-3">
-                            @switch (activeTab)
-                            {
-                                case ProfileTab.PersonalInfo:
-                                    <EditForm Model="@profileModel" OnValidSubmit="HandleProfileUpdate">
-                                        <DataAnnotationsValidator />
-                                        <ValidationSummary />
-
-                                        <div class="row mb-3">
-                                            <div class="col-md-6">
-                                                <label class="form-label">First Name</label>
-                                                <InputText class="form-control" @bind-Value="profileModel.FirstName" />
-                                                <ValidationMessage For="@(() => profileModel.FirstName)" />
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label class="form-label">Last Name</label>
-                                                <InputText class="form-control" @bind-Value="profileModel.LastName" />
-                                                <ValidationMessage For="@(() => profileModel.LastName)" />
-                                            </div>
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Phone Number</label>
-                                            <InputText class="form-control" @bind-Value="profileModel.PhoneNumber" />
-                                            <ValidationMessage For="@(() => profileModel.PhoneNumber)" />
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Location</label>
-                                            <InputText class="form-control" @bind-Value="profileModel.Location" />
-                                            <ValidationMessage For="@(() => profileModel.Location)" />
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Bio</label>
-                                            <InputTextArea class="form-control" @bind-Value="profileModel.Bio" rows="3" />
-                                            <ValidationMessage For="@(() => profileModel.Bio)" />
-                                        </div>
-
-                                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                                    </EditForm>
-                                    break;
-
-                                case ProfileTab.Security:
-                                    <EditForm Model="@passwordModel" OnValidSubmit="HandlePasswordUpdate">
-                                        <DataAnnotationsValidator />
-                                        <ValidationSummary />
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Current Password</label>
-                                            <InputText type="password" class="form-control" @bind-Value="passwordModel.CurrentPassword" />
-                                            <ValidationMessage For="@(() => passwordModel.CurrentPassword)" />
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <label class="form-label">New Password</label>
-                                            <InputText type="password" class="form-control" @bind-Value="passwordModel.NewPassword" />
-                                            <ValidationMessage For="@(() => passwordModel.NewPassword)" />
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <label class="form-label">Confirm New Password</label>
-                                            <InputText type="password" class="form-control" @bind-Value="passwordModel.ConfirmPassword" />
-                                            <ValidationMessage For="@(() => passwordModel.ConfirmPassword)" />
-                                        </div>
-
-                                        <button type="submit" class="btn btn-primary">Update Password</button>
-                                    </EditForm>
-
-                                    <hr />
-
-                                    <div class="mt-4">
-                                        <h5>Two-Factor Authentication</h5>
-                                        <p class="text-muted">Enhance your account security by enabling two-factor authentication.</p>
-                                        <button class="btn btn-outline-primary" @onclick="SetupTwoFactor">
-                                            @(twoFactorEnabled ? "Disable" : "Enable") Two-Factor Authentication
-                                        </button>
-                                    </div>
-                                    break;
-
-                                case ProfileTab.Notifications:
-                                    <div class="notification-settings">
-                                        <div class="form-check form-switch mb-3">
-                                            <input class="form-check-input" type="checkbox" @bind="notificationSettings.EmailNotifications">
-                                            <label class="form-check-label">Email Notifications</label>
-                                        </div>
-
-                                        <div class="form-check form-switch mb-3">
-                                            <input class="form-check-input" type="checkbox" @bind="notificationSettings.EventReminders">
-                                            <label class="form-check-label">Event Reminders</label>
-                                        </div>
-
-                                        <div class="form-check form-switch mb-3">
-                                            <input class="form-check-input" type="checkbox" @bind="notificationSettings.MarketingEmails">
-                                            <label class="form-check-label">Marketing Emails</label>
-                                        </div>
-
-                                        <button class="btn btn-primary" @onclick="SaveNotificationSettings">
-                                            Save Notification Settings
-                                        </button>
-                                    </div>
-                                    break;
-                            }
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <MudAlert Severity="Severity.Error" Class="mt-4">Unable to load user profile.</MudAlert>
     }
 </div>
 
-@code {
-    private enum ProfileTab
-    {
-        PersonalInfo,
-        Security,
-        Notifications
+<style>
+    .profile-container {
+        width: 100%;
     }
 
-    private User? user;
-    private ProfileTab activeTab = ProfileTab.PersonalInfo;
+    .profile-header {
+        background: linear-gradient(90deg, #9C27B0 0%, #E91E63 100%);
+        height: 200px;
+        position: relative;
+        margin-bottom: 80px;
+    }
+
+    .profile-avatar-container {
+        position: absolute;
+        bottom: -60px;
+        left: 50px;
+    }
+
+    .profile-avatar, .profile-avatar-placeholder {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 4px solid white;
+        background: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        color: #757575;
+    }
+
+    .profile-content {
+        padding: 0 50px;
+    }
+
+    .profile-info {
+        margin-bottom: 40px;
+    }
+
+    .bio {
+        color: #666;
+        margin: 15px 0;
+    }
+
+    .contact-info {
+        margin: 20px 0;
+    }
+
+    .contact-info div {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 8px 0;
+        color: #666;
+    }
+
+    .event-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .event-date, .event-popularity {
+        margin-left: auto;
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .settings-options {
+        max-width: 600px;
+    }
+
+    .settings-options .mud-button {
+        width: 100%;
+        justify-content: flex-start;
+    }
+</style>
+
+@code {
     private bool loading = true;
-    private bool twoFactorEnabled;
-    private ProfileModel profileModel = new();
-    private PasswordModel passwordModel = new();
-    private NotificationSettings notificationSettings = new();
+    private ApplicationUser? user;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            user = await AuthService.GetCurrentUserAsync();
-            if (user != null)
-            {
-                profileModel = new ProfileModel
-                {
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    PhoneNumber = user.PhoneNumber,
-                    Location = user.Location,
-                    Bio = user.Bio
-                };
-
-                // Load notification settings
-                await LoadNotificationSettings();
-            }
+            user = await UserService.GetUserProfileAsync();
         }
         finally
         {
@@ -248,143 +176,9 @@
         }
     }
 
-    private async Task HandleProfileUpdate()
+    private async Task HandleLogout()
     {
-        if (user != null)
-        {
-            var request = new UpdateProfileRequest
-            {
-                FirstName = profileModel.FirstName,
-                LastName = profileModel.LastName,
-                PhoneNumber = profileModel.PhoneNumber,
-                Location = profileModel.Location,
-                Bio = profileModel.Bio
-            };
-
-            await AuthService.UpdateProfileAsync(request);
-            // Refresh user data
-            user = await AuthService.GetCurrentUserAsync();
-        }
-    }
-
-    private async Task HandlePasswordUpdate()
-    {
-        if (passwordModel.NewPassword == passwordModel.ConfirmPassword)
-        {
-            var request = new ChangePasswordRequest
-            {
-                CurrentPassword = passwordModel.CurrentPassword,
-                NewPassword = passwordModel.NewPassword
-            };
-            await AuthService.ChangePasswordAsync(request);
-            passwordModel = new PasswordModel();
-        }
-    }
-
-    private async Task UpdateAvatar()
-    {
-        // Implement avatar update logic
-    }
-
-    private async Task SetupTwoFactor()
-    {
-        // Implement 2FA setup/disable logic
-        twoFactorEnabled = !twoFactorEnabled;
-    }
-
-    private async Task LoadNotificationSettings()
-    {
-        // Load notification settings from the server
-    }
-
-    private async Task SaveNotificationSettings()
-    {
-        // Save notification settings to the server
-    }
-
-    private class ProfileModel
-    {
-        public string FirstName { get; set; } = "";
-        public string LastName { get; set; } = "";
-        public string PhoneNumber { get; set; } = "";
-        public string Location { get; set; } = "";
-        public string Bio { get; set; } = "";
-    }
-
-    private class PasswordModel
-    {
-        public string CurrentPassword { get; set; } = "";
-        public string NewPassword { get; set; } = "";
-        public string ConfirmPassword { get; set; } = "";
-    }
-
-    private class NotificationSettings
-    {
-        public bool EmailNotifications { get; set; } = true;
-        public bool EventReminders { get; set; } = true;
-        public bool MarketingEmails { get; set; } = false;
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/");
     }
 }
-
-<style>
-    .profile-avatar {
-        width: 150px;
-        height: 150px;
-        object-fit: cover;
-    }
-
-    .default-avatar {
-        width: 150px;
-        height: 150px;
-        background-color: #0d6efd;
-        color: white;
-        font-size: 4rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-    }
-
-    .avatar-container {
-        position: relative;
-        display: inline-block;
-    }
-
-    .avatar-edit-button {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        border-radius: 50%;
-        padding: 0.5rem;
-        width: 2.5rem;
-        height: 2.5rem;
-    }
-
-    .stats-list {
-        display: grid;
-        gap: 1rem;
-    }
-
-    .stat-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem;
-        background-color: #f8f9fa;
-        border-radius: 0.25rem;
-    }
-
-    .stat-label {
-        color: #6c757d;
-        font-size: 0.875rem;
-    }
-
-    .stat-value {
-        font-weight: bold;
-        color: #0d6efd;
-    }
-
-    .notification-settings {
-        max-width: 600px;
-    }
-</style>
