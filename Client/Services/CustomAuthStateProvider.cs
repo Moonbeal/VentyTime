@@ -44,7 +44,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
             // Log claims for debugging
             foreach (var claim in claims)
             {
-                _logger.LogInformation($"Claim: {claim.Type} = {claim.Value}");
+                _logger.LogInformation("Claim: {Type} = {Value}", claim.Type, claim.Value);
             }
 
             // Add the token itself as a claim

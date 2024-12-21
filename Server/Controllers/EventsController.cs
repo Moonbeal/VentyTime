@@ -64,11 +64,11 @@ namespace VentyTime.Server.Controllers
                 }
 
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-                _logger.LogInformation($"User Role from token: {userRole}");
+                _logger.LogInformation("User Role from token: {Role}", userRole);
 
                 if (userRole != UserRole.Organizer.ToString() && userRole != UserRole.Admin.ToString())
                 {
-                    _logger.LogWarning($"User with role {userRole} attempted to create event");
+                    _logger.LogWarning("User with role {Role} attempted to create event", userRole);
                     return Forbid();
                 }
 
@@ -154,7 +154,7 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                _logger.LogInformation($"Starting image upload. Content type: {file?.ContentType}, Length: {file?.Length}");
+                _logger.LogInformation("Starting image upload. Content type: {ContentType}, Length: {Length}", file?.ContentType, file?.Length);
 
                 if (file == null || file.Length == 0)
                 {
@@ -166,21 +166,21 @@ namespace VentyTime.Server.Controllers
                 var allowedTypes = new[] { "image/jpeg", "image/jpg", "image/png" };
                 if (!allowedTypes.Contains(file.ContentType.ToLower()))
                 {
-                    _logger.LogWarning($"Invalid file type: {file.ContentType}");
+                    _logger.LogWarning("Invalid file type: {ContentType}", file.ContentType);
                     return BadRequest("Invalid file type. Only JPG and PNG files are allowed.");
                 }
 
                 // Check file size (max 4MB)
                 if (file.Length > 4 * 1024 * 1024)
                 {
-                    _logger.LogWarning($"File size too large: {file.Length} bytes");
+                    _logger.LogWarning("File size too large: {Length} bytes", file.Length);
                     return BadRequest("File size exceeds maximum limit of 4MB");
                 }
 
                 // Create uploads directory if it doesn't exist
                 var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads");
-                _logger.LogInformation($"Uploads folder path: {uploadsFolder}");
-                
+                _logger.LogInformation("Uploads folder path: {Path}", uploadsFolder);
+
                 if (!Directory.Exists(uploadsFolder))
                 {
                     _logger.LogInformation("Creating uploads directory");
@@ -190,7 +190,7 @@ namespace VentyTime.Server.Controllers
                 // Generate unique filename
                 var uniqueFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
                 var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                _logger.LogInformation($"Saving file to: {filePath}");
+                _logger.LogInformation("Saving file to: {Path}", filePath);
 
                 // Save file
                 using (var stream = new FileStream(filePath, FileMode.Create))
@@ -201,7 +201,7 @@ namespace VentyTime.Server.Controllers
                 // Return the URL to the uploaded file
                 var baseUrl = $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
                 var imageUrl = $"{baseUrl}/uploads/{uniqueFileName}";
-                _logger.LogInformation($"File uploaded successfully. URL: {imageUrl}");
+                _logger.LogInformation("File uploaded successfully. URL: {Url}", imageUrl);
 
                 return Ok(imageUrl);
             }
@@ -224,7 +224,7 @@ namespace VentyTime.Server.Controllers
             return await _context.Events
                 .Include(e => e.Organizer)
                 .Include(e => e.Registrations)
-                .Where(e => 
+                .Where(e =>
                     e.Title.ToLower().Contains(searchTerm) ||
                     e.Description.ToLower().Contains(searchTerm) ||
                     e.Location.ToLower().Contains(searchTerm) ||

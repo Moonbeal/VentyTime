@@ -186,6 +186,11 @@ namespace VentyTime.Client.Services
             try
             {
                 var userId = await _authService.GetUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _snackbar.Add("User ID not found. Please log in again.", Severity.Error);
+                    return new RegistrationResponse(false, "User not authenticated");
+                }
                 var registration = await GetRegistrationAsync(eventId, userId);
                 if (registration != null)
                 {
