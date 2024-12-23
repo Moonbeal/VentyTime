@@ -53,7 +53,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    var jwtKey = builder.Configuration["JwtSecurityKey"];
+    var jwtKey = builder.Configuration["JwtSettings:SecretKey"];
     if (string.IsNullOrEmpty(jwtKey))
     {
         throw new InvalidOperationException("JWT Security Key is not configured");
@@ -65,8 +65,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["JwtIssuer"],
-        ValidAudience = builder.Configuration["JwtAudience"],
+        ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+        ValidAudience = builder.Configuration["JwtSettings:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
 });
