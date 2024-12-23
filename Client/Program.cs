@@ -22,19 +22,19 @@ builder.Services.AddLogging();
 // Register Blazored LocalStorage
 builder.Services.AddBlazoredLocalStorage();
 
-// Register HTTP clients
-builder.Services.AddScoped(sp => 
+// Configure HttpClient with auth handler
+builder.Services.AddScoped<CustomAuthorizationMessageHandler>();
+
+// Configure the HttpClient for the API
+builder.Services.AddHttpClient("VentyTime.ServerAPI", client => 
 {
-    var client = new HttpClient() 
-    { 
-        BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
-        DefaultRequestHeaders = 
-        {
-            { "Accept", "application/json" }
-        }
-    };
-    return client;
-});
+    client.BaseAddress = new Uri("https://localhost:7241");
+})
+.AddHttpMessageHandler<CustomAuthorizationMessageHandler>();
+
+// Register HttpClient factory
+builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>()
+    .CreateClient("VentyTime.ServerAPI"));
 
 // Register MudBlazor services
 builder.Services.AddMudServices();

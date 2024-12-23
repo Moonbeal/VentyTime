@@ -34,6 +34,17 @@
                          AdornmentIcon="@PasswordInputIcon"
                          OnAdornmentClick="TogglePasswordVisibility" />
 
+            <MudSelect T="UserRole" 
+                      Label="Login As" 
+                      @bind-Value="loginRequest.Role"
+                      Required="true"
+                      RequiredError="Please select how you want to login!"
+                      Variant="Variant.Outlined"
+                      Class="mt-4">
+                <MudSelectItem Value="@(UserRole.User)">User</MudSelectItem>
+                <MudSelectItem Value="@(UserRole.Organizer)">Organizer</MudSelectItem>
+            </MudSelect>
+
             <div class="d-flex justify-space-between align-center mt-4">
                 <MudButton Variant="Variant.Filled"
                           Color="Color.Primary"

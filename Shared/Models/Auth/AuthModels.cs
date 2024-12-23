@@ -12,6 +12,9 @@ public class LoginRequest
     public string Password { get; set; } = string.Empty;
 
     public bool RememberMe { get; set; }
+
+    [Required(ErrorMessage = "Role is required")]
+    public UserRole Role { get; set; }
 }
 
 public class RegisterRequest
@@ -37,9 +40,6 @@ public class RegisterRequest
     [Required(ErrorMessage = "Last name is required")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Last name must be between 2 and 50 characters")]
     public string LastName { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Role is required")]
-    public UserRole Role { get; set; } = UserRole.User;
 }
 
 public class AuthResponse

@@ -49,8 +49,9 @@ namespace VentyTime.Client.Services
             {
                 Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
                 
-                // Get the local time zone offset in minutes
-                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+                // Get the local time zone offset in minutes for the event's date
+                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
+                Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
                 
                 using var request = new HttpRequestMessage(HttpMethod.Post, "api/events");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
@@ -83,8 +84,9 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                // Get the local time zone offset in minutes
-                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+                // Get the local time zone offset in minutes for the event's date
+                var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
+                Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
                 
                 using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{eventItem.Id}");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
@@ -166,7 +168,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PostAsync("api/events/upload", content);
+                var response = await _httpClient.PostAsync("api/events/upload-image", content);
                 response.EnsureSuccessStatusCode();
                 var url = await response.Content.ReadAsStringAsync();
                 return new ApiResponse<string> { IsSuccessful = true, Data = url.Trim('"') };

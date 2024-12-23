@@ -137,6 +137,9 @@
     {
         try
         {
+            // Set StartTime to match StartDate
+            eventModel.StartTime = eventModel.StartDate;
+            
             var createdEvent = await EventService.CreateEventAsync(eventModel);
             NavigationManager.NavigateTo($"/event/{createdEvent.Id}");
         }

@@ -53,9 +53,6 @@ namespace VentyTime.Server.Controllers
             var result = await _userManager.CreateAsync(user, model.Password);
             if (result.Succeeded)
             {
-                // Add default role
-                await _userManager.AddToRoleAsync(user, "User");
-
                 // Generate email confirmation token
                 var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
@@ -79,7 +76,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = user.Role
+                        Role = UserRole.None // No role assigned during registration
                     }
                 });
             }
@@ -117,6 +114,17 @@ namespace VentyTime.Server.Controllers
                 // Update last login time
                 user.LastLoginAt = DateTime.UtcNow;
                 user.UpdatedAt = DateTime.UtcNow;
+
+                // Update user's role
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                if (currentRoles.Any())
+                {
+                    // Remove existing roles
+                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                }
+
+                // Add new role
+                await _userManager.AddToRoleAsync(user, model.Role.ToString());
                 await _userManager.UpdateAsync(user);
 
                 // Generate JWT token
@@ -132,7 +140,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = user.Role
+                        Role = model.Role
                     }
                 });
             }
@@ -153,7 +161,7 @@ namespace VentyTime.Server.Controllers
             return Ok(new { message = "Logged out successfully" });
         }
 
-        private Task<string> GenerateJwtToken(ApplicationUser user)
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
             var claims = new List<Claim>
             {
@@ -163,9 +171,16 @@ namespace VentyTime.Server.Controllers
                 new(ClaimTypes.Name, user.UserName!),
                 new(ClaimTypes.Email, user.Email!),
                 new("firstName", user.FirstName),
-                new("lastName", user.LastName),
-                new("role", user.Role.ToString())
+                new("lastName", user.LastName)
             };
+
+            // Get user roles and add them to claims
+            var roles = await _userManager.GetRolesAsync(user);
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+                claims.Add(new Claim("role", role)); // For backward compatibility
+            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -178,7 +193,7 @@ namespace VentyTime.Server.Controllers
                 expires: expires,
                 signingCredentials: creds);
 
-            return Task.FromResult(new JwtSecurityTokenHandler().WriteToken(token));
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
         [Authorize]

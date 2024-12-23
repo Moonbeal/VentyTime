@@ -27,9 +27,12 @@ namespace VentyTime.Shared.Models
         [Required(ErrorMessage = "Start date is required")]
         public DateTime StartDate { get; set; }
 
+        [Required(ErrorMessage = "Start time is required")]
+        public DateTime StartTime { get; set; }
+
         public DateTime GetStartDateTime()
         {
-            return StartDate;
+            return StartTime;
         }
 
         public bool HasStarted()

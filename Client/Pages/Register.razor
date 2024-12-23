@@ -89,18 +89,10 @@
                          autocomplete="new-password"
                          Class="mb-4" />
 
-            <MudSelect T="UserRole" 
-                      Label="Account Type" 
-                      @bind-Value="registerRequest.Role"
-                      Required="true"
-                      RequiredError="Account type is required!"
-                      Variant="Variant.Outlined"
-                      id="role"
-                      name="role"
-                      Class="mb-4">
-                <MudSelectItem Value="@(UserRole.User)">User</MudSelectItem>
-                <MudSelectItem Value="@(UserRole.Organizer)">Organizer</MudSelectItem>
-            </MudSelect>
+            <div class="d-flex justify-center mt-6">
+                <MudText>Already have an account?</MudText>
+                <MudLink Href="/login" Underline="Underline.Always" Class="ml-2">Login here</MudLink>
+            </div>
 
             <MudButton Variant="Variant.Filled" 
                       Color="Color.Primary" 
@@ -111,11 +103,6 @@
                       Class="mt-4">
                 CREATE ACCOUNT
             </MudButton>
-
-            <div class="d-flex justify-center mt-6">
-                <MudText>Already have an account?</MudText>
-                <MudLink Href="/login" Underline="Underline.Always" Class="ml-2">Login here</MudLink>
-            </div>
         </MudForm>
     </MudPaper>
 </MudContainer>

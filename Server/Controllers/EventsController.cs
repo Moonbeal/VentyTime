@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -9,20 +10,21 @@ namespace VentyTime.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class EventsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<EventsController> _logger;
-        private readonly IWebHostEnvironment _environment;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public EventsController(
             ApplicationDbContext context,
             ILogger<EventsController> logger,
-            IWebHostEnvironment environment)
+            UserManager<ApplicationUser> userManager)
         {
             _context = context;
             _logger = logger;
-            _environment = environment;
+            _userManager = userManager;
         }
 
         [HttpGet]
@@ -43,12 +45,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while getting events");
+                _logger.LogError(ex, "Error occurred while getting events: {Message}", ex.Message);
                 return StatusCode(500, new { message = "Internal server error while retrieving events", details = ex.Message });
             }
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous] // Keep this endpoint anonymous
         public async Task<ActionResult<Event>> GetEvent(int id)
         {
             try
@@ -69,191 +72,190 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting event with ID {Id}", id);
+                _logger.LogError(ex, "Error getting event {Id}: {Message}", id, ex.Message);
                 return StatusCode(500, new { message = "Internal server error while retrieving event", details = ex.Message });
             }
         }
 
         [HttpPost]
-        [Authorize]
-        public async Task<ActionResult<Event>> CreateEvent(Event @event)
+        public async Task<ActionResult<Event>> CreateEvent([FromBody] Event @event)
         {
-            try
+            _logger.LogInformation("=== Початок створення події ===");
+            _logger.LogInformation("Метод: {Method}", Request.Method);
+            _logger.LogInformation("Шлях: {Path}", Request.Path);
+            _logger.LogInformation("Content-Type: {ContentType}", Request.ContentType);
+            _logger.LogInformation("Authorization: {Auth}", Request.Headers.Authorization.ToString());
+
+            try 
             {
-                _logger.LogInformation("Starting CreateEvent request");
-                _logger.LogInformation("Raw event details: {@Event}", @event);
+                _logger.LogInformation("Початок створення події. Метод: {Method}, Шлях: {Path}", Request.Method, Request.Path);
+                _logger.LogInformation("Отримані дані події: {@Event}", @event);
+
+                // Базова валідація
+                if (@event == null)
+                {
+                    _logger.LogError("Отримано null замість об'єкту події");
+                    return BadRequest(new { message = "Дані події відсутні" });
+                }
+
+                // Валідація обов'язкових полів
+                var validationErrors = new List<string>();
+                
+                if (string.IsNullOrWhiteSpace(@event.Title))
+                    validationErrors.Add("Назва події обов'язкова");
+                
+                if (string.IsNullOrWhiteSpace(@event.Description))
+                    validationErrors.Add("Опис події обов'язковий");
+                
+                if (string.IsNullOrWhiteSpace(@event.Category))
+                    validationErrors.Add("Категорія події обов'язкова");
+                
+                if (string.IsNullOrWhiteSpace(@event.Location))
+                    validationErrors.Add("Місце проведення обов'язкове");
+
+                if (@event.StartDate == default)
+                    validationErrors.Add("Дата початку події обов'язкова");
+
+                if (@event.Price < 0)
+                    validationErrors.Add("Ціна не може бути від'ємною");
+
+                if (@event.MaxAttendees <= 0)
+                    validationErrors.Add("Максимальна кількість учасників повинна бути більше 0");
+
+                if (validationErrors.Any())
+                {
+                    _logger.LogError("Помилки валідації: {@Errors}", validationErrors);
+                    return BadRequest(new { message = "Помилки валідації", errors = validationErrors });
+                }
 
                 // Get the current user's ID from claims
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation("Отримано ID користувача: {UserId}", userId);
+
                 if (string.IsNullOrEmpty(userId))
                 {
-                    _logger.LogWarning("User ID not found in claims");
-                    return Unauthorized(new { message = "User ID not found" });
+                    _logger.LogError("Не вдалося отримати ID користувача");
+                    return Unauthorized(new { message = "Користувач не авторизований" });
                 }
 
-                _logger.LogInformation("Creating event for user {UserId}", userId);
-
-                // Validate required fields
-                if (string.IsNullOrEmpty(@event.Title))
+                // Перевіряємо чи існує користувач
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
                 {
-                    _logger.LogWarning("Title is required");
-                    return BadRequest(new { message = "Title is required" });
+                    _logger.LogError("Користувача з ID {UserId} не знайдено", userId);
+                    return NotFound(new { message = "Користувача не знайдено" });
                 }
 
-                if (string.IsNullOrEmpty(@event.Description))
-                {
-                    _logger.LogWarning("Description is required");
-                    return BadRequest(new { message = "Description is required" });
-                }
+                _logger.LogInformation("Знайдено користувача: {UserEmail}", user.Email);
 
-                if (string.IsNullOrEmpty(@event.Category))
+                TimeSpan offset;
+                // Отримуємо зміщення часового поясу з заголовків
+                if (Request.Headers.TryGetValue("X-TimeZone-Offset", out var tzOffset))
                 {
-                    _logger.LogWarning("Category is required");
-                    return BadRequest(new { message = "Category is required" });
-                }
-
-                if (string.IsNullOrEmpty(@event.Location))
-                {
-                    _logger.LogWarning("Location is required");
-                    return BadRequest(new { message = "Location is required" });
-                }
-
-                // Set the organizer ID and created date
-                @event.OrganizerId = userId;
-                @event.CreatedAt = DateTime.UtcNow;
-
-                // Convert local time to UTC using the provided time offset
-                try 
-                {
-                    TimeSpan offset;
-                    // Try to get the time zone offset from the request headers
-                    if (Request.Headers.TryGetValue("X-TimeZone-Offset", out var tzOffset) && 
-                        int.TryParse(tzOffset.FirstOrDefault(), out var offsetMinutes))
+                    _logger.LogInformation("Отримано зміщення часового поясу з заголовків: {Offset}", tzOffset.ToString());
+                    if (int.TryParse(tzOffset.FirstOrDefault(), out var offsetMinutes))
                     {
                         offset = TimeSpan.FromMinutes(offsetMinutes);
+                        _logger.LogInformation("Розпарсене зміщення часового поясу: {OffsetMinutes} хвилин", offsetMinutes);
                     }
                     else
                     {
-                        // Default to UTC+2 (Eastern European Time) if no offset provided
+                        _logger.LogWarning("Не вдалося розпарсити значення зміщення часового поясу: {Value}", tzOffset.ToString());
                         offset = TimeSpan.FromHours(2);
+                        _logger.LogInformation("Використовуємо зміщення за замовчуванням +2 години");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Зміщення часового поясу не знайдено в заголовках");
+                    offset = TimeSpan.FromHours(2);
+                    _logger.LogInformation("Використовуємо зміщення за замовчуванням +2 години");
+                }
+
+                _logger.LogInformation("Вхідний локальний час: {LocalTime}", @event.StartDate);
+                _logger.LogInformation("Вхідний Kind: {Kind}", @event.StartDate.Kind);
+                
+                try
+                {
+                    // Спочатку перевіряємо, чи дата вже не в UTC
+                    if (@event.StartDate.Kind == DateTimeKind.Utc)
+                    {
+                        _logger.LogInformation("Дата вже в UTC форматі, пропускаємо конвертацію");
+                    }
+                    else
+                    {
+                        // Якщо дата в локальному форматі або невизначена, конвертуємо її
+                        var localDateTime = DateTime.SpecifyKind(@event.StartDate, DateTimeKind.Local);
+                        _logger.LogInformation("Локальний час з встановленим Kind: {LocalTime} ({Kind})", 
+                            localDateTime, localDateTime.Kind);
+
+                        // Конвертуємо в UTC
+                        var utcDateTime = localDateTime.ToUniversalTime();
+                        _logger.LogInformation("UTC час після конвертації: {UtcTime}", utcDateTime);
+                        
+                        @event.StartDate = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+                        _logger.LogInformation("Фінальне UTC значення: {UtcTime} ({Kind})", 
+                            @event.StartDate, @event.StartDate.Kind);
                     }
 
-                    // Convert to UTC by subtracting the offset
-                    var utcDateTime = @event.StartDate.Subtract(offset);
-                    _logger.LogInformation("UTC DateTime after conversion: {UtcDateTime}", utcDateTime);
+                    if (@event.StartDate == default)
+                    {
+                        _logger.LogError("StartDate має значення за замовчуванням після конвертації");
+                        return StatusCode(500, new { message = "Некоректне значення дати/часу після конвертації" });
+                    }
 
-                    // Store the UTC date
-                    @event.StartDate = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
-                    _logger.LogInformation("Final UTC value - Date: {Date}, DateKind: {Kind}", 
-                        @event.StartDate, @event.StartDate.Kind);
+                    // Перевіряємо, чи дата в майбутньому
+                    if (@event.StartDate <= DateTime.UtcNow)
+                    {
+                        _logger.LogError("Дата події повинна бути в майбутньому. Поточна дата: {CurrentDate}, Дата події: {EventDate}", 
+                            DateTime.UtcNow, @event.StartDate);
+                        return BadRequest(new { message = "Дата події повинна бути в майбутньому" });
+                    }
                 }
-                catch (Exception ex)
+                catch (Exception timeEx)
                 {
-                    _logger.LogError(ex, "Error converting time to UTC: {Message}", ex.Message);
-                    return StatusCode(500, new { message = "Error processing date/time", details = ex.Message });
+                    _logger.LogError(timeEx, "Помилка при конвертації часу: {Message}", timeEx.Message);
+                    return StatusCode(500, new { message = $"Помилка при конвертації часу: {timeEx.Message}" });
                 }
 
-                if (@event.StartDate <= DateTime.UtcNow)
-                {
-                    _logger.LogWarning("Invalid start date/time: {StartDateTime}. Must be in the future.", @event.StartDate);
-                    return BadRequest(new { message = "Event start date/time must be in the future" });
-                }
+                // Set the organizer
+                @event.OrganizerId = userId;
 
-                if (@event.Price < 0)
-                {
-                    _logger.LogWarning("Invalid price: {Price}", @event.Price);
-                    return BadRequest(new { message = "Price cannot be negative" });
-                }
-
-                if (@event.MaxAttendees < 0)
-                {
-                    _logger.LogWarning("Invalid max attendees: {MaxAttendees}", @event.MaxAttendees);
-                    return BadRequest(new { message = "Maximum attendees cannot be negative" });
-                }
-
-                // Fix image URL if it contains escaped quotes
-                if (!string.IsNullOrEmpty(@event.ImageUrl))
-                {
-                    @event.ImageUrl = @event.ImageUrl.Trim('"');
-                    _logger.LogInformation("Processed image URL: {ImageUrl}", @event.ImageUrl);
-                }
-
-                _logger.LogInformation("Validated event data. Adding to database...");
+                @event.CreatedAt = DateTime.UtcNow;
 
                 try
                 {
-                    _logger.LogInformation("Adding event to context");
-                    _logger.LogInformation("Event data before save: {@Event}", new 
-                    {
-                        @event.Title,
-                        @event.Description,
-                        @event.Category,
-                        @event.Location,
-                        @event.StartDate,
-                        StartDateKind = @event.StartDate.Kind,
-                        @event.Price,
-                        @event.MaxAttendees,
-                        @event.OrganizerId,
-                        @event.ImageUrl,
-                        CombinedDateTime = @event.GetStartDateTime(),
-                        CombinedDateTimeKind = @event.GetStartDateTime().Kind
-                    });
-
-                    _context.Events.Add(@event);
-                    _logger.LogInformation("Saving changes to database");
+                    _logger.LogInformation("Спроба додати подію до бази даних");
+                    _logger.LogInformation("Значення StartDate: {StartDate}", @event.StartDate);
                     
-                    try
-                    {
-                        await _context.SaveChangesAsync();
-                        _logger.LogInformation("Event saved successfully with ID: {EventId}", @event.Id);
-                        _logger.LogInformation("Event saved successfully with details: {@Event}", @event);
-                    }
-                    catch (DbUpdateException dbEx)
-                    {
-                        var message = $"Database update error: {dbEx.Message}";
-                        if (dbEx.InnerException != null)
-                        {
-                            message += $"\nInner exception: {dbEx.InnerException.Message}";
-                            _logger.LogError(dbEx.InnerException, "Inner exception details");
-                        }
-                        _logger.LogError(dbEx, message);
-                        return StatusCode(500, new { message = "Помилка бази даних", details = message });
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Помилка під час збереження: {Message}", ex.Message);
-                        return StatusCode(500, new { message = "Помилка збереження в базі даних", details = ex.Message });
-                    }
-
-                    try
-                    {
-                        await _context.Entry(@event)
-                            .Reference(e => e.Organizer)
-                            .LoadAsync();
-                        _logger.LogInformation("Organizer details loaded successfully");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Помилка завантаження даних організатора: {Message}", ex.Message);
-                        // Don't fail the request if loading organizer fails
-                    }
-
-                    return CreatedAtAction(nameof(GetEvent), new { id = @event.Id }, @event);
+                    // Переконуємося, що StartTime встановлено
+                    @event.StartTime = @event.StartDate;
+                    _logger.LogInformation("Значення StartTime: {StartTime}", @event.StartTime);
+                    
+                    _context.Events.Add(@event);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Подію успішно додано до бази даних. EventId: {@EventId}", @event.Id);
+                    return Ok(@event);
                 }
-                catch (Exception ex)
+                catch (DbUpdateException dbEx)
                 {
-                    _logger.LogError(ex, "Необроблена помилка в CreateEvent: {Message}", ex.Message);
-                    return StatusCode(500, new { message = "Необроблена помилка сервера", details = ex.Message });
+                    _logger.LogError(dbEx, "Помилка оновлення бази даних: {Message}", dbEx.Message);
+                    if (dbEx.InnerException != null)
+                    {
+                        _logger.LogError(dbEx.InnerException, "Внутрішня помилка: {Message}", dbEx.InnerException.Message);
+                    }
+                    return StatusCode(500, new { message = "Помилка при збереженні в базу даних", details = dbEx.Message });
+                }
+                catch (Exception dbEx)
+                {
+                    _logger.LogError(dbEx, "Помилка при збереженні події в базу даних: {Message}", dbEx.Message);
+                    return StatusCode(500, new { message = $"Помилка при збереженні події: {dbEx.Message}" });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating event. Exception details: {Message}", ex.Message);
-                if (ex.InnerException != null)
-                {
-                    _logger.LogError("Inner exception: {Message}", ex.InnerException.Message);
-                }
-                return StatusCode(500, new { message = "An error occurred while creating the event", details = ex.Message });
+                _logger.LogError(ex, "Загальна помилка при створенні події: {Message}", ex.Message);
+                return StatusCode(500, new { message = $"Помилка при створенні події: {ex.Message}" });
             }
         }
 
@@ -297,25 +299,58 @@ namespace VentyTime.Server.Controllers
             {
                 TimeSpan offset;
                 // Try to get the time zone offset from the request headers
-                if (Request.Headers.TryGetValue("X-TimeZone-Offset", out var tzOffset) && 
-                    int.TryParse(tzOffset.FirstOrDefault(), out var offsetMinutes))
+                if (Request.Headers.TryGetValue("X-TimeZone-Offset", out var tzOffset))
                 {
-                    offset = TimeSpan.FromMinutes(offsetMinutes);
+                    _logger.LogInformation("Отримано зміщення часового поясу з заголовків: {Offset}", tzOffset.ToString());
+                    if (int.TryParse(tzOffset.FirstOrDefault(), out var offsetMinutes))
+                    {
+                        offset = TimeSpan.FromMinutes(offsetMinutes);
+                        _logger.LogInformation("Розпарсене зміщення часового поясу: {OffsetMinutes} хвилин", offsetMinutes);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Не вдалося розпарсити значення зміщення часового поясу: {Value}", tzOffset.ToString());
+                        offset = TimeSpan.FromHours(2);
+                        _logger.LogInformation("Використовуємо зміщення за замовчуванням +2 години");
+                    }
                 }
                 else
                 {
-                    // Default to UTC+2 (Eastern European Time) if no offset provided
+                    _logger.LogWarning("Зміщення часового поясу не знайдено в заголовках");
                     offset = TimeSpan.FromHours(2);
+                    _logger.LogInformation("Використовуємо зміщення за замовчуванням +2 години");
                 }
 
-                // Convert to UTC by subtracting the offset
-                var utcDateTime = @event.StartDate.Subtract(offset);
-                _logger.LogInformation("UTC DateTime after conversion: {UtcDateTime}", utcDateTime);
+                _logger.LogInformation("Вхідний локальний час: {LocalTime}", @event.StartDate);
+                _logger.LogInformation("Вхідний Kind: {Kind}", @event.StartDate.Kind);
+                
+                // Спочатку перевіряємо, чи дата вже не в UTC
+                if (@event.StartDate.Kind == DateTimeKind.Utc)
+                {
+                    _logger.LogInformation("Дата вже в UTC форматі, пропускаємо конвертацію");
+                    // Нічого не робимо, дата вже в UTC
+                }
+                else
+                {
+                    // Якщо дата в локальному форматі або невизначена, конвертуємо її
+                    var localDateTime = DateTime.SpecifyKind(@event.StartDate, DateTimeKind.Local);
+                    _logger.LogInformation("Локальний час з встановленим Kind: {LocalTime} ({Kind})", 
+                        localDateTime, localDateTime.Kind);
 
-                // Store the UTC date
-                @event.StartDate = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
-                _logger.LogInformation("Final UTC value - Date: {Date}, DateKind: {Kind}", 
-                    @event.StartDate, @event.StartDate.Kind);
+                    // Конвертуємо в UTC
+                    var utcDateTime = localDateTime.ToUniversalTime();
+                    _logger.LogInformation("UTC час після конвертації: {UtcTime}", utcDateTime);
+                    
+                    @event.StartDate = DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+                    _logger.LogInformation("Фінальне UTC значення: {UtcTime} ({Kind})", 
+                        @event.StartDate, @event.StartDate.Kind);
+                }
+
+                if (@event.StartDate == default)
+                {
+                    _logger.LogError("StartDate має значення за замовчуванням після конвертації");
+                    return StatusCode(500, new { message = "Некоректне значення дати/часу після конвертації" });
+                }
             }
             catch (Exception ex)
             {
@@ -380,13 +415,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting event with ID {Id}", id);
+                _logger.LogError(ex, "Error deleting event with ID {Id}: {Message}", id, ex.Message);
                 return StatusCode(500, new { message = "Internal server error while deleting event", details = ex.Message });
             }
         }
 
-        [HttpPost("upload")]
         [Authorize]
+        [HttpPost("upload-image")]
         public async Task<ActionResult<string>> UploadEventImage()
         {
             try
@@ -439,12 +474,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error uploading event image");
-                return StatusCode(500, "Error uploading image");
+                _logger.LogError(ex, "Error uploading event image: {Message}", ex.Message);
+                return StatusCode(500, new { message = "Error uploading image", details = ex.Message });
             }
         }
 
         [HttpGet("search")]
+        [AllowAnonymous] // Keep this endpoint anonymous
         public async Task<ActionResult<IEnumerable<Event>>> SearchEvents([FromQuery] string q)
         {
             try
@@ -472,12 +508,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error searching events");
+                _logger.LogError(ex, "Error searching events: {Query}, {Message}", q, ex.Message);
                 return StatusCode(500, new { message = "Internal server error while searching events", details = ex.Message });
             }
         }
 
         [HttpGet("upcoming")]
+        [AllowAnonymous] // Keep this endpoint anonymous
         public async Task<ActionResult<IEnumerable<Event>>> GetUpcomingEvents()
         {
             try
@@ -497,12 +534,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting upcoming events");
+                _logger.LogError(ex, "Error getting upcoming events: {Message}", ex.Message);
                 return StatusCode(500, new { message = "Internal server error while retrieving upcoming events", details = ex.Message });
             }
         }
 
         [HttpGet("organizer/{organizerId}")]
+        [AllowAnonymous] // Keep this endpoint anonymous
         public async Task<ActionResult<IEnumerable<Event>>> GetEventsByOrganizer(string organizerId)
         {
             try
@@ -521,7 +559,7 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events by organizer with ID {Id}", organizerId);
+                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}: {Message}", organizerId, ex.Message);
                 return StatusCode(500, new { message = "Internal server error while retrieving events by organizer", details = ex.Message });
             }
         }
