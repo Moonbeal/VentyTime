@@ -32,6 +32,9 @@ namespace VentyTime.Server.Controllers
             _configuration = configuration;
         }
 
+        // ⚠️ CRITICAL AUTHENTICATION CODE - DO NOT MODIFY WITHOUT TESTING ⚠️
+        // This section contains core authentication logic that has been tested and verified
+        // Any changes to this code may break the login/registration system
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest model)
         {
@@ -89,6 +92,9 @@ namespace VentyTime.Server.Controllers
             return BadRequest(ModelState);
         }
 
+        // ⚠️ CRITICAL AUTHENTICATION CODE - DO NOT MODIFY WITHOUT TESTING ⚠️
+        // This section contains core authentication logic that has been tested and verified
+        // Any changes to this code may break the login/registration system
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest model)
         {
