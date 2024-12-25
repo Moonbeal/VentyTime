@@ -1,0 +1,93 @@
+@using VentyTime.Shared.Models
+@inject NavigationManager NavigationManager
+
+<MudDialog>
+    <DialogContent>
+        <MudCard Elevation="0">
+            @if (!string.IsNullOrEmpty(Event.ImageUrl))
+            {
+                <MudCardMedia Image="@Event.ImageUrl" Height="300" />
+            }
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Class="mb-4">@Event.Title</MudText>
+                <MudText Typo="Typo.body1" Class="mb-4">@Event.Description</MudText>
+
+                <MudDivider Class="my-4" />
+
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudStack>
+                            <MudText Typo="Typo.subtitle1">
+                                <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+                                Category
+                            </MudText>
+                            <MudText Typo="Typo.body2">@Event.Category</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudStack>
+                            <MudText Typo="Typo.subtitle1">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                Location
+                            </MudText>
+                            <MudText Typo="Typo.body2">@Event.Location</MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudStack>
+                            <MudText Typo="Typo.subtitle1">
+                                <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-2" />
+                                Date & Time
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                @Event.StartDate.ToString("MMMM dd, yyyy")
+                                <br />
+                                @Event.StartTime.ToString(@"hh\:mm tt")
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudStack>
+                            <MudText Typo="Typo.subtitle1">
+                                <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
+                                Capacity
+                            </MudText>
+                            <MudText Typo="Typo.body2">@Event.MaxAttendees seats</MudText>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+
+                <MudDivider Class="my-4" />
+
+                <MudText Typo="Typo.h6" Class="mb-2">Price</MudText>
+                <MudText Typo="Typo.h4" Color="Color.Primary">
+                    @(Event.Price > 0 ? $"${Event.Price:F2}" : "Free")
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Close</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled"
+                  OnClick="@(() => NavigateToEventRegistration(Event.Id))">
+            Register Now
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Event Event { get; set; } = default!;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void NavigateToEventRegistration(int eventId)
+    {
+        MudDialog.Close();
+        NavigationManager.NavigateTo($"/events/{eventId}/register");
+    }
+}

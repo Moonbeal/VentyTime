@@ -357,7 +357,6 @@ namespace VentyTime.Server.Services
 
                 var now = DateTime.UtcNow;
                 var events = await _context.Events
-                    .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
                     .Where(e => e.IsActive && e.StartDate > now)
                     .OrderBy(e => e.StartDate)

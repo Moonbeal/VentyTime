@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
+using System.Text.Json.Serialization;
 
 namespace VentyTime.Shared.Models
 {
@@ -32,11 +33,17 @@ namespace VentyTime.Shared.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }
+
+        [JsonIgnore]
+        public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
+
+        [JsonIgnore]
+        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
+
+        [JsonIgnore]
+        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+
         public bool IsActive { get; set; } = true;
         public UserRole Role { get; set; } = UserRole.User;
-
-        // Navigation properties
-        public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
-        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
     }
 }

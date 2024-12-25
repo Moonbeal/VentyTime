@@ -2,10 +2,14 @@
 @using VentyTime.Shared.Models
 @using System.ComponentModel.DataAnnotations
 @using System.Security.Claims
+@using System.Net.Http
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Forms
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpClientFactory ClientFactory
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
     <MudPaper Class="pa-4">
@@ -34,11 +38,10 @@
                       Required="true"
                       RequiredError="Category is required"
                       Class="mb-4">
-                <MudSelectItem Value="@("Conference")">Conference</MudSelectItem>
-                <MudSelectItem Value="@("Workshop")">Workshop</MudSelectItem>
-                <MudSelectItem Value="@("Meetup")">Meetup</MudSelectItem>
-                <MudSelectItem Value="@("Social")">Social</MudSelectItem>
-                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                @foreach (var category in EventCategories.All)
+                {
+                    <MudSelectItem Value="@category">@category</MudSelectItem>
+                }
             </MudSelect>
 
             <MudTextField @bind-Value="eventModel.Location"
@@ -66,10 +69,32 @@
                           Class="mb-4"
                           AdornmentColor="Color.Primary" />
 
-            <MudTextField @bind-Value="eventModel.ImageUrl"
-                         Label="Image URL (optional)"
-                         HelperText="Enter a URL for the event image"
-                         Class="mb-4" />
+            <MudPaper Class="pa-4 mb-4" Outlined="true">
+                <InputFile id="fileInput" OnChange="OnInputFileChanged" hidden />
+                <div class="d-flex flex-column gap-4 align-center justify-center py-4">
+                    @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+                    {
+                        <MudImage Src="@eventModel.ImageUrl" Alt="Event image" Width="200" Height="200" ObjectFit="ObjectFit.Cover" Class="rounded-lg" />
+                        <MudButton OnClick="@(() => ClearImage())" 
+                                 Color="Color.Error" 
+                                 Variant="Variant.Text" 
+                                 StartIcon="@Icons.Material.Filled.Delete">
+                            Remove Image
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Size="Size.Large" />
+                        <MudButton HtmlTag="label"
+                                 Variant="Variant.Filled"
+                                 Color="Color.Primary"
+                                 StartIcon="@Icons.Material.Filled.CloudUpload"
+                                 for="fileInput">
+                            Upload Event Image
+                        </MudButton>
+                    }
+                </div>
+            </MudPaper>
 
             <div class="d-flex justify-space-between mt-6">
                 <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))"
@@ -99,12 +124,71 @@
 @code {
     private Event eventModel = new()
     {
-        StartDate = DateTime.Today,
-        EndDate = DateTime.Today
+        StartDate = DateTime.Now.Date.AddDays(1).AddHours(12),
+        Category = EventCategories.Technology
     };
+    private MudForm form;
     private bool isValid;
     private bool processing;
-    private MudForm form = default!;
+    private IBrowserFile uploadedFile;
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null)
+                return;
+
+            if (file.Size > 5 * 1024 * 1024) // 5MB limit
+            {
+                Snackbar.Add("File is too large. Maximum size is 5MB.", Severity.Error);
+                return;
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                Snackbar.Add($"Invalid file format. Allowed formats are: {string.Join(", ", allowedExtensions)}", Severity.Error);
+                return;
+            }
+
+            uploadedFile = file;
+            var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+
+            // Get the HttpClient with the correct base address
+            var client = ClientFactory.CreateClient("VentyTime.ServerAPI");
+            var response = await client.PostAsync("api/Upload", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var uploadedPath = await response.Content.ReadAsStringAsync();
+                eventModel.ImageUrl = uploadedPath;
+                StateHasChanged();
+                Snackbar.Add("Image uploaded successfully!", Severity.Success);
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to upload image: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ClearImage()
+    {
+        eventModel.ImageUrl = null;
+        uploadedFile = null;
+        StateHasChanged();
+    }
 
     private void OnDateChanged(DateTime? date)
     {

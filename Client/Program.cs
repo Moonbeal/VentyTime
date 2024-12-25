@@ -12,15 +12,8 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configure HttpClient for auth endpoints
+// Configure HttpClient for all endpoints
 builder.Services.AddHttpClient("VentyTime.ServerAPI", client =>
-{
-    client.BaseAddress = new Uri("https://localhost:7241");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
-
-// Configure HttpClient for non-auth endpoints
-builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7241");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
@@ -37,6 +30,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>
 builder.Services.AddAuthorizationCore();
 
 // Add Services
+builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IAuthService>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
@@ -52,12 +46,6 @@ builder.Services.AddScoped<IAuthService>(sp =>
         logger,
         navigationManager
     );
-});
-
-builder.Services.AddScoped<IEventService>(sp =>
-{
-    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
-    return new EventService(httpClient);
 });
 
 builder.Services.AddScoped<IUserService>(sp =>

@@ -6,18 +6,24 @@ namespace VentyTime.Client.Services
 {
     public class EventService : IEventService
     {
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public EventService(HttpClient httpClient)
+        public EventService(IHttpClientFactory httpClientFactory)
         {
-            _httpClient = httpClient;
+            _httpClientFactory = httpClientFactory;
+        }
+
+        private HttpClient CreateClient()
+        {
+            return _httpClientFactory.CreateClient("VentyTime.ServerAPI");
         }
 
         public async Task<List<Event>> GetEventsAsync()
         {
             try
             {
-                var response = await _httpClient.GetAsync("api/events");
+                var client = CreateClient();
+                var response = await client.GetAsync("api/events");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
             }
@@ -32,7 +38,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.GetAsync($"api/events/{id}");
+                var client = CreateClient();
+                var response = await client.GetAsync($"api/events/{id}");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<Event>();
             }
@@ -48,6 +55,7 @@ namespace VentyTime.Client.Services
             try
             {
                 Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
+                var client = CreateClient();
 
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
@@ -57,7 +65,7 @@ namespace VentyTime.Client.Services
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await client.SendAsync(request);
                 response.EnsureSuccessStatusCode();
 
                 var createdEvent = await response.Content.ReadFromJsonAsync<Event>();
@@ -84,6 +92,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
+                var client = CreateClient();
+
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
@@ -92,7 +102,7 @@ namespace VentyTime.Client.Services
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
-                var response = await _httpClient.SendAsync(request);
+                var response = await client.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
             }
@@ -107,7 +117,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"api/events/{id}");
+                var client = CreateClient();
+                var response = await client.DeleteAsync($"api/events/{id}");
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)
@@ -119,14 +130,16 @@ namespace VentyTime.Client.Services
 
         public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
         {
-            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/organizer/{organizerId}") ?? new List<Event>();
+            var client = CreateClient();
+            return await client.GetFromJsonAsync<List<Event>>($"api/events/organizer/{organizerId}") ?? new List<Event>();
         }
 
         public async Task<List<Event>> SearchEventsAsync(string searchTerm)
         {
             try
             {
-                return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/search?query={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
+                var client = CreateClient();
+                return await client.GetFromJsonAsync<List<Event>>($"api/events/search?query={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
             }
             catch (Exception ex)
             {
@@ -139,7 +152,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.GetAsync($"api/events/upcoming?count={count}");
+                var client = CreateClient();
+                var response = await client.GetAsync($"api/events/upcoming?count={count}");
                 response.EnsureSuccessStatusCode();
                 
                 var events = await response.Content.ReadFromJsonAsync<List<Event>>();
@@ -159,24 +173,28 @@ namespace VentyTime.Client.Services
 
         public async Task<List<Event>> GetPopularEventsAsync(int count = 5)
         {
-            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/popular?count={count}") ?? new List<Event>();
+            var client = CreateClient();
+            return await client.GetFromJsonAsync<List<Event>>($"api/events/popular?count={count}") ?? new List<Event>();
         }
 
         public async Task<bool> IsEventFullAsync(int id)
         {
-            var @event = await GetEventByIdAsync(id);
+            var client = CreateClient();
+            var @event = await client.GetFromJsonAsync<Event>($"api/events/{id}");
             return @event?.IsFull ?? false;
         }
 
         public async Task<bool> CancelEventAsync(int id)
         {
-            var response = await _httpClient.PostAsync($"api/events/{id}/cancel", null);
+            var client = CreateClient();
+            var response = await client.PostAsync($"api/events/{id}/cancel", null);
             return response.IsSuccessStatusCode;
         }
 
         public async Task<byte[]> GenerateReportAsync(ReportPeriod period)
         {
-            var response = await _httpClient.GetAsync($"api/events/report?period={period}");
+            var client = CreateClient();
+            var response = await client.GetAsync($"api/events/report?period={period}");
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsByteArrayAsync();
         }
@@ -185,7 +203,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PostAsync("api/events/upload-image", content);
+                var client = CreateClient();
+                var response = await client.PostAsync("api/events/upload-image", content);
                 response.EnsureSuccessStatusCode();
                 var url = await response.Content.ReadAsStringAsync();
                 return new ApiResponse<string> { IsSuccessful = true, Data = url.Trim('"') };
@@ -206,7 +225,8 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.GetAsync("api/events/categories");
+                var client = CreateClient();
+                var response = await client.GetAsync("api/events/categories");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
             }

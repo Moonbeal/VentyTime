@@ -30,7 +30,7 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var events = await _eventService.GetEventsAsync();
+                var (events, totalCount) = await _eventService.GetEventsAsync();
                 return Ok(events);
             }
             catch (Exception ex)
@@ -115,22 +115,24 @@ namespace VentyTime.Server.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<ActionResult<Event>> CreateEvent([FromBody] Event @event)
+        public async Task<ActionResult<Event>> CreateEvent([FromBody] Event eventItem)
         {
             try
             {
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(ModelState);
-                }
-
                 var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized(new { message = "User not authenticated" });
                 }
 
-                var createdEvent = await _eventService.CreateEventAsync(@event, userId);
+                eventItem.CreatorId = userId;
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var createdEvent = await _eventService.CreateEventAsync(eventItem, userId);
                 return CreatedAtAction(nameof(GetEvent), new { id = createdEvent.Id }, createdEvent);
             }
             catch (Exception ex)

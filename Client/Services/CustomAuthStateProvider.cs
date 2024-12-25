@@ -13,17 +13,17 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
     private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
     private readonly JwtSecurityTokenHandler _tokenHandler;
     private readonly ILogger<CustomAuthStateProvider> _logger;
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public CustomAuthStateProvider(
         Blazored.LocalStorage.ILocalStorageService localStorage,
         ILogger<CustomAuthStateProvider> logger,
-        HttpClient httpClient)
+        IHttpClientFactory httpClientFactory)
     {
         _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
         _tokenHandler = new JwtSecurityTokenHandler();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -36,7 +36,8 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
                 return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
             }
 
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var httpClient = _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             
             var tokenContent = _tokenHandler.ReadJwtToken(token);
             var claims = tokenContent.Claims.ToList();
@@ -69,7 +70,8 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
                 throw new ArgumentNullException(nameof(token));
 
             await _localStorage.SetItemAsync("authToken", token);
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var httpClient = _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(GetClaimsFromToken(token), "jwt"));
             var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
             NotifyAuthenticationStateChanged(authState);
@@ -86,7 +88,8 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         try
         {
             await _localStorage.RemoveItemAsync("authToken");
-            _httpClient.DefaultRequestHeaders.Authorization = null;
+            var httpClient = _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            httpClient.DefaultRequestHeaders.Authorization = null;
             var anonymousUser = new ClaimsPrincipal(new ClaimsIdentity());
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(anonymousUser)));
         }

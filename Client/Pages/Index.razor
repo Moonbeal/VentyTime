@@ -1,10 +1,8 @@
 @page "/"
-@using Microsoft.AspNetCore.Components
-@using Microsoft.AspNetCore.Components.Web
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
-@using MudBlazor
 @using VentyTime.Client.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using System.Timers
 
 @inject IEventService EventService
@@ -16,115 +14,505 @@
 <PageTitle>VentyTime - Discover Amazing Events</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <div class="hero-section">
-        <MudGrid>
-            <MudItem xs="12" md="6" Class="d-flex flex-column justify-center">
-                <MudText Typo="Typo.h2" Class="mb-4">Find Your Next Adventure</MudText>
-                <MudText Typo="Typo.h5" Class="mb-6">Discover, join, and create unforgettable events in your community</MudText>
-                <div class="search-box mb-6">
-                    <MudTextField @bind-Value="searchQuery" 
-                                Placeholder="Search events..." 
-                                Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.Search"
-                                Class="mt-0"
-                                Immediate="true"
-                                OnKeyUp="@SearchEvents"
-                                DebounceInterval="500" />
-                </div>
-                <div class="d-flex gap-4 flex-wrap">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" 
-                              Class="px-8" OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-                        Browse Events
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Large"
-                              OnClick="@(() => NavigationManager.NavigateTo("/create-event"))">
-                        Create Event
-                    </MudButton>
-                </div>
-            </MudItem>
-        </MudGrid>
-    </div>
+    <MudGrid>
+        <!-- Hero Section -->
+        <MudItem xs="12">
+            <div class="hero-section pa-8 mb-8">
+                <MudText Typo="Typo.h2" Class="mb-4">Discover Amazing Events</MudText>
+                <MudText Typo="Typo.h6" Class="mb-6">Find and join exciting events in your area</MudText>
+                
+                <MudTextField T="string" 
+                             @bind-Value="searchQuery"
+                             Placeholder="Search events..."
+                             Variant="Variant.Outlined"
+                             Class="mt-4 mb-4 search-field"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             AdornmentColor="Color.Primary"
+                             OnKeyUp="@(async (e) => { if (e.Key == "Enter") await HandleSearch(); })" />
+                
+                <MudButton Class="explore-button" 
+                           StartIcon="@Icons.Material.Filled.Explore" 
+                           OnClick="@(() => NavigationManager.NavigateTo("/events"))">
+                    EXPLORE EVENTS
+                </MudButton>
+            </div>
+        </MudItem>
 
-    @if (isLoading)
-    {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-    }
-    else if (!string.IsNullOrEmpty(error))
-    {
-        <MudAlert Severity="Severity.Error">@error</MudAlert>
-    }
-    else
-    {
-        <MudTabs Elevation="0" Color="Color.Primary" Rounded="true" PanelClass="mt-6">
-            <MudTabPanel Text="Featured Events">
+        <!-- Quick Stats -->
+        <MudItem xs="12">
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="d-flex flex-column align-center pa-6 stats-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Primary" Size="Size.Large" Class="stats-icon" />
+                        <MudText Typo="Typo.h3" Class="mt-4 stats-number">@searchResults.Count</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="stats-label">Total Events</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="d-flex flex-column align-center pa-6 stats-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Filled.Today" Color="Color.Secondary" Size="Size.Large" Class="stats-icon" />
+                        <MudText Typo="Typo.h3" Class="mt-4 stats-number">@searchResults.Count(e => e.StartDate.Date == DateTime.Today)</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="stats-label">Today's Events</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="d-flex flex-column align-center pa-6 stats-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Filled.Upcoming" Color="Color.Info" Size="Size.Large" Class="stats-icon" />
+                        <MudText Typo="Typo.h3" Class="mt-4 stats-number">@searchResults.Count(e => e.StartDate > DateTime.Today)</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="stats-label">Upcoming Events</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="d-flex flex-column align-center pa-6 stats-card" Elevation="0">
+                        <MudIcon Icon="@Icons.Material.Filled.Favorite" Color="Color.Error" Size="Size.Large" Class="stats-icon" />
+                        <MudText Typo="Typo.h3" Class="mt-4 stats-number">@searchResults.Count(e => e.IsFeatured)</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="stats-label">Featured Events</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <!-- Quick Filters -->
+        <MudItem xs="12">
+            <div class="d-flex gap-2 flex-wrap">
+                <MudChip Color="Color.Default"
+                         Variant="@(selectedCategories.Count == 0 ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => FilterByCategory(null))">
+                    All Events
+                </MudChip>
+                @foreach (var category in EventCategories.All)
+                {
+                    <MudChip Color="Color.Primary"
+                            Variant="@(selectedCategories.Contains(category) ? Variant.Filled : Variant.Outlined)"
+                            OnClick="@(() => FilterByCategory(category))">
+                        @category
+                    </MudChip>
+                }
+            </div>
+        </MudItem>
+
+        <!-- Featured Events Section -->
+        <MudItem xs="12">
+            <MudGrid>
+                <MudItem xs="12" Class="d-flex justify-space-between align-center">
+                    <MudText Typo="Typo.h5">Featured Events</MudText>
+                    <MudButton Variant="Variant.Text" 
+                              Color="Color.Primary" 
+                              EndIcon="@Icons.Material.Filled.ArrowForward"
+                              OnClick="@(() => NavigationManager.NavigateTo("/events"))">
+                        View All
+                    </MudButton>
+                </MudItem>
+                @foreach (var eventItem in searchResults.Where(e => e.IsFeatured).Take(3))
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Class="@($"event-card ma-2 {eventItem.Category.ToLower().Replace(" & ", "-")}")">
+                            <MudCardMedia Image="@(string.IsNullOrEmpty(eventItem.ImageUrl) ? "/images/events/default-event.jpg" : eventItem.ImageUrl)"
+                                         Height="200" />
+                            <MudCardContent Class="event-content">
+                                <div class="event-category">@eventItem.Category</div>
+                                <div class="event-title">@eventItem.Title</div>
+                                <div class="event-description">@eventItem.Description</div>
+                                <div class="event-info">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+                                    <span>@eventItem.Location</span>
+                                </div>
+                            </MudCardContent>
+                            <div class="event-footer">
+                                <div class="event-price">
+                                    @(eventItem.Price > 0 ? $"${eventItem.Price:F2}" : "Free")
+                                </div>
+                                <div>
+                                    <MudButton Color="Color.Primary" 
+                                              Variant="Variant.Text"
+                                              OnClick="@(() => ShowEventDetails(eventItem))">
+                                        Learn More
+                                    </MudButton>
+                                    <MudButton Color="Color.Primary" 
+                                              Variant="Variant.Filled"
+                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{eventItem.Id}/register"))">
+                                        Register
+                                    </MudButton>
+                                </div>
+                            </div>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudItem>
+
+        <!-- Calendar Section -->
+        <MudItem xs="12">
+            <div class="events-calendar">
                 <MudGrid>
-                    @foreach (var eventItem in events)
-                    {
-                        <MudItem xs="12" sm="6" md="4">
-                            <MudCard Class="event-card" @onclick="@(() => NavigateToEventDetails(eventItem.Id))">
-                                <MudCardMedia Image="@(string.IsNullOrEmpty(eventItem.ImageUrl) ? "/images/default-event.jpg" : eventItem.ImageUrl)" 
-                                            Height="200" />
-                                <MudCardContent>
-                                    <MudText Typo="Typo.h6" Class="mb-2">@eventItem.Title</MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-                                        @eventItem.StartDate.ToShortDateString() at @eventItem.StartTime.ToString(@"hh\:mm")
-                                    </MudText>
-                                    <MudText Typo="Typo.body2" Class="text-truncate">@eventItem.Description</MudText>
-                                </MudCardContent>
-                                <MudCardActions>
-                                    <MudButton Variant="Variant.Text" Color="Color.Primary">Learn More</MudButton>
-                                </MudCardActions>
-                            </MudCard>
-                        </MudItem>
-                    }
+                    <MudItem xs="12" md="4">
+                        <MudText Typo="Typo.h5" Class="calendar-title mb-4">Events Calendar</MudText>
+                        <MudDatePicker @bind-Date="selectedDate" 
+                                     Label="Select Date" 
+                                     DateFormat="MM/dd/yyyy"
+                                     DisableToolbar="true"
+                                     PickerVariant="PickerVariant.Dialog" />
+                    </MudItem>
+                    <MudItem xs="12" md="8">
+                        <MudList Clickable="true" Class="pa-0">
+                            @{
+                                var eventsForDate = searchResults.Where(e => e.StartDate.Date == selectedDate?.Date).ToList();
+                            }
+                            @if (!eventsForDate.Any())
+                            {
+                                <MudText Typo="Typo.subtitle1" Class="pa-4">No events scheduled for this date</MudText>
+                            }
+                            else
+                            {
+                                @foreach (var eventItem in eventsForDate)
+                                {
+                                    <MudListItem @onclick="@(() => NavigationManager.NavigateTo($"/event/{eventItem.Id}"))" Class="calendar-event">
+                                        <div class="d-flex gap-4">
+                                            <div class="calendar-event-content">
+                                                <MudText Typo="Typo.h6" Class="calendar-event-title">@eventItem.Title</MudText>
+                                                <MudText Typo="Typo.body2" Class="calendar-event-description">@eventItem.Description</MudText>
+                                                <div class="calendar-event-details">
+                                                    <div class="calendar-event-location">
+                                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-1" />
+                                                        <span>@eventItem.Location</span>
+                                                    </div>
+                                                    <div class="calendar-event-capacity">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" Class="mr-1" />
+                                                        <span>@eventItem.MaxAttendees seats</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            }
+                        </MudList>
+                    </MudItem>
                 </MudGrid>
-            </MudTabPanel>
-        </MudTabs>
-    }
+            </div>
+        </MudItem>
+    </MudGrid>
 </MudContainer>
+
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, #9333EA 0%, #E11D48 100%);
+        color: white;
+        border-radius: var(--mud-default-borderradius);
+        margin-bottom: 2rem;
+    }
+
+    .search-field {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: var(--mud-default-borderradius);
+    }
+
+    .search-field ::deep .mud-input {
+        color: var(--mud-palette-text-primary);
+    }
+
+    .search-field ::deep .mud-input-outlined {
+        border-color: transparent;
+    }
+
+    .stats-card {
+        background: white;
+        border-radius: 12px;
+        transition: all 0.2s ease-in-out;
+        border: 1px solid rgba(147, 51, 234, 0.1);
+    }
+
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(147, 51, 234, 0.1);
+    }
+
+    .stats-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        color: #9333EA;
+    }
+
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 600;
+        color: #1F2937;
+        margin: 0.5rem 0;
+    }
+
+    .stats-label {
+        color: #6B7280;
+        font-size: 1rem;
+    }
+
+    .event-card {
+        transition: all 0.2s ease-in-out;
+        height: 100%;
+        background: white;
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .event-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 12px rgba(147, 51, 234, 0.15);
+    }
+
+    .event-card.technology {
+        background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(147, 51, 234, 0.05) 100%);
+    }
+
+    .event-card.music {
+        background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+    }
+
+    .event-card.sports {
+        background: linear-gradient(135deg, rgba(192, 132, 252, 0.1) 0%, rgba(192, 132, 252, 0.05) 100%);
+    }
+
+    .event-card.food-drink {
+        background: linear-gradient(135deg, rgba(216, 180, 254, 0.1) 0%, rgba(216, 180, 254, 0.05) 100%);
+    }
+
+    .event-card.arts-culture {
+        background: linear-gradient(135deg, rgba(233, 213, 255, 0.1) 0%, rgba(233, 213, 255, 0.05) 100%);
+    }
+
+    .event-card.business {
+        background: linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(147, 51, 234, 0.03) 100%);
+    }
+
+    .event-category {
+        font-size: 0.875rem;
+        color: #9333EA;
+        margin-bottom: 8px;
+        font-weight: 500;
+    }
+
+    .event-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #1F2937;
+    }
+
+    .event-price {
+        font-weight: 600;
+        color: #9333EA;
+    }
+
+    .event-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #6B7280;
+    }
+
+    .event-info .mud-icon {
+        font-size: 1rem;
+        color: #9333EA;
+    }
+
+    .events-calendar {
+        background: linear-gradient(135deg, rgba(147, 51, 234, 0.1) 0%, rgba(233, 30, 99, 0.1) 100%);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(147, 51, 234, 0.15);
+        border: 2px solid #9333EA;
+        margin-top: 2rem;
+        backdrop-filter: blur(8px);
+        position: relative;
+    }
+
+    .events-calendar::before {
+        content: '';
+        position: absolute;
+        top: -1px;
+        left: -1px;
+        right: -1px;
+        bottom: -1px;
+        border-radius: 12px;
+        border: 1px solid rgba(233, 30, 99, 0.8);
+        pointer-events: none;
+    }
+
+    .calendar-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1F2937;
+        margin-bottom: 1rem;
+    }
+
+    .calendar-event {
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        align-items: flex-start;
+        padding: 16px;
+        margin: 8px 0;
+        border-radius: 8px;
+        border: 1px solid rgba(147, 51, 234, 0.2);
+        transition: all 0.2s ease-in-out;
+    }
+
+    .calendar-event:hover {
+        transform: translateX(4px);
+        background: white;
+        border-color: #9333EA;
+        box-shadow: 0 4px 12px rgba(147, 51, 234, 0.15);
+    }
+
+    ::deep .mud-picker .mud-input {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        border: 1px solid rgba(147, 51, 234, 0.2);
+    }
+
+    ::deep .mud-picker .mud-input:hover {
+        background: white;
+        border-color: #9333EA;
+    }
+
+    ::deep .mud-picker .mud-input.mud-input-focused {
+        background: white;
+        border-color: #9333EA;
+        box-shadow: 0 0 0 1px #9333EA;
+    }
+
+    .explore-button {
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        color: #9333EA !important;
+        font-weight: 500 !important;
+        padding: 8px 24px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    .explore-button:hover {
+        background-color: white !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .explore-button .mud-button-icon-start {
+        color: #9333EA !important;
+    }
+</style>
 
 @code {
     private List<Event> events = new();
     private List<Event> searchResults = new();
-    private bool isLoading = true;
-    private string? error;
+    private bool isLoading = false;
     private string searchQuery = "";
+    private DateTime? selectedDate = DateTime.Today;
+    private HashSet<string> selectedCategories = new();
+    private System.Timers.Timer? searchTimer;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadEvents();
+    }
+
+    private async Task LoadEvents()
+    {
         try
         {
-            events = await EventService.GetUpcomingEventsAsync();
-            isLoading = false;
+            isLoading = true;
+            events = await EventService.GetEventsAsync();
+            searchResults = events;
         }
         catch (Exception ex)
         {
-            error = "Error loading data: " + ex.Message;
+            Snackbar.Add("Failed to load events", Severity.Error);
+        }
+        finally
+        {
             isLoading = false;
-        }
-    }
-
-    private async Task SearchEvents(KeyboardEventArgs e)
-    {
-        if (string.IsNullOrWhiteSpace(searchQuery))
-        {
-            searchResults.Clear();
-            return;
-        }
-
-        try
-        {
-            searchResults = await EventService.SearchEventsAsync(searchQuery);
             StateHasChanged();
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error searching events: {ex.Message}", Severity.Error);
-        }
     }
 
-    private void NavigateToEventDetails(int eventId)
+    private async Task FilterByCategory(string? category)
     {
-        NavigationManager.NavigateTo($"/event/{eventId}");
+        if (category == null)
+        {
+            selectedCategories.Clear();
+            searchResults = events;
+        }
+        else
+        {
+            if (selectedCategories.Contains(category))
+            {
+                selectedCategories.Remove(category);
+            }
+            else
+            {
+                selectedCategories.Add(category);
+            }
+
+            searchResults = selectedCategories.Count > 0
+                ? events.Where(e => selectedCategories.Contains(e.Category)).ToList()
+                : events;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ApplyFilters()
+    {
+        searchResults = events;
+
+        if (selectedCategories.Count > 0)
+        {
+            searchResults = searchResults.Where(e => selectedCategories.Contains(e.Category)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            searchResults = searchResults.Where(e => 
+                e.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                e.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                e.Location.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+            return;
+
+        NavigationManager.NavigateTo($"/events?q={Uri.EscapeDataString(searchQuery)}");
+    }
+
+    private void NavigateToEventDetails(int eventId) => NavigationManager.NavigateTo($"/event/{eventId}");
+    private void NavigateToEventRegistration(int eventId) => NavigationManager.NavigateTo($"/event/{eventId}/register");
+
+    private string GetCategoryColor(string category)
+    {
+        return category switch
+        {
+            "Technology" => "primary",
+            "Music" => "secondary",
+            "Sports" => "success",
+            "Food & Drink" => "warning",
+            "Arts & Culture" => "info",
+            "Business" => "error",
+            _ => "default"
+        };
+    }
+
+    private async Task ShowEventDetails(Event eventDetails)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Event"] = eventDetails
+        };
+
+        var dialog = await DialogService.ShowAsync<EventDetailsDialog>("Event Details", parameters);
+        var result = await dialog.Result;
     }
 }

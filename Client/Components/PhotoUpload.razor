@@ -1,0 +1,116 @@
+@using System.Net.Http.Headers
+@using System.IO
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudPaper Class="pa-4 my-4">
+    <InputFile id="fileInput" OnChange="OnInputFileChanged" hidden multiple />
+    <MudButton HtmlTag="label"
+               Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.CloudUpload"
+               for="fileInput">
+        Upload Photos
+    </MudButton>
+
+    @if (_uploading)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
+    }
+
+    @if (UploadedFiles.Any())
+    {
+        <MudGrid Class="mt-4">
+            @foreach (var file in UploadedFiles)
+            {
+                <MudItem xs="6" sm="4" md="3">
+                    <MudCard>
+                        <MudCardMedia Image="@file" Height="200" />
+                        <MudCardActions>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                         Color="Color.Error" 
+                                         OnClick="@(() => RemovePhoto(file))" />
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudPaper>
+
+@code {
+    private bool _uploading;
+    private List<string> _uploadedFiles = new();
+
+    [Parameter]
+    public List<string> UploadedFiles
+    {
+        get => _uploadedFiles;
+        set
+        {
+            if (_uploadedFiles != value)
+            {
+                _uploadedFiles = value;
+                UploadedFilesChanged.InvokeAsync(value);
+            }
+        }
+    }
+
+    [Parameter]
+    public EventCallback<List<string>> UploadedFilesChanged { get; set; }
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _uploading = true;
+            var files = e.GetMultipleFiles();
+            foreach (var file in files)
+            {
+                if (file.Size > 5 * 1024 * 1024) // 5MB limit
+                {
+                    Snackbar.Add($"File {file.Name} is too large. Maximum size is 5MB.", Severity.Error);
+                    continue;
+                }
+
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+                var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+                if (!allowedExtensions.Contains(extension))
+                {
+                    Snackbar.Add($"File {file.Name} has invalid format. Allowed formats are: {string.Join(", ", allowedExtensions)}", Severity.Error);
+                    continue;
+                }
+
+                var content = new MultipartFormDataContent();
+                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "file", file.Name);
+
+                var response = await Http.PostAsync("api/upload", content);
+                if (response.IsSuccessStatusCode)
+                {
+                    var uploadedPath = await response.Content.ReadAsStringAsync();
+                    UploadedFiles = UploadedFiles.Append(uploadedPath).ToList();
+                    Snackbar.Add($"File {file.Name} uploaded successfully!", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add($"Failed to upload {file.Name}", Severity.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error uploading files: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void RemovePhoto(string path)
+    {
+        UploadedFiles = UploadedFiles.Where(x => x != path).ToList();
+    }
+}

@@ -1,30 +1,46 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using VentyTime.Server.Data;
 using VentyTime.Server.Models;
 using VentyTime.Server.Services;
 using VentyTime.Shared.Models;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Set default culture to English
-var cultureInfo = new CultureInfo("en-US");
-CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
-CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+// Enable detailed errors in development
+if (builder.Environment.IsDevelopment())
+{
+    builder.WebHost.UseSetting("DetailedErrors", "true");
+}
 
 // Add services to the container.
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options => 
+    {
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
+
+builder.Services.AddRazorPages();
+
+// Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add Identity services
-builder.Services.AddIdentity<VentyTime.Server.Models.ApplicationUser, IdentityRole>(options =>
+builder.Services.AddIdentity<VentyTime.Shared.Models.ApplicationUser, IdentityRole>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequireDigit = true;
@@ -78,7 +94,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("https://localhost:7242", "http://localhost:5242")
+        policy.WithOrigins("https://localhost:5242", "http://localhost:5242")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -93,40 +109,19 @@ builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 
-builder.Services.AddControllers();
-builder.Services.AddRazorPages();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Configure form options for file uploads
+builder.Services.Configure<FormOptions>(options =>
 {
-    app.UseWebAssemblyDebugging();
-    app.UseDeveloperExceptionPage();
-}
-
-app.UseHttpsRedirection();
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
-    RequestPath = "/uploads"
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
 });
 
-// Configure CORS before routing
-app.UseCors();
+// Configure file upload size limit
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    options.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+});
 
-// Configure routing and auth
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-
-// Map controllers and fallback
-app.MapControllers();
-app.MapRazorPages();
-app.MapFallbackToFile("index.html");
+var app = builder.Build();
 
 // Initialize database
 using (var scope = app.Services.CreateScope())
@@ -135,22 +130,57 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<VentyTime.Server.Models.ApplicationUser>>();
+        var userManager = services.GetRequiredService<UserManager<VentyTime.Shared.Models.ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
         
-        app.Logger.LogInformation("Ensuring database exists and is up to date...");
-        context.Database.EnsureCreated();
-        
-        app.Logger.LogInformation("Ensuring roles exist...");
+        await context.Database.MigrateAsync();
         await SeedData.EnsureRolesAsync(roleManager);
-        
-        app.Logger.LogInformation("Database initialization completed successfully.");
+        await SeedData.SeedEventsAsync(context, userManager);
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "An error occurred while initializing the database.");
-        throw;
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while seeding the database.");
     }
+}
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
+// Configure static files for uploads
+var uploadsPath = Path.Combine(builder.Environment.WebRootPath, "uploads");
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
+
+app.UseRouting();
+app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages();
+app.MapControllers();
+app.MapFallbackToFile("index.html");
+
+// Create uploads directory if it doesn't exist
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
 }
 
 app.Run();
