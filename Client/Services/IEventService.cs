@@ -12,11 +12,12 @@ namespace VentyTime.Client.Services
         Task<bool> DeleteEventAsync(int id);
         Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId);
         Task<List<Event>> SearchEventsAsync(string searchTerm);
-        Task<List<Event>> GetUpcomingEventsAsync();
+        Task<List<Event>> GetUpcomingEventsAsync(int count = 10);
         Task<List<Event>> GetPopularEventsAsync(int count = 5);
         Task<bool> IsEventFullAsync(int id);
         Task<bool> CancelEventAsync(int id);
         Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content);
         Task<byte[]> GenerateReportAsync(ReportPeriod period);
+        Task<List<string>> GetCategoriesAsync();
     }
 }

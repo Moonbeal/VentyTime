@@ -265,6 +265,44 @@ namespace VentyTime.Server.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("VentyTime.Shared.Models.Comment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Comments");
+                });
+
             modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
                 {
                     b.Property<int>("Id")
@@ -285,6 +323,9 @@ namespace VentyTime.Server.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(2000)
@@ -312,8 +353,8 @@ namespace VentyTime.Server.Migrations
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("datetime2");
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -338,21 +379,26 @@ namespace VentyTime.Server.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("datetime2");
+                    b.Property<string>("ApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<int>("EventId")
                         .HasColumnType("int");
 
-                    b.Property<DateTime>("RegisteredAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("RegistrationDate")
-                        .HasColumnType("datetime2");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("Status")
-                        .HasMaxLength(50)
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("UserId")
                         .IsRequired()
@@ -360,9 +406,12 @@ namespace VentyTime.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EventId");
+                    b.HasIndex("ApplicationUserId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("EventId", "UserId")
+                        .IsUnique();
 
                     b.ToTable("Registrations");
                 });
@@ -418,6 +467,25 @@ namespace VentyTime.Server.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("VentyTime.Shared.Models.Comment", b =>
+                {
+                    b.HasOne("VentyTime.Shared.Models.Event", "Event")
+                        .WithMany("Comments")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("VentyTime.Shared.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
                 {
                     b.HasOne("VentyTime.Shared.Models.ApplicationUser", "Organizer")
@@ -431,6 +499,10 @@ namespace VentyTime.Server.Migrations
 
             modelBuilder.Entity("VentyTime.Shared.Models.Registration", b =>
                 {
+                    b.HasOne("VentyTime.Shared.Models.ApplicationUser", null)
+                        .WithMany("Registrations")
+                        .HasForeignKey("ApplicationUserId");
+
                     b.HasOne("VentyTime.Shared.Models.Event", "Event")
                         .WithMany("Registrations")
                         .HasForeignKey("EventId")
@@ -438,9 +510,9 @@ namespace VentyTime.Server.Migrations
                         .IsRequired();
 
                     b.HasOne("VentyTime.Shared.Models.ApplicationUser", "User")
-                        .WithMany("Registrations")
+                        .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Event");
@@ -457,6 +529,8 @@ namespace VentyTime.Server.Migrations
 
             modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
                 {
+                    b.Navigation("Comments");
+
                     b.Navigation("Registrations");
                 });
 #pragma warning restore 612, 618

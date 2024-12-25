@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace VentyTime.Shared.Models
 {
@@ -9,19 +10,27 @@ namespace VentyTime.Shared.Models
 
         [Required]
         public int EventId { get; set; }
-        public virtual Event? Event { get; set; }
 
         [Required]
-        public string UserId { get; set; } = "";
+        public string UserId { get; set; } = string.Empty;
+
+        public RegistrationStatus Status { get; set; }
+
+        [StringLength(500)]
+        public string? Notes { get; set; }
+
+        public DateTime CreatedAt { get; set; }
+
+        public DateTime? UpdatedAt { get; set; }
+
+        [JsonIgnore]
+        public virtual Event? Event { get; set; }
+
+        [JsonIgnore]
         public virtual ApplicationUser? User { get; set; }
 
-        public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
-        public DateTime? CancelledAt { get; set; }
-        public bool IsCancelled => CancelledAt.HasValue;
-        
-        public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;
-
-        public RegistrationStatus Status { get; set; } = RegistrationStatus.Pending;
+        // This is used to track when the registration was made
+        public DateTime RegistrationDate { get; set; }
     }
 
     public enum RegistrationStatus

@@ -3,12 +3,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using VentyTime.Server.Data;
-using VentyTime.Shared.Models;
-using VentyTime.Shared.Models.Auth;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using VentyTime.Server.Data;
+using VentyTime.Shared.Models;
+using VentyTime.Shared.Models.Auth;
 
 namespace VentyTime.Server.Controllers
 {
@@ -20,17 +20,20 @@ namespace VentyTime.Server.Controllers
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<RegistrationController> _logger;
 
         public RegistrationController(
             ApplicationDbContext context,
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            ILogger<RegistrationController> logger)
         {
             _context = context;
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
+            _logger = logger;
         }
 
         [HttpPost("register")]
@@ -190,85 +193,226 @@ namespace VentyTime.Server.Controllers
         [HttpGet("event/{eventId}")]
         public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
         {
-            return await _context.Registrations
-                .Include(r => r.User)
-                .Where(r => r.EventId == eventId)
-                .ToListAsync();
+            try
+            {
+                var registrations = await _context.Registrations
+                    .Include(r => r.User)
+                    .Where(r => r.EventId == eventId)
+                    .ToListAsync();
+
+                return Ok(registrations);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registrations for event {EventId}", eventId);
+                return StatusCode(500, new { message = "An error occurred while retrieving registrations" });
+            }
         }
 
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations(string userId)
         {
-            return await _context.Registrations
-                .Include(r => r.Event)
-                .Where(r => r.UserId == userId)
-                .ToListAsync();
+            try
+            {
+                var registrations = await _context.Registrations
+                    .Include(r => r.Event)
+                    .Where(r => r.UserId == userId)
+                    .ToListAsync();
+
+                return Ok(registrations);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registrations for user {UserId}", userId);
+                return StatusCode(500, new { message = "An error occurred while retrieving registrations" });
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Registration>> GetRegistration(int id)
+        {
+            try
+            {
+                var registration = await _context.Registrations
+                    .Include(r => r.Event)
+                    .Include(r => r.User)
+                    .FirstOrDefaultAsync(r => r.Id == id);
+
+                if (registration == null)
+                {
+                    return NotFound();
+                }
+
+                return Ok(registration);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registration {RegistrationId}", id);
+                return StatusCode(500, new { message = "An error occurred while retrieving registration" });
+            }
         }
 
         [Authorize]
         [HttpPost("event/{eventId}")]
-        public async Task<IActionResult> RegisterForEvent(int eventId)
+        public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
+            try
             {
-                return Unauthorized();
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                var @event = await _context.Events
+                    .Include(e => e.Registrations)
+                    .FirstOrDefaultAsync(e => e.Id == eventId);
+
+                if (@event == null)
+                {
+                    return NotFound(new { message = "Event not found" });
+                }
+
+                if (!@event.IsActive)
+                {
+                    return BadRequest(new { message = "Event is not active" });
+                }
+
+                if (@event.EndDate < DateTime.UtcNow)
+                {
+                    return BadRequest(new { message = "Event has already ended" });
+                }
+
+                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+                if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
+                {
+                    return BadRequest(new { message = "Event is full" });
+                }
+
+                var existingRegistration = @event.Registrations?.FirstOrDefault(r => r.UserId == userId);
+                if (existingRegistration != null)
+                {
+                    if (existingRegistration.Status == RegistrationStatus.Cancelled)
+                    {
+                        existingRegistration.Status = RegistrationStatus.Pending;
+                        existingRegistration.UpdatedAt = DateTime.UtcNow;
+                        await _context.SaveChangesAsync();
+                        return Ok(existingRegistration);
+                    }
+                    return BadRequest(new { message = "You are already registered for this event" });
+                }
+
+                var registration = new Registration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    Status = RegistrationStatus.Pending,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Registrations.Add(registration);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetRegistration), new { id = registration.Id }, registration);
             }
-
-            var @event = await _context.Events
-                .Include(e => e.Registrations)
-                .FirstOrDefaultAsync(e => e.Id == eventId);
-
-            if (@event == null)
+            catch (Exception ex)
             {
-                return NotFound("Event not found");
+                _logger.LogError(ex, "Error registering for event {EventId}", eventId);
+                return StatusCode(500, new { message = "An error occurred while registering for event" });
             }
-
-            if (@event.IsFull)
-            {
-                return BadRequest("Event is full");
-            }
-
-            if (@event.Registrations.Any(r => r.UserId == userId))
-            {
-                return BadRequest("Already registered for this event");
-            }
-
-            var registration = new Registration
-            {
-                EventId = eventId,
-                UserId = userId,
-                RegistrationDate = DateTime.UtcNow
-            };
-
-            _context.Registrations.Add(registration);
-            await _context.SaveChangesAsync();
-
-            return Ok();
         }
 
         [Authorize]
-        [HttpDelete("{registrationId}")]
-        public async Task<IActionResult> CancelRegistration(int registrationId)
+        [HttpPost("{id}/cancel")]
+        public async Task<IActionResult> CancelRegistration(int id)
         {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
+            try
             {
-                return Unauthorized();
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                var registration = await _context.Registrations
+                    .FirstOrDefaultAsync(r => r.Id == id);
+
+                if (registration == null)
+                {
+                    return NotFound();
+                }
+
+                if (registration.UserId != userId)
+                {
+                    return Forbid();
+                }
+
+                if (registration.Status == RegistrationStatus.Cancelled)
+                {
+                    return BadRequest(new { message = "Registration is already cancelled" });
+                }
+
+                registration.Status = RegistrationStatus.Cancelled;
+                registration.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok();
             }
-
-            var registration = await _context.Registrations
-                .FirstOrDefaultAsync(r => r.Id == registrationId && r.UserId == userId);
-
-            if (registration == null)
+            catch (Exception ex)
             {
-                return NotFound("Registration not found");
+                _logger.LogError(ex, "Error cancelling registration {RegistrationId}", id);
+                return StatusCode(500, new { message = "An error occurred while cancelling registration" });
             }
+        }
 
-            _context.Registrations.Remove(registration);
-            await _context.SaveChangesAsync();
+        [Authorize(Roles = "Admin,Organizer")]
+        [HttpPost("{id}/confirm")]
+        public async Task<IActionResult> ConfirmRegistration(int id)
+        {
+            try
+            {
+                var registration = await _context.Registrations
+                    .Include(r => r.Event)
+                    .FirstOrDefaultAsync(r => r.Id == id);
 
-            return Ok();
+                if (registration == null)
+                {
+                    return NotFound();
+                }
+
+                if (registration.Status != RegistrationStatus.Pending)
+                {
+                    return BadRequest(new { message = "Registration cannot be confirmed" });
+                }
+
+                var @event = await _context.Events
+                    .Include(e => e.Registrations)
+                    .FirstOrDefaultAsync(e => e.Id == registration.EventId);
+
+                if (@event == null)
+                {
+                    return NotFound(new { message = "Event not found" });
+                }
+
+                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+                if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
+                {
+                    return BadRequest(new { message = "Event is full" });
+                }
+
+                registration.Status = RegistrationStatus.Confirmed;
+                registration.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error confirming registration {RegistrationId}", id);
+                return StatusCode(500, new { message = "An error occurred while confirming registration" });
+            }
         }
     }
 }

@@ -2,14 +2,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
 using VentyTime.Server.Data;
+using VentyTime.Server.Models;
+using VentyTime.Server.Services;
 using VentyTime.Shared.Models;
-using Microsoft.AspNetCore.Diagnostics;
-using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,34 +19,24 @@ var cultureInfo = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
 CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
-// Configure Kestrel
-builder.WebHost.ConfigureKestrel(serverOptions =>
-{
-    // Bind to localhost only
-    serverOptions.Listen(System.Net.IPAddress.Loopback, 5241); // HTTP
-    serverOptions.Listen(System.Net.IPAddress.Loopback, 7241, listenOptions =>
-    {
-        listenOptions.UseHttps(); // HTTPS
-    });
-});
-
 // Add services to the container.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Налаштування Identity
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options => 
+// Add Identity services
+builder.Services.AddIdentity<VentyTime.Server.Models.ApplicationUser, IdentityRole>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 6;
+    options.Password.RequiredLength = 8;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+// Configure JWT authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -67,39 +58,47 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
         ValidAudience = builder.Configuration["JwtSettings:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        ClockSkew = TimeSpan.Zero
     };
 });
 
-// Додаємо контролери і конфігуруємо JSON
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-    });
-
-builder.Services.AddRazorPages();
-
-// Налаштування CORS
-builder.Services.AddCors(options =>
+// Configure authorization policies
+builder.Services.AddAuthorization(options =>
 {
-    options.AddDefaultPolicy(builder =>
-        builder.WithOrigins("https://localhost:7242")
-               .AllowAnyMethod()
-               .AllowAnyHeader()
-               .AllowCredentials());
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    options.FallbackPolicy = null; // This allows [AllowAnonymous] to work properly
 });
 
-// Налаштування логування
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-builder.Logging.SetMinimumLevel(LogLevel.Debug);
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("https://localhost:7242", "http://localhost:5242")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// Add services
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IRegistrationService, RegistrationService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
+builder.Services.AddScoped<IImageService, ImageService>();
+
+builder.Services.AddControllers();
+builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
-// Налаштування HTTP pipeline
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
@@ -109,106 +108,48 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
-
-// Додаємо middleware для логування запитів
-app.Use(async (context, next) =>
+app.UseStaticFiles(new StaticFileOptions
 {
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation(
-        "=== Incoming Request ===\n" +
-        "Method: {Method}\n" +
-        "Path: {Path}\n" +
-        "QueryString: {Query}\n" +
-        "ContentType: {ContentType}\n" +
-        "Authorization: {Auth}",
-        context.Request.Method,
-        context.Request.Path,
-        context.Request.QueryString,
-        context.Request.ContentType,
-        context.Request.Headers.Authorization.ToString());
-
-    await next();
-
-    logger.LogInformation(
-        "=== Response ===\n" +
-        "StatusCode: {StatusCode}",
-        context.Response.StatusCode);
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+    RequestPath = "/uploads"
 });
 
-app.UseRouting();
-
+// Configure CORS before routing
 app.UseCors();
 
+// Configure routing and auth
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Map controllers and fallback
 app.MapControllers();
 app.MapRazorPages();
 app.MapFallbackToFile("index.html");
 
-// Логуємо всі зареєстровані маршрути
-var endpointDataSource = app.Services
-    .GetRequiredService<EndpointDataSource>();
-
-app.Logger.LogInformation("=== Registered Routes ===");
-foreach (var endpoint in endpointDataSource.Endpoints)
-{
-    if (endpoint is RouteEndpoint routeEndpoint)
-    {
-        var httpMethods = routeEndpoint.Metadata
-            .GetOrderedMetadata<HttpMethodMetadata>()
-            .SelectMany(m => m.HttpMethods)
-            .DefaultIfEmpty("No HTTP methods");
-
-        var auth = routeEndpoint.Metadata
-            .GetOrderedMetadata<IAuthorizeData>()
-            .Any() ? "Authorized" : "Anonymous";
-
-        app.Logger.LogInformation(
-            "Endpoint: {DisplayName}\n" +
-            "Route: {RoutePattern}\n" +
-            "HTTP Methods: {HttpMethods}\n" +
-            "Auth: {Auth}\n",
-            routeEndpoint.DisplayName,
-            routeEndpoint.RoutePattern.RawText,
-            string.Join(", ", httpMethods),
-            auth);
-    }
-}
-
-// Ensure database is created and seeded
+// Initialize database
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        var userManager = services.GetRequiredService<UserManager<VentyTime.Server.Models.ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-        var logger = services.GetRequiredService<ILogger<Program>>();
-
-        logger.LogInformation("Ensuring database exists and is up to date...");
-        await context.Database.EnsureCreatedAsync();
-
-        // Ensure roles exist
-        logger.LogInformation("Ensuring roles exist...");
-        var roles = Enum.GetNames(typeof(UserRole));
-        foreach (var role in roles)
-        {
-            if (!await roleManager.RoleExistsAsync(role))
-            {
-                logger.LogInformation("Creating role: {Role}", role);
-                await roleManager.CreateAsync(new IdentityRole(role));
-            }
-        }
         
-        logger.LogInformation("Database initialization completed successfully.");
+        app.Logger.LogInformation("Ensuring database exists and is up to date...");
+        context.Database.EnsureCreated();
+        
+        app.Logger.LogInformation("Ensuring roles exist...");
+        await SeedData.EnsureRolesAsync(roleManager);
+        
+        app.Logger.LogInformation("Database initialization completed successfully.");
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while initializing the database.");
-        throw; // Re-throw to see the error in the console
+        app.Logger.LogError(ex, "An error occurred while initializing the database.");
+        throw;
     }
 }
 

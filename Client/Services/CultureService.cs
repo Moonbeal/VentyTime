@@ -14,11 +14,11 @@ namespace VentyTime.Client.Services
 
         public async Task InitializeCultureAsync()
         {
-            var culture = new CultureInfo("en-US");
+            var culture = CultureInfo.InvariantCulture;
             CultureInfo.CurrentCulture = culture;
             CultureInfo.CurrentUICulture = culture;
 
-            await _jsRuntime.InvokeVoidAsync("blazorCulture.set", "en-US");
+            await _jsRuntime.InvokeVoidAsync("blazorCulture.set", "");
         }
     }
 }

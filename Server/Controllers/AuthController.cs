@@ -1,14 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
+using VentyTime.Server.Services;
 using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
 
@@ -18,123 +12,120 @@ namespace VentyTime.Server.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IConfiguration _configuration;
+        private readonly IUserService _userService;
+        private readonly ITokenService _tokenService;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
-            IConfiguration configuration)
+            IUserService userService,
+            ITokenService tokenService,
+            ILogger<AuthController> logger)
         {
-            _userManager = userManager;
-            _signInManager = signInManager;
-            _configuration = configuration;
+            _userService = userService;
+            _tokenService = tokenService;
+            _logger = logger;
         }
 
-        // ⚠️ CRITICAL AUTHENTICATION CODE - DO NOT MODIFY WITHOUT TESTING ⚠️
-        // This section contains core authentication logic that has been tested and verified
-        // Any changes to this code may break the login/registration system
-        [HttpPost("register")]
+        [HttpPost]
+        [Route("register")]
+        [AllowAnonymous]
         public async Task<IActionResult> Register([FromBody] RegisterRequest model)
         {
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
-            }
+                _logger.LogInformation("Register attempt for email: {Email}", model.Email);
 
-            var user = new ApplicationUser
-            {
-                UserName = model.Email,
-                Email = model.Email,
-                FirstName = model.FirstName,
-                LastName = model.LastName,
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true
-            };
-
-            var result = await _userManager.CreateAsync(user, model.Password);
-            if (result.Succeeded)
-            {
-                // Generate email confirmation token
-                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-
-                // TODO: Send confirmation email
-                // For now, we'll auto-confirm the email
-                await _userManager.ConfirmEmailAsync(user, token);
-
-                // Sign in the user
-                await _signInManager.SignInAsync(user, isPersistent: false);
-
-                // Generate JWT token
-                var jwtToken = await GenerateJwtToken(user);
-
-                return Ok(new AuthResponse
+                if (!ModelState.IsValid)
                 {
-                    Token = jwtToken,
-                    User = new UserDto
-                    {
-                        Id = user.Id,
-                        Email = user.Email!,
-                        FirstName = user.FirstName,
-                        LastName = user.LastName,
-                        AvatarUrl = user.AvatarUrl,
-                        Role = UserRole.None // No role assigned during registration
-                    }
-                });
-            }
-
-            foreach (var error in result.Errors)
-            {
-                ModelState.AddModelError(string.Empty, error.Description);
-            }
-
-            return BadRequest(ModelState);
-        }
-
-        // ⚠️ CRITICAL AUTHENTICATION CODE - DO NOT MODIFY WITHOUT TESTING ⚠️
-        // This section contains core authentication logic that has been tested and verified
-        // Any changes to this code may break the login/registration system
-        [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            if (user == null)
-            {
-                return BadRequest(new { message = "Invalid email or password" });
-            }
-
-            if (!user.IsActive)
-            {
-                return BadRequest(new { message = "Your account has been deactivated" });
-            }
-
-            var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: true);
-            if (result.Succeeded)
-            {
-                // Update last login time
-                user.LastLoginAt = DateTime.UtcNow;
-                user.UpdatedAt = DateTime.UtcNow;
-
-                // Update user's role
-                var currentRoles = await _userManager.GetRolesAsync(user);
-                if (currentRoles.Any())
-                {
-                    // Remove existing roles
-                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                    return BadRequest(new { errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
                 }
 
-                // Add new role
-                await _userManager.AddToRoleAsync(user, model.Role.ToString());
-                await _userManager.UpdateAsync(user);
+                var existingUser = await _userService.GetUserByEmailAsync(model.Email);
+                if (existingUser != null)
+                {
+                    return BadRequest(new { message = "Email already registered" });
+                }
 
-                // Generate JWT token
-                var token = await GenerateJwtToken(user);
+                var (succeeded, errors) = await _userService.CreateUserAsync(model);
+                if (succeeded)
+                {
+                    var user = await _userService.GetUserByEmailAsync(model.Email);
+                    var token = await _tokenService.GenerateJwtToken(user!);
+
+                    _logger.LogInformation("User registered successfully: {Email}", model.Email);
+
+                    return Ok(new AuthResponse
+                    {
+                        Token = token,
+                        User = new UserDto
+                        {
+                            Id = user!.Id,
+                            Email = user.Email!,
+                            FirstName = user.FirstName,
+                            LastName = user.LastName,
+                            AvatarUrl = user.AvatarUrl,
+                            Role = UserRole.User
+                        }
+                    });
+                }
+
+                return BadRequest(new { errors });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during registration for email: {Email}", model.Email);
+                return StatusCode(500, new { message = "An error occurred during registration" });
+            }
+        }
+
+        [HttpPost("login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Login([FromBody] LoginRequest model)
+        {
+            try
+            {
+                _logger.LogInformation("Login attempt for email: {Email}", model.Email);
+
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+                }
+
+                var user = await _userService.GetUserByEmailAsync(model.Email);
+                if (user == null)
+                {
+                    _logger.LogWarning("Login failed - user not found: {Email}", model.Email);
+                    return BadRequest(new { message = "Invalid email or password" });
+                }
+
+                if (!user.IsActive)
+                {
+                    _logger.LogWarning("Login attempt for deactivated account: {Email}", model.Email);
+                    return BadRequest(new { message = "Your account has been deactivated" });
+                }
+
+                if (!await _userService.ValidateUserAsync(model))
+                {
+                    _logger.LogWarning("Invalid password attempt for user: {Email}", model.Email);
+                    return BadRequest(new { message = "Invalid email or password" });
+                }
+
+                // Перевіряємо роль
+                if (model.Role != UserRole.None)
+                {
+                    var isInRole = await _userService.IsInRoleAsync(user, model.Role.ToString());
+                    if (!isInRole)
+                    {
+                        _logger.LogWarning("User {Email} attempted to login with unauthorized role: {Role}", model.Email, model.Role);
+                        return BadRequest(new { message = "Unauthorized role access" });
+                    }
+                }
+
+                // Оновлюємо інформацію про останній вхід
+                await _userService.UpdateUserLastLoginAsync(user);
+
+                var token = await _tokenService.GenerateJwtToken(user);
+                _logger.LogInformation("User {Email} logged in successfully", model.Email);
 
                 return Ok(new AuthResponse
                 {
@@ -150,140 +141,112 @@ namespace VentyTime.Server.Controllers
                     }
                 });
             }
-
-            if (result.IsLockedOut)
+            catch (Exception ex)
             {
-                return BadRequest(new { message = "Account locked. Please try again later." });
+                _logger.LogError(ex, "Error during login for email: {Email}", model.Email);
+                return StatusCode(500, new { message = "An error occurred during login" });
             }
-
-            return BadRequest(new { message = "Invalid email or password" });
         }
 
         [Authorize]
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
-            await _signInManager.SignOutAsync();
-            return Ok(new { message = "Logged out successfully" });
-        }
-
-        private async Task<string> GenerateJwtToken(ApplicationUser user)
-        {
-            var claims = new List<Claim>
+            try
             {
-                new(JwtRegisteredClaimNames.Sub, user.Email!),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new(ClaimTypes.NameIdentifier, user.Id),
-                new(ClaimTypes.Name, user.UserName!),
-                new(ClaimTypes.Email, user.Email!),
-                new("firstName", user.FirstName),
-                new("lastName", user.LastName)
-            };
-
-            // Get user roles and add them to claims
-            var roles = await _userManager.GetRolesAsync(user);
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-                claims.Add(new Claim("role", role)); // For backward compatibility
-            }
-
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expires = DateTime.Now.AddDays(Convert.ToDouble(_configuration["JwtSettings:ExpirationInDays"]));
-
-            var token = new JwtSecurityToken(
-                issuer: _configuration["JwtSettings:Issuer"],
-                audience: _configuration["JwtSettings:Audience"],
-                claims: claims,
-                expires: expires,
-                signingCredentials: creds);
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-
-        [Authorize]
-        [HttpGet("me")]
-        public async Task<ActionResult<UserDto>> GetCurrentUser()
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            return Ok(new UserDto
-            {
-                Id = user.Id,
-                Email = user.Email!,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                AvatarUrl = user.AvatarUrl,
-                Role = user.Role
-            });
-        }
-
-        [Authorize]
-        [HttpPut("profile")]
-        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest model)
-        {
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            user.FirstName = model.FirstName;
-            user.LastName = model.LastName;
-            user.AvatarUrl = model.AvatarUrl ?? user.AvatarUrl;
-            user.Bio = model.Bio ?? user.Bio;
-            user.Location = model.Location ?? user.Location;
-            user.Website = model.Website ?? user.Website;
-            user.UpdatedAt = DateTime.UtcNow;
-
-            var result = await _userManager.UpdateAsync(user);
-            if (!result.Succeeded)
-            {
-                return BadRequest(result.Errors);
-            }
-
-            return Ok(new UserDto
-            {
-                Id = user.Id,
-                Email = user.Email!,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                AvatarUrl = user.AvatarUrl,
-                Role = user.Role
-            });
-        }
-
-        [Authorize]
-        [HttpPut("password")]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest model)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            var user = await _userManager.GetUserAsync(User);
-            if (user == null)
-            {
-                return NotFound();
-            }
-
-            var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
-            if (!result.Succeeded)
-            {
-                foreach (var error in result.Errors)
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userId))
                 {
-                    ModelState.AddModelError(string.Empty, error.Description);
+                    _logger.LogInformation("User {UserId} logged out", userId);
+                    await Task.CompletedTask; 
                 }
-                return BadRequest(ModelState);
+                return Ok(new { message = "Logged out successfully" });
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during logout");
+                return StatusCode(500, new { message = "An error occurred during logout" });
+            }
+        }
 
-            return Ok(new { message = "Password changed successfully" });
+        [Authorize]
+        [HttpGet("current")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new { message = "User not authenticated" });
+                }
+
+                var user = await _userService.GetUserByEmailAsync(User.FindFirst(ClaimTypes.Email)?.Value!);
+                if (user == null)
+                {
+                    return NotFound(new { message = "User not found" });
+                }
+
+                var roles = await _userService.GetUserRolesAsync(user);
+                var role = roles.FirstOrDefault();
+                var userRole = Enum.TryParse<UserRole>(role, out var parsedRole) ? parsedRole : UserRole.None;
+
+                return Ok(new UserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email!,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    AvatarUrl = user.AvatarUrl,
+                    Role = userRole
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user");
+                return StatusCode(500, new { message = "An error occurred while getting user information" });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("refresh")]
+        public async Task<IActionResult> RefreshToken()
+        {
+            try
+            {
+                var token = Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+                if (string.IsNullOrEmpty(token))
+                {
+                    return BadRequest(new { message = "No token provided" });
+                }
+
+                if (_tokenService.IsTokenExpired(token))
+                {
+                    return Unauthorized(new { message = "Token expired" });
+                }
+
+                var principal = await _tokenService.ValidateToken(token);
+                var email = principal.FindFirst(ClaimTypes.Email)?.Value;
+                
+                if (string.IsNullOrEmpty(email))
+                {
+                    return BadRequest(new { message = "Invalid token" });
+                }
+
+                var user = await _userService.GetUserByEmailAsync(email);
+                if (user == null)
+                {
+                    return NotFound(new { message = "User not found" });
+                }
+
+                var newToken = await _tokenService.GenerateJwtToken(user);
+                return Ok(new { token = newToken });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error refreshing token");
+                return StatusCode(500, new { message = "An error occurred while refreshing token" });
+            }
         }
     }
 }

@@ -1,0 +1,205 @@
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@using MudBlazor
+@using System.Security.Claims
+
+@inject ICommentService CommentService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<MudPaper Class="pa-4">
+    <MudText Typo="Typo.h5" Class="mb-4">Comments</MudText>
+
+    @if (_comments == null)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (!_comments.Any())
+    {
+        <MudAlert Severity="Severity.Info">No comments yet. Be the first to comment!</MudAlert>
+    }
+    else
+    {
+        <div class="comments-list">
+            @foreach (var comment in _comments)
+            {
+                <MudCard Class="mb-4">
+                    <MudCardContent>
+                        @if (comment.Id == _editingCommentId)
+                        {
+                            <MudTextField @bind-Value="_editContent" 
+                                        Label="Edit comment" 
+                                        Variant="Variant.Outlined" 
+                                        Lines="3" />
+                            <MudStack Row="true" Class="mt-2">
+                                <MudButton Color="Color.Primary" 
+                                          Variant="Variant.Filled" 
+                                          OnClick="() => SaveEditAsync(comment)">Save</MudButton>
+                                <MudButton Color="Color.Secondary" 
+                                          Variant="Variant.Outlined" 
+                                          OnClick="CancelEdit">Cancel</MudButton>
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <MudStack>
+                                <MudStack Row="true" Class="mb-2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.subtitle1">@comment.User?.UserName</MudText>
+                                    <MudText Typo="Typo.caption">
+                                        @comment.CreatedAt.ToLocalTime().ToString("g")
+                                        @if (comment.IsEdited)
+                                        {
+                                            <span>(edited)</span>
+                                        }
+                                    </MudText>
+                                </MudStack>
+                                <MudText>@comment.Content</MudText>
+                                @if (_currentUserId == comment.UserId)
+                                {
+                                    <MudStack Row="true" Class="mt-2" Spacing="1">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                                     Size="Size.Small" 
+                                                     OnClick="() => StartEdit(comment)" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                                     Size="Size.Small" 
+                                                     Color="Color.Error" 
+                                                     OnClick="() => DeleteCommentAsync(comment.Id)" />
+                                    </MudStack>
+                                }
+                            </MudStack>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </div>
+    }
+
+    @if (_isAuthenticated)
+    {
+        <MudDivider Class="my-4" />
+        <MudTextField @bind-Value="_newCommentContent" 
+                     Label="Add a comment" 
+                     Variant="Variant.Outlined" 
+                     Lines="3" />
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="AddCommentAsync" 
+                  Class="mt-2">Add Comment</MudButton>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-4">
+            Please <MudLink Href="/login">log in</MudLink> to add comments.
+        </MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int EventId { get; set; }
+    
+    private List<Comment>? _comments;
+    private string _currentUserId = string.Empty;
+    private bool _isAuthenticated;
+    private int? _editingCommentId;
+    private string _editContent = string.Empty;
+    private string _newCommentContent = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+        
+        if (_isAuthenticated)
+        {
+            _currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+        }
+
+        await LoadCommentsAsync();
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        try
+        {
+            _comments = await CommentService.GetEventCommentsAsync(EventId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // Handle error (e.g., show error message)
+            Console.WriteLine($"Error loading comments: {ex.Message}");
+        }
+    }
+
+    private async Task AddCommentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newCommentContent)) return;
+
+        try
+        {
+            var comment = new Comment
+            {
+                EventId = EventId,
+                Content = _newCommentContent,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await CommentService.AddCommentAsync(comment);
+            _newCommentContent = string.Empty;
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine($"Error adding comment: {ex.Message}");
+        }
+    }
+
+    private void StartEdit(Comment comment)
+    {
+        _editingCommentId = comment.Id;
+        _editContent = comment.Content;
+    }
+
+    private void CancelEdit()
+    {
+        _editingCommentId = null;
+        _editContent = string.Empty;
+    }
+
+    private async Task SaveEditAsync(Comment comment)
+    {
+        if (string.IsNullOrWhiteSpace(_editContent)) return;
+
+        try
+        {
+            comment.Content = _editContent;
+            comment.IsEdited = true;
+            await CommentService.UpdateCommentAsync(comment);
+            _editingCommentId = null;
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine($"Error updating comment: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteCommentAsync(int commentId)
+    {
+        try
+        {
+            await CommentService.DeleteCommentAsync(commentId);
+            await LoadCommentsAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine($"Error deleting comment: {ex.Message}");
+        }
+    }
+}

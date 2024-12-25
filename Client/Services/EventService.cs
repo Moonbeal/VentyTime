@@ -48,18 +48,18 @@ namespace VentyTime.Client.Services
             try
             {
                 Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
-                
+
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
-                
+
                 using var request = new HttpRequestMessage(HttpMethod.Post, "api/events");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
-                
+
                 var createdEvent = await response.Content.ReadFromJsonAsync<Event>();
                 return createdEvent ?? throw new Exception("Created event is null");
             }
@@ -87,7 +87,7 @@ namespace VentyTime.Client.Services
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
-                
+
                 using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{eventItem.Id}");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
@@ -124,12 +124,37 @@ namespace VentyTime.Client.Services
 
         public async Task<List<Event>> SearchEventsAsync(string searchTerm)
         {
-            return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/search?q={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
+            try
+            {
+                return await _httpClient.GetFromJsonAsync<List<Event>>($"api/events/search?query={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error searching events: {ex.Message}");
+                throw;
+            }
         }
 
-        public async Task<List<Event>> GetUpcomingEventsAsync()
+        public async Task<List<Event>> GetUpcomingEventsAsync(int count = 10)
         {
-            return await _httpClient.GetFromJsonAsync<List<Event>>("api/events/upcoming") ?? new List<Event>();
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/events/upcoming?count={count}");
+                response.EnsureSuccessStatusCode();
+                
+                var events = await response.Content.ReadFromJsonAsync<List<Event>>();
+                return events ?? new List<Event>();
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
+                return new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
+                return new List<Event>();
+            }
         }
 
         public async Task<List<Event>> GetPopularEventsAsync(int count = 5)
@@ -151,17 +176,9 @@ namespace VentyTime.Client.Services
 
         public async Task<byte[]> GenerateReportAsync(ReportPeriod period)
         {
-            try
-            {
-                var response = await _httpClient.GetAsync($"api/events/report/{period}");
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsByteArrayAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error generating report: {ex.Message}");
-                throw;
-            }
+            var response = await _httpClient.GetAsync($"api/events/report?period={period}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsByteArrayAsync();
         }
 
         public async Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content)
@@ -182,6 +199,21 @@ namespace VentyTime.Client.Services
             {
                 Console.WriteLine($"Error uploading image: {ex.Message}");
                 return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
+            }
+        }
+
+        public async Task<List<string>> GetCategoriesAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("api/events/categories");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting categories: {ex.Message}");
+                return new List<string>();
             }
         }
     }

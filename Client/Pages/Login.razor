@@ -91,14 +91,17 @@
 
     private async Task HandleLogin()
     {
-        await form.Validate();
-
-        if (form.IsValid)
+        if (form != null)
         {
-            var result = await UserService.LoginAsync(loginRequest);
-            if (result)
+            await form.Validate();
+
+            if (form.IsValid)
             {
-                NavigationManager.NavigateTo("/");
+                var result = await UserService.LoginAsync(loginRequest);
+                if (result)
+                {
+                    NavigationManager.NavigateTo("/");
+                }
             }
         }
     }

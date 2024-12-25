@@ -12,19 +12,21 @@ namespace VentyTime.Client.Services
     public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
+        private readonly HttpClient _noAuthClient;
         private readonly CustomAuthStateProvider _authStateProvider;
         private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
         private readonly ILogger<AuthService> _logger;
         private readonly NavigationManager _navigationManager;
 
         public AuthService(
-            HttpClient httpClient,
+            IHttpClientFactory httpClientFactory,
             AuthenticationStateProvider authStateProvider,
             Blazored.LocalStorage.ILocalStorageService localStorage,
             ILogger<AuthService> logger,
             NavigationManager navigationManager)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            _noAuthClient = httpClientFactory.CreateClient("VentyTime.ServerAPI.NoAuth");
             _authStateProvider = (CustomAuthStateProvider)authStateProvider 
                 ?? throw new ArgumentNullException(nameof(authStateProvider));
             _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
@@ -65,28 +67,15 @@ namespace VentyTime.Client.Services
             try
             {
                 _logger.LogInformation("Attempting to register user: {Email}", request.Email);
-                var response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
+                
+                var response = await _noAuthClient.PostAsJsonAsync("api/auth/register", request);
                 
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogWarning("Registration failed for user {Email}. Status code: {StatusCode}, Error: {Error}", 
                         request.Email, response.StatusCode, errorContent);
-                    return new AuthResponse 
-                    { 
-                        Success = false, 
-                        Message = $"Registration failed: {errorContent}",
-                        Token = string.Empty,
-                        User = new UserDto
-                        {
-                            Id = string.Empty,
-                            Email = string.Empty,
-                            FirstName = string.Empty,
-                            LastName = string.Empty,
-                            AvatarUrl = string.Empty,
-                            Role = UserRole.User
-                        }
-                    };
+                    throw new HttpRequestException($"Registration failed: {response.StatusCode} - {errorContent}");
                 }
 
                 var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
@@ -99,41 +88,12 @@ namespace VentyTime.Client.Services
                     return result;
                 }
 
-                _logger.LogWarning("Registration failed for user {Email} - invalid response format", request.Email);
-                return new AuthResponse 
-                { 
-                    Success = false, 
-                    Message = "Registration failed: Invalid response from server",
-                    Token = string.Empty,
-                    User = new UserDto
-                    {
-                        Id = string.Empty,
-                        Email = string.Empty,
-                        FirstName = string.Empty,
-                        LastName = string.Empty,
-                        AvatarUrl = string.Empty,
-                        Role = UserRole.User
-                    }
-                };
+                throw new Exception("Invalid response from server during registration");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while registering user {Email}", request.Email);
-                return new AuthResponse 
-                { 
-                    Success = false, 
-                    Message = "An error occurred during registration.",
-                    Token = string.Empty,
-                    User = new UserDto
-                    {
-                        Id = string.Empty,
-                        Email = string.Empty,
-                        FirstName = string.Empty,
-                        LastName = string.Empty,
-                        AvatarUrl = string.Empty,
-                        Role = UserRole.User
-                    }
-                };
+                _logger.LogError(ex, "Error during registration for user {Email}", request.Email);
+                throw;
             }
         }
 
@@ -240,7 +200,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("api/auth/request-password-reset", new { Email = email });
+                var response = await _noAuthClient.PostAsJsonAsync("api/auth/request-password-reset", new { Email = email });
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("Password reset requested for {Email}", email);
@@ -262,7 +222,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("api/auth/reset-password", request);
+                var response = await _noAuthClient.PostAsJsonAsync("api/auth/reset-password", request);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("Password reset successfully for token");

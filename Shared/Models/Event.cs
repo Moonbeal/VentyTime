@@ -27,12 +27,15 @@ namespace VentyTime.Shared.Models
         [Required(ErrorMessage = "Start date is required")]
         public DateTime StartDate { get; set; }
 
+        [Required(ErrorMessage = "End date is required")]
+        public DateTime EndDate { get; set; }
+
         [Required(ErrorMessage = "Start time is required")]
-        public DateTime StartTime { get; set; }
+        public TimeSpan StartTime { get; set; }
 
         public DateTime GetStartDateTime()
         {
-            return StartTime;
+            return StartDate.Add(StartTime);
         }
 
         public bool HasStarted()
@@ -66,18 +69,21 @@ namespace VentyTime.Shared.Models
         public string OrganizerId { get; set; } = "";
 
         [JsonIgnore]
-        public ApplicationUser? Organizer { get; set; }
+        public virtual ICollection<Registration>? Registrations { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
+        public virtual ICollection<Comment>? Comments { get; set; }
 
-        public bool IsFull => MaxAttendees > 0 && Registrations.Count >= MaxAttendees;
-        
-        public int CurrentParticipants => Registrations.Count;
+        [JsonIgnore]
+        public virtual ApplicationUser? Organizer { get; set; }
+
+        public bool IsFull => MaxAttendees > 0 && Registrations?.Count >= MaxAttendees;
+
+        public int CurrentParticipants => Registrations?.Count ?? 0;
 
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
 
-        public bool IsRegistrationOpen => MaxAttendees == 0 || Registrations.Count < MaxAttendees;
+        public bool IsRegistrationOpen => MaxAttendees == 0 || Registrations?.Count < MaxAttendees;
 
         // For backward compatibility
         public string Name => Title;

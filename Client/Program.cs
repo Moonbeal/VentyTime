@@ -2,52 +2,96 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using VentyTime.Client;
 using VentyTime.Client.Services;
-using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor.Services;
-using System.Globalization;
-using Microsoft.JSInterop;
+using MudBlazor;
+using Blazored.LocalStorage;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
-
-// Configure localization services
-builder.Services.AddLocalization();
-
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Register logging services first
-builder.Services.AddLogging();
-
-// Register Blazored LocalStorage
-builder.Services.AddBlazoredLocalStorage();
-
-// Configure HttpClient with auth handler
-builder.Services.AddScoped<CustomAuthorizationMessageHandler>();
-
-// Configure the HttpClient for the API
-builder.Services.AddHttpClient("VentyTime.ServerAPI", client => 
+// Configure HttpClient for auth endpoints
+builder.Services.AddHttpClient("VentyTime.ServerAPI", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7241");
-})
-.AddHttpMessageHandler<CustomAuthorizationMessageHandler>();
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 
-// Register HttpClient factory
-builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>()
-    .CreateClient("VentyTime.ServerAPI"));
+// Configure HttpClient for non-auth endpoints
+builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7241");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 
-// Register MudBlazor services
+// Add MudBlazor
 builder.Services.AddMudServices();
 
-// Register authentication services
-builder.Services.AddAuthorizationCore();
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
-builder.Services.AddScoped<IAuthService, AuthService>();
+// Add LocalStorage
+builder.Services.AddBlazoredLocalStorage();
 
-// Register other services
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IEventService, EventService>();
-builder.Services.AddScoped<IRegistrationService, RegistrationService>();
+// Add Auth State Provider
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+builder.Services.AddAuthorizationCore();
+
+// Add Services
+builder.Services.AddScoped<IAuthService>(sp =>
+{
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var logger = sp.GetRequiredService<ILogger<AuthService>>();
+    var navigationManager = sp.GetRequiredService<NavigationManager>();
+    
+    return new AuthService(
+        httpClientFactory,
+        authStateProvider,
+        localStorage,
+        logger,
+        navigationManager
+    );
+});
+
+builder.Services.AddScoped<IEventService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
+    return new EventService(httpClient);
+});
+
+builder.Services.AddScoped<IUserService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
+    var snackbar = sp.GetRequiredService<ISnackbar>();
+    var logger = sp.GetRequiredService<ILogger<UserService>>();
+    
+    return new UserService(
+        httpClient,
+        localStorage,
+        authStateProvider,
+        snackbar,
+        logger
+    );
+});
+
+builder.Services.AddScoped<IRegistrationService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
+    var snackbar = sp.GetRequiredService<ISnackbar>();
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authService = sp.GetRequiredService<IAuthService>();
+    return new RegistrationService(httpClient, snackbar, localStorage, authService);
+});
+
+builder.Services.AddScoped<ICommentService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
+    return new CommentService(httpClient);
+});
+
 builder.Services.AddScoped<CultureService>();
 
 await builder.Build().RunAsync();

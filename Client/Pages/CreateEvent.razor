@@ -1,157 +1,97 @@
 @page "/create-event"
-@using Microsoft.AspNetCore.Components.Forms
-@using System.ComponentModel.DataAnnotations
 @using VentyTime.Shared.Models
+@using System.ComponentModel.DataAnnotations
 @using System.Security.Claims
-@using System.Text.Json
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
-@inject IUserService UserService
-@inject IJSRuntime JSRuntime
-@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@attribute [Authorize]
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-8">
-    <MudPaper Elevation="3" Class="pa-6 rounded-lg">
-        <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-6">Create New Event</MudText>
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudPaper Class="pa-4">
+        <MudForm @ref="form" Model="@eventModel" @bind-IsValid="@isValid">
+            <MudText Typo="Typo.h4" Class="mb-4">Create New Event</MudText>
 
-        <MudForm @ref="form" Model="@eventModel" @bind-IsValid="@success">
-            <MudGrid Spacing="3">
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.Title"
-                                Label="Event Title"
-                                Variant="Variant.Outlined"
-                                Required="true"
-                                RequiredError="Title is required!"
-                                Immediate="true"
-                                Counter="100"
-                                MaxLength="100"
-                                HelperText="Give your event a catchy title" />
-                </MudItem>
+            <MudTextField @bind-Value="eventModel.Title"
+                         Label="Title"
+                         Required="true"
+                         RequiredError="Title is required"
+                         MaxLength="100"
+                         Counter="100"
+                         Class="mb-4" />
 
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="eventModel.Description"
-                                Label="Description"
-                                Variant="Variant.Outlined"
-                                Required="true"
-                                RequiredError="Description is required!"
-                                Lines="4"
-                                Counter="500"
-                                MaxLength="500"
-                                HelperText="Describe your event in detail" />
-                </MudItem>
+            <MudTextField @bind-Value="eventModel.Description"
+                         Label="Description"
+                         Required="true"
+                         RequiredError="Description is required"
+                         Lines="3"
+                         MaxLength="500"
+                         Counter="500"
+                         Class="mb-4" />
 
-                <MudItem xs="12" sm="6">
-                    <MudSelect T="string"
-                              Label="Category"
-                              @bind-Value="eventModel.Category"
-                              Required="true"
-                              RequiredError="Category is required!"
-                              AnchorOrigin="Origin.BottomCenter"
-                              Variant="Variant.Outlined">
-                        <MudSelectItem Value="@("Art & Culture")">Art & Culture</MudSelectItem>
-                        <MudSelectItem Value="@("Business")">Business</MudSelectItem>
-                        <MudSelectItem Value="@("Food & Drinks")">Food & Drinks</MudSelectItem>
-                        <MudSelectItem Value="@("Music")">Music</MudSelectItem>
-                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
-                        <MudSelectItem Value="@("Technology")">Technology</MudSelectItem>
-                        <MudSelectItem Value="@("Other")">Other</MudSelectItem>
-                    </MudSelect>
-                </MudItem>
+            <MudSelect @bind-Value="eventModel.Category"
+                      Label="Category"
+                      Required="true"
+                      RequiredError="Category is required"
+                      Class="mb-4">
+                <MudSelectItem Value="@("Conference")">Conference</MudSelectItem>
+                <MudSelectItem Value="@("Workshop")">Workshop</MudSelectItem>
+                <MudSelectItem Value="@("Meetup")">Meetup</MudSelectItem>
+                <MudSelectItem Value="@("Social")">Social</MudSelectItem>
+                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+            </MudSelect>
 
-                <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="eventModel.Location"
-                                Label="Location"
-                                Variant="Variant.Outlined"
-                                Required="true"
-                                RequiredError="Location is required!"
-                                Adornment="Adornment.Start"
-                                AdornmentIcon="@Icons.Material.Filled.LocationOn" />
-                </MudItem>
+            <MudTextField @bind-Value="eventModel.Location"
+                         Label="Location"
+                         Required="true"
+                         RequiredError="Location is required"
+                         Class="mb-4" />
 
-                <MudItem xs="12" sm="6">
-                    <MudDatePicker Label="Event Date and Time"
-                                 Required="true"
-                                 RequiredError="Date is required!"
-                                 DisablePastDates="true"
-                                 DateFormat="dd/MM/yyyy"
-                                 Variant="Variant.Outlined"
-                                 Date="eventModel.StartDate"
-                                 DateChanged="date => { if (date.HasValue) eventModel.StartDate = date.Value; }" />
-                </MudItem>
+            <MudDatePicker Date="@eventModel.StartDate"
+                          DateChanged="@(date => OnDateChanged(date))"
+                          Label="Date"
+                          Required="true"
+                          RequiredError="Date is required"
+                          DisablePast="true"
+                          DateFormat="dd/MM/yyyy"
+                          Class="mb-4"
+                          AdornmentColor="Color.Primary" />
 
-                <MudItem xs="12" sm="6">
-                    <MudTimePicker Label="Start Time"
-                                 Required="true"
-                                 RequiredError="Time is required!"
-                                 AmPm="true"
-                                 TimeFormat="hh:mm tt"
-                                 Variant="Variant.Outlined"
-                                 Time="eventModel.StartDate.TimeOfDay"
-                                 TimeChanged="time => { if (time.HasValue) eventModel.StartDate = eventModel.StartDate.Date.Add(time.Value); }" />
-                </MudItem>
+            <MudTimePicker Time="@eventModel.StartDate.TimeOfDay"
+                          TimeChanged="@(time => OnTimeChanged(time))"
+                          Label="Time"
+                          Required="true"
+                          RequiredError="Time is required"
+                          AmPm="false"
+                          Class="mb-4"
+                          AdornmentColor="Color.Primary" />
 
-                <MudItem xs="12" sm="6">
-                    <MudNumericField @bind-Value="eventModel.Price"
-                                   Label="Price ($)"
-                                   Required="true"
-                                   RequiredError="Price is required!"
-                                   Min="0"
-                                   Format="N2"
-                                   Variant="Variant.Outlined"
-                                   Adornment="Adornment.Start"
-                                   AdornmentText="$"
-                                   HelperText="Set to 0 for free events" />
-                </MudItem>
+            <MudTextField @bind-Value="eventModel.ImageUrl"
+                         Label="Image URL (optional)"
+                         HelperText="Enter a URL for the event image"
+                         Class="mb-4" />
 
-                <MudItem xs="12" sm="6">
-                    <MudNumericField @bind-Value="eventModel.MaxAttendees"
-                                   Label="Capacity"
-                                   Required="true"
-                                   RequiredError="Capacity is required!"
-                                   Min="0"
-                                   Variant="Variant.Outlined"
-                                   HelperText="Set to 0 for unlimited capacity" />
-                </MudItem>
-
-                <MudItem xs="12">
-                    <InputFile id="fileInput" OnChange="OnInputFileChanged" class="d-none" />
-                    <MudButton HtmlTag="label"
-                              Variant="Variant.Filled"
-                              Color="Color.Secondary"
-                              StartIcon="@Icons.Material.Filled.CloudUpload"
-                              for="fileInput"
-                              Size="Size.Large">
-                        Upload Image
-                    </MudButton>
-                    @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+            <div class="d-flex justify-space-between mt-6">
+                <MudButton OnClick="@(() => NavigationManager.NavigateTo("/"))"
+                          Variant="Variant.Outlined"
+                          Color="Color.Secondary">
+                    Cancel
+                </MudButton>
+                <MudButton OnClick="CreateEventAsync"
+                          Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          Disabled="@(!isValid || processing)">
+                    @if (processing)
                     {
-                        <MudImage Src="@eventModel.ImageUrl" Alt="Event Image" Class="mt-3" Width="200" Height="200" ObjectFit="ObjectFit.Cover" />
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Creating...</MudText>
                     }
-                </MudItem>
-
-                <MudItem xs="12" Class="d-flex justify-space-between align-center">
-                    <MudButton Href="/"
-                              Variant="Variant.Outlined"
-                              Color="Color.Error"
-                              Size="Size.Large"
-                              StartIcon="@Icons.Material.Filled.ArrowBack">
-                        Back
-                    </MudButton>
-
-                    <MudButton OnClick="HandleValidSubmit"
-                              Disabled="!success"
-                              Variant="Variant.Filled"
-                              Color="Color.Primary"
-                              Size="Size.Large"
-                              StartIcon="@Icons.Material.Filled.Add"
-                              Class="ml-auto">
-                        Create Event
-                    </MudButton>
-                </MudItem>
-            </MudGrid>
+                    else
+                    {
+                        <MudText>Create Event</MudText>
+                    }
+                </MudButton>
+            </div>
         </MudForm>
     </MudPaper>
 </MudContainer>
@@ -159,131 +99,69 @@
 @code {
     private Event eventModel = new()
     {
-        StartDate = DateTime.UtcNow.Date.AddDays(1).AddHours(12), // Set to tomorrow at noon by default
-        Price = 0,
-        MaxAttendees = 10
+        StartDate = DateTime.Today,
+        EndDate = DateTime.Today
     };
+    private bool isValid;
+    private bool processing;
+    private MudForm form = default!;
 
-    private bool success;
-    private MudForm form;
-
-    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
+    private void OnDateChanged(DateTime? date)
     {
-        var file = e.File;
-        if (file != null)
+        if (date.HasValue)
         {
-            try
-            {
-                if (file.Size > 4096000)
-                {
-                    Snackbar.Add("File size must be less than 4MB", Severity.Error);
-                    return;
-                }
-
-                using var content = new MultipartFormDataContent();
-                using var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 4096000));
-                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
-                content.Add(fileContent, "file", file.Name);
-
-                var response = await EventService.UploadEventImage(content);
-                if (response.IsSuccessful)
-                {
-                    eventModel.ImageUrl = response.Data.Trim('"'); // Remove any quotes from the URL
-                    Snackbar.Add("Image uploaded successfully!", Severity.Success);
-                }
-                else
-                {
-                    Snackbar.Add("Failed to upload image", Severity.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error uploading image: {ex.Message}");
-                Snackbar.Add("Error uploading image", Severity.Error);
-            }
+            var time = eventModel.StartDate.TimeOfDay;
+            eventModel.StartDate = date.Value.Date + time;
+            eventModel.EndDate = eventModel.StartDate.AddHours(1);
         }
     }
 
-    private async Task HandleValidSubmit()
+    private void OnTimeChanged(TimeSpan? time)
     {
+        if (time.HasValue)
+        {
+            eventModel.StartDate = eventModel.StartDate.Date + time.Value;
+            eventModel.EndDate = eventModel.StartDate.AddHours(1);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+        {
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        eventModel.OrganizerId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private async Task CreateEventAsync()
+    {
+        if (!isValid) return;
+
         try
         {
+            processing = true;
             await form.Validate();
-            if (!form.IsValid)
+
+            if (form.IsValid)
             {
-                Snackbar.Add("Please fill in all required fields correctly", Severity.Warning);
-                return;
-            }
-
-            // Get current user ID
-            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var user = authState.User;
-            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userId))
-            {
-                Snackbar.Add("You must be logged in to create an event.", Severity.Error);
-                return;
-            }
-
-            // Set the organizer ID
-            eventModel.OrganizerId = userId;
-
-            // Clean up the image URL
-            if (!string.IsNullOrEmpty(eventModel.ImageUrl))
-            {
-                eventModel.ImageUrl = eventModel.ImageUrl.Trim('"');
-            }
-
-            // Get the user's time zone
-            var userTimeZone = TimeZoneInfo.Local;
-            Console.WriteLine($"User's time zone: {userTimeZone.Id}");
-
-            // Combine date and time in local time zone
-            var localDateTime = new DateTime(
-                eventModel.StartDate.Year,
-                eventModel.StartDate.Month,
-                eventModel.StartDate.Day,
-                eventModel.StartDate.Hour,
-                eventModel.StartDate.Minute,
-                eventModel.StartDate.Second,
-                DateTimeKind.Local
-            );
-            Console.WriteLine($"Local DateTime before conversion: {localDateTime}");
-
-            // Convert to UTC
-            var utcDateTime = TimeZoneInfo.ConvertTimeToUtc(localDateTime, userTimeZone);
-            Console.WriteLine($"UTC DateTime after conversion: {utcDateTime}");
-
-            // Update the event model with UTC values
-            eventModel.StartDate = utcDateTime;
-
-            Console.WriteLine($"Final event values - Date: {eventModel.StartDate:yyyy-MM-dd}, Time: {eventModel.StartDate:HH:mm:ss}");
-
-            // Create the event
-            var createdEvent = await EventService.CreateEventAsync(eventModel);
-            success = true;
-            Snackbar.Add("Event created successfully!", Severity.Success);
-            NavigationManager.NavigateTo($"/events/{createdEvent.Id}");
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine($"HTTP error creating event: {ex.Message}");
-            if (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-            {
-                Snackbar.Add("Please log in to create events", Severity.Warning);
-                NavigationManager.NavigateTo("/login");
-            }
-            else
-            {
-                Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
+                var createdEvent = await EventService.CreateEventAsync(eventModel);
+                Snackbar.Add("Event created successfully!", Severity.Success);
+                NavigationManager.NavigateTo($"/events/{createdEvent.Id}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error creating event: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
             Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            processing = false;
         }
     }
 }

@@ -13,6 +13,7 @@ namespace VentyTime.Server.Data
 
         public DbSet<Event> Events { get; set; } = null!;
         public DbSet<Registration> Registrations { get; set; } = null!;
+        public DbSet<Comment> Comments { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -83,16 +84,15 @@ namespace VentyTime.Server.Data
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasOne(r => r.User)
-                    .WithMany(u => u.Registrations)
+                    .WithMany()
                     .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Restrict);
 
-                entity.Property(r => r.RegistrationDate)
-                    .IsRequired();
+                entity.HasIndex(r => new { r.EventId, r.UserId })
+                    .IsUnique();
 
-                entity.Property(r => r.Status)
-                    .HasMaxLength(50)
-                    .IsRequired();
+                entity.Property(r => r.CreatedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
             });
         }
     }
