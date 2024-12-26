@@ -37,12 +37,15 @@ namespace VentyTime.Server.Controllers
 
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(new { errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+                    var modelErrors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
+                    _logger.LogWarning("Invalid model state for registration: {Errors}", string.Join(", ", modelErrors));
+                    return BadRequest(new { errors = modelErrors });
                 }
 
                 var existingUser = await _userService.GetUserByEmailAsync(model.Email);
                 if (existingUser != null)
                 {
+                    _logger.LogWarning("Registration failed - email already exists: {Email}", model.Email);
                     return BadRequest(new { message = "Email already registered" });
                 }
 
@@ -50,16 +53,22 @@ namespace VentyTime.Server.Controllers
                 if (succeeded)
                 {
                     var user = await _userService.GetUserByEmailAsync(model.Email);
-                    var token = await _tokenService.GenerateJwtToken(user!);
+                    if (user == null)
+                    {
+                        _logger.LogError("User was created but could not be retrieved: {Email}", model.Email);
+                        return StatusCode(500, new { message = "User was created but could not be retrieved" });
+                    }
 
+                    var token = await _tokenService.GenerateJwtToken(user);
                     _logger.LogInformation("User registered successfully: {Email}", model.Email);
 
                     return Ok(new AuthResponse
                     {
+                        Success = true,
                         Token = token,
                         User = new UserDto
                         {
-                            Id = user!.Id,
+                            Id = user.Id,
                             Email = user.Email!,
                             FirstName = user.FirstName,
                             LastName = user.LastName,
@@ -69,12 +78,13 @@ namespace VentyTime.Server.Controllers
                     });
                 }
 
+                _logger.LogWarning("Registration failed for {Email}: {Errors}", model.Email, string.Join(", ", errors));
                 return BadRequest(new { errors });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration for email: {Email}", model.Email);
-                return StatusCode(500, new { message = "An error occurred during registration" });
+                return StatusCode(500, new { message = "An error occurred during registration", error = ex.Message, stackTrace = ex.StackTrace });
             }
         }
 
@@ -84,51 +94,38 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                _logger.LogInformation("Login attempt for email: {Email}", model.Email);
+                _logger.LogInformation("Login attempt for email: {Email} with role: {Role}", 
+                    model.Email, model.SelectedRole);
 
                 if (!ModelState.IsValid)
                 {
-                    return BadRequest(new { errors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage) });
+                    var modelErrors = ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage);
+                    _logger.LogWarning("Invalid model state for login: {Errors}", string.Join(", ", modelErrors));
+                    return BadRequest(new { errors = modelErrors });
+                }
+
+                var isValid = await _userService.ValidateUserAsync(model);
+                if (!isValid)
+                {
+                    _logger.LogWarning("Login failed for {Email} with role {Role}", 
+                        model.Email, model.SelectedRole);
+                    return BadRequest(new { message = "Invalid email, password, or selected role" });
                 }
 
                 var user = await _userService.GetUserByEmailAsync(model.Email);
                 if (user == null)
                 {
-                    _logger.LogWarning("Login failed - user not found: {Email}", model.Email);
-                    return BadRequest(new { message = "Invalid email or password" });
+                    _logger.LogError("User was validated but could not be retrieved: {Email}", model.Email);
+                    return StatusCode(500, new { message = "An error occurred during login" });
                 }
-
-                if (!user.IsActive)
-                {
-                    _logger.LogWarning("Login attempt for deactivated account: {Email}", model.Email);
-                    return BadRequest(new { message = "Your account has been deactivated" });
-                }
-
-                if (!await _userService.ValidateUserAsync(model))
-                {
-                    _logger.LogWarning("Invalid password attempt for user: {Email}", model.Email);
-                    return BadRequest(new { message = "Invalid email or password" });
-                }
-
-                // Перевіряємо роль
-                if (model.Role != UserRole.None)
-                {
-                    var isInRole = await _userService.IsInRoleAsync(user, model.Role.ToString());
-                    if (!isInRole)
-                    {
-                        _logger.LogWarning("User {Email} attempted to login with unauthorized role: {Role}", model.Email, model.Role);
-                        return BadRequest(new { message = "Unauthorized role access" });
-                    }
-                }
-
-                // Оновлюємо інформацію про останній вхід
-                await _userService.UpdateUserLastLoginAsync(user);
 
                 var token = await _tokenService.GenerateJwtToken(user);
-                _logger.LogInformation("User {Email} logged in successfully", model.Email);
+                _logger.LogInformation("User logged in successfully: {Email} with role {Role}", 
+                    model.Email, model.SelectedRole);
 
                 return Ok(new AuthResponse
                 {
+                    Success = true,
                     Token = token,
                     User = new UserDto
                     {
@@ -137,7 +134,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = model.Role
+                        Role = model.SelectedRole
                     }
                 });
             }

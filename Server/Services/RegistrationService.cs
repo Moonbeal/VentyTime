@@ -7,7 +7,7 @@ namespace VentyTime.Server.Services
     public interface IRegistrationService
     {
         Task<Registration> CreateRegistrationAsync(Registration registration, string userId);
-        Task<Registration> UpdateRegistrationAsync(Registration registration, string userId);
+        Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId);
         Task<Registration?> GetRegistrationByIdAsync(int id);
         Task<IEnumerable<Registration>> GetRegistrationsByEventAsync(int eventId);
         Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId);
@@ -76,7 +76,7 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<Registration> UpdateRegistrationAsync(Registration registration, string userId)
+        public async Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId)
         {
             try
             {
@@ -90,7 +90,12 @@ namespace VentyTime.Server.Services
                     throw new UnauthorizedAccessException("User is not authorized to update this registration");
                 }
 
-                existingRegistration.Status = registration.Status;
+                if (existingRegistration.Status != RegistrationStatus.Pending)
+                {
+                    throw new InvalidOperationException($"Cannot update registration with status {existingRegistration.Status}");
+                }
+
+                existingRegistration.Status = newStatus;
                 existingRegistration.UpdatedAt = DateTime.UtcNow;
 
                 using var transaction = await _context.Database.BeginTransactionAsync();

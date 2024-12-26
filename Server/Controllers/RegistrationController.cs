@@ -51,29 +51,25 @@ namespace VentyTime.Server.Controllers
                 UserName = model.Email,
                 Email = model.Email,
                 FirstName = model.FirstName,
-                LastName = model.LastName
+                LastName = model.LastName,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
             };
 
             var result = await _userManager.CreateAsync(applicationUser, model.Password);
 
             if (result.Succeeded)
             {
+                // Add user to the default User role
+                await _userManager.AddToRoleAsync(applicationUser, UserRole.User.ToString());
                 await _signInManager.SignInAsync(applicationUser, isPersistent: false);
 
-                // Create associated User profile
-                var userProfile = new ApplicationUser
-                {
-                    Id = applicationUser.Id,
-                    UserName = applicationUser.UserName ?? model.Email,
-                    Email = applicationUser.Email,
-                    FirstName = model.FirstName,
-                    LastName = model.LastName
-                };
+                var token = await GenerateJwtToken(applicationUser);
 
-                _context.Users.Add(userProfile);
-                await _context.SaveChangesAsync();
-
-                var token = GenerateJwtToken(applicationUser);
+                // Get the user's role
+                var roles = await _userManager.GetRolesAsync(applicationUser);
+                var role = roles.FirstOrDefault();
+                var userRole = Enum.TryParse<UserRole>(role, out var parsedRole) ? parsedRole : UserRole.User;
 
                 return Ok(new AuthResponse
                 {
@@ -87,7 +83,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = applicationUser.FirstName,
                         LastName = applicationUser.LastName,
                         AvatarUrl = applicationUser.AvatarUrl,
-                        Role = applicationUser.Role
+                        Role = userRole
                     }
                 });
             }
@@ -129,7 +125,11 @@ namespace VentyTime.Server.Controllers
 
             if (result.Succeeded)
             {
-                var token = GenerateJwtToken(user);
+                // Update last login time
+                user.LastLoginAt = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+
+                var token = await GenerateJwtToken(user);
                 return Ok(new AuthResponse
                 {
                     Success = true,
@@ -141,7 +141,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = user.Role
+                        Role = Enum.TryParse<UserRole>((await _userManager.GetRolesAsync(user)).FirstOrDefault(), out var parsedRole) ? parsedRole : UserRole.User
                     }
                 });
             }
@@ -163,25 +163,28 @@ namespace VentyTime.Server.Controllers
             });
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
+            var roles = await _userManager.GetRolesAsync(user);
+            var role = roles.FirstOrDefault() ?? UserRole.User.ToString();
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id),
                 new(ClaimTypes.Name, user.UserName ?? string.Empty),
                 new(ClaimTypes.Email, user.Email ?? string.Empty),
-                new(ClaimTypes.Role, UserRole.User.ToString()),
+                new(ClaimTypes.Role, role),
                 new(ClaimTypes.GivenName, user.FirstName),
                 new(ClaimTypes.Surname, user.LastName)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSecurityKey"] ?? string.Empty));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:SecretKey"] ?? string.Empty));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var expiry = DateTime.Now.AddDays(Convert.ToInt32(_configuration["JwtExpiryInDays"] ?? "1"));
+            var expiry = DateTime.Now.AddDays(Convert.ToInt32(_configuration["JwtSettings:ExpirationInDays"] ?? "7"));
 
             var token = new JwtSecurityToken(
-                _configuration["JwtIssuer"],
-                _configuration["JwtAudience"],
+                _configuration["JwtSettings:Issuer"],
+                _configuration["JwtSettings:Audience"],
                 claims,
                 expires: expiry,
                 signingCredentials: creds
@@ -258,38 +261,62 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
-                    return Unauthorized();
+                    _logger.LogWarning("Unauthorized registration attempt for event {EventId}", eventId);
+                    return Unauthorized(new { message = "You must be logged in to register for events." });
                 }
 
+                // Verify user exists
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogError("User {UserId} not found while registering for event {EventId}", userId, eventId);
+                    return BadRequest(new { message = "User not found" });
+                }
+
+                // Load event with its registrations
                 var @event = await _context.Events
                     .Include(e => e.Registrations)
                     .FirstOrDefaultAsync(e => e.Id == eventId);
 
                 if (@event == null)
                 {
+                    _logger.LogWarning("Attempted to register for non-existent event {EventId}", eventId);
                     return NotFound(new { message = "Event not found" });
                 }
 
                 if (!@event.IsActive)
                 {
-                    return BadRequest(new { message = "Event is not active" });
+                    _logger.LogWarning("Attempted to register for inactive event {EventId}", eventId);
+                    return BadRequest(new { message = "This event is not active" });
                 }
 
                 if (@event.EndDate < DateTime.UtcNow)
                 {
-                    return BadRequest(new { message = "Event has already ended" });
+                    _logger.LogWarning("Attempted to register for ended event {EventId}", eventId);
+                    return BadRequest(new { message = "This event has already ended" });
                 }
 
+                if (@event.StartDate < DateTime.UtcNow)
+                {
+                    _logger.LogWarning("Attempted to register for started event {EventId}", eventId);
+                    return BadRequest(new { message = "This event has already started" });
+                }
+
+                // Check current capacity
                 var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
                 if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
                 {
-                    return BadRequest(new { message = "Event is full" });
+                    _logger.LogWarning("Attempted to register for full event {EventId}", eventId);
+                    return BadRequest(new { message = "This event is full" });
                 }
 
-                var existingRegistration = @event.Registrations?.FirstOrDefault(r => r.UserId == userId);
+                // Check for existing registration using a direct query
+                var existingRegistration = await _context.Registrations
+                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
                 if (existingRegistration != null)
                 {
                     if (existingRegistration.Status == RegistrationStatus.Cancelled)
@@ -297,28 +324,57 @@ namespace VentyTime.Server.Controllers
                         existingRegistration.Status = RegistrationStatus.Pending;
                         existingRegistration.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync();
-                        return Ok(existingRegistration);
+                        _logger.LogInformation("Reactivated cancelled registration for user {UserId} in event {EventId}", userId, eventId);
+                        
+                        // Load and return the full registration details
+                        var reactivatedRegistration = await _context.Registrations
+                            .Include(r => r.Event)
+                            .Include(r => r.User)
+                            .FirstOrDefaultAsync(r => r.Id == existingRegistration.Id);
+                            
+                        return Ok(reactivatedRegistration);
                     }
+                    
+                    _logger.LogWarning("User {UserId} attempted to register again for event {EventId}", userId, eventId);
                     return BadRequest(new { message = "You are already registered for this event" });
                 }
 
+                // Create new registration
                 var registration = new Registration
                 {
                     EventId = eventId,
                     UserId = userId,
-                    Status = RegistrationStatus.Pending,
-                    CreatedAt = DateTime.UtcNow
+                    Status = RegistrationStatus.Pending
                 };
 
                 _context.Registrations.Add(registration);
-                await _context.SaveChangesAsync();
 
-                return CreatedAtAction(nameof(GetRegistration), new { id = registration.Id }, registration);
+                // Update event capacity
+                @event.CurrentCapacity = confirmedRegistrations + 1;
+                _context.Events.Update(@event);
+
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
+                
+                // Load and return the full registration details
+                var savedRegistration = await _context.Registrations
+                    .Include(r => r.Event)
+                    .Include(r => r.User)
+                    .FirstOrDefaultAsync(r => r.Id == registration.Id);
+
+                if (savedRegistration == null)
+                {
+                    _logger.LogError("Failed to load saved registration {RegistrationId} for event {EventId}", registration.Id, eventId);
+                    return StatusCode(500, new { message = "Registration was created but could not be loaded" });
+                }
+                    
+                return Ok(savedRegistration);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error registering for event {EventId}", eventId);
-                return StatusCode(500, new { message = "An error occurred while registering for event" });
+                _logger.LogError(ex, "Error registering user for event {EventId}. Error: {Error}", eventId, ex.ToString());
+                return StatusCode(500, new { message = "An error occurred while registering for the event", error = ex.Message });
             }
         }
 
@@ -357,7 +413,7 @@ namespace VentyTime.Server.Controllers
 
                 await _context.SaveChangesAsync();
 
-                return Ok();
+                return Ok(registration);
             }
             catch (Exception ex)
             {

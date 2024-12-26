@@ -1,28 +1,37 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using VentyTime.Shared.Models;
+using Blazored.LocalStorage;
 
 namespace VentyTime.Client.Services
 {
     public class EventService : IEventService
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILocalStorageService _localStorage;
 
-        public EventService(IHttpClientFactory httpClientFactory)
+        public EventService(IHttpClientFactory httpClientFactory, ILocalStorageService localStorage)
         {
             _httpClientFactory = httpClientFactory;
+            _localStorage = localStorage;
         }
 
-        private HttpClient CreateClient()
+        private async Task<HttpClient> CreateClientAsync()
         {
-            return _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            var client = _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrEmpty(token))
+            {
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+            return client;
         }
 
         public async Task<List<Event>> GetEventsAsync()
         {
             try
             {
-                var client = CreateClient();
+                var client = await CreateClientAsync();
                 var response = await client.GetAsync("api/events");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
@@ -38,7 +47,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var client = CreateClient();
+                var client = await CreateClientAsync();
                 var response = await client.GetAsync($"api/events/{id}");
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<Event>();
@@ -55,7 +64,7 @@ namespace VentyTime.Client.Services
             try
             {
                 Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
-                var client = CreateClient();
+                var client = await CreateClientAsync();
 
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
@@ -92,7 +101,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var client = CreateClient();
+                var client = await CreateClientAsync();
 
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
@@ -117,7 +126,7 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var client = CreateClient();
+                var client = await CreateClientAsync();
                 var response = await client.DeleteAsync($"api/events/{id}");
                 return response.IsSuccessStatusCode;
             }
@@ -128,17 +137,173 @@ namespace VentyTime.Client.Services
             }
         }
 
+        public async Task<List<string>> GetCategoriesAsync()
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync("api/categories");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting categories: {ex.Message}");
+                return new List<string>();
+            }
+        }
+
         public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
         {
-            var client = CreateClient();
-            return await client.GetFromJsonAsync<List<Event>>($"api/events/organizer/{organizerId}") ?? new List<Event>();
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync($"api/events/organizer/{organizerId}");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting events for organizer {organizerId}: {ex.Message}");
+                return new List<Event>();
+            }
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> RegisterForEventAsync(int eventId)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.PostAsync($"api/events/{eventId}/register", null);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                    return (false, errorContent?.Message ?? "Failed to register for the event");
+                }
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error registering for event {eventId}: {ex.Message}");
+                return (false, "An unexpected error occurred");
+            }
+        }
+
+        private class ErrorResponse
+        {
+            public string? Message { get; set; }
+        }
+
+        public async Task<List<Event>> GetRegisteredEventsAsync()
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                return await client.GetFromJsonAsync<List<Event>>("api/events/registered") ?? new List<Event>();
+            }
+            catch (Exception)
+            {
+                return new List<Event>();
+            }
+        }
+
+        public async Task<bool> UnregisterFromEventAsync(int eventId)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.DeleteAsync($"api/events/{eventId}/register");
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> CheckRegistrationStatusAsync(int eventId)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync($"api/events/{eventId}/registration-status");
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public async Task<List<Event>> GetUpcomingEventsAsync()
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync("api/events/upcoming");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
+                return new List<Event>();
+            }
+        }
+
+        public async Task<List<Event>> GetPopularEventsAsync()
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync("api/events/popular");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting popular events: {ex.Message}");
+                return new List<Event>();
+            }
+        }
+
+        public async Task<byte[]> GenerateReportAsync(int eventId)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync($"api/events/{eventId}/report");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsByteArrayAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating report: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<string> UploadEventImage(MultipartFormDataContent content)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.PostAsync("api/events/upload", content);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error uploading image: {ex.Message}");
+                throw;
+            }
         }
 
         public async Task<List<Event>> SearchEventsAsync(string searchTerm)
         {
             try
             {
-                var client = CreateClient();
+                var client = await CreateClientAsync();
                 return await client.GetFromJsonAsync<List<Event>>($"api/events/search?query={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
             }
             catch (Exception ex)
@@ -148,92 +313,31 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<List<Event>> GetUpcomingEventsAsync(int count = 10)
+        public async Task<bool> IsEventFullAsync(int eventId)
         {
             try
             {
-                var client = CreateClient();
-                var response = await client.GetAsync($"api/events/upcoming?count={count}");
-                response.EnsureSuccessStatusCode();
-                
-                var events = await response.Content.ReadFromJsonAsync<List<Event>>();
-                return events ?? new List<Event>();
+                var client = await CreateClientAsync();
+                var @event = await client.GetFromJsonAsync<Event>($"api/events/{eventId}");
+                return @event?.IsFull ?? false;
             }
-            catch (HttpRequestException ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
-                return new List<Event>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
-                return new List<Event>();
+                return false;
             }
         }
 
-        public async Task<List<Event>> GetPopularEventsAsync(int count = 5)
-        {
-            var client = CreateClient();
-            return await client.GetFromJsonAsync<List<Event>>($"api/events/popular?count={count}") ?? new List<Event>();
-        }
-
-        public async Task<bool> IsEventFullAsync(int id)
-        {
-            var client = CreateClient();
-            var @event = await client.GetFromJsonAsync<Event>($"api/events/{id}");
-            return @event?.IsFull ?? false;
-        }
-
-        public async Task<bool> CancelEventAsync(int id)
-        {
-            var client = CreateClient();
-            var response = await client.PostAsync($"api/events/{id}/cancel", null);
-            return response.IsSuccessStatusCode;
-        }
-
-        public async Task<byte[]> GenerateReportAsync(ReportPeriod period)
-        {
-            var client = CreateClient();
-            var response = await client.GetAsync($"api/events/report?period={period}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsByteArrayAsync();
-        }
-
-        public async Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content)
+        public async Task<bool> CancelEventAsync(int eventId)
         {
             try
             {
-                var client = CreateClient();
-                var response = await client.PostAsync("api/events/upload-image", content);
-                response.EnsureSuccessStatusCode();
-                var url = await response.Content.ReadAsStringAsync();
-                return new ApiResponse<string> { IsSuccessful = true, Data = url.Trim('"') };
+                var client = await CreateClientAsync();
+                var response = await client.PostAsync($"api/events/{eventId}/cancel", null);
+                return response.IsSuccessStatusCode;
             }
-            catch (HttpRequestException ex)
+            catch (Exception)
             {
-                Console.WriteLine($"HTTP error uploading image: {ex.Message}");
-                return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error uploading image: {ex.Message}");
-                return new ApiResponse<string> { IsSuccessful = false, Message = ex.Message };
-            }
-        }
-
-        public async Task<List<string>> GetCategoriesAsync()
-        {
-            try
-            {
-                var client = CreateClient();
-                var response = await client.GetAsync("api/events/categories");
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting categories: {ex.Message}");
-                return new List<string>();
+                return false;
             }
         }
     }

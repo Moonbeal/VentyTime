@@ -7,6 +7,7 @@ using MudBlazor;
 using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
 using Microsoft.Extensions.Logging;
+using VentyTime.Client.Auth;
 
 namespace VentyTime.Client.Services;
 
@@ -99,7 +100,7 @@ public class UserService : IUserService
             var response = await _httpClient.DeleteAsync($"api/users/{userId}");
             if (response.IsSuccessStatusCode)
             {
-                await _authStateProvider.NotifyUserLogout();
+                await _authStateProvider.NotifyUserLogoutAsync();
                 return true;
             }
             return false;
@@ -130,52 +131,61 @@ public class UserService : IUserService
         return await _localStorage.GetItemAsync<string>("authToken");
     }
 
-    public async Task<bool> LoginAsync(LoginRequest request)
+    public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
         try
         {
+            _logger.LogInformation("Attempting login for user: {Email} with role {Role}", 
+                request.Email, request.SelectedRole);
+
             var response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
             {
-                var authResponse = JsonSerializer.Deserialize<AuthResponse>(responseContent, new JsonSerializerOptions
+                var result = JsonSerializer.Deserialize<AuthResponse>(responseContent, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (authResponse?.Token != null)
+                if (result != null && !string.IsNullOrEmpty(result.Token))
                 {
-                    await _localStorage.SetItemAsync("authToken", authResponse.Token);
-                    await _localStorage.SetItemAsync("userId", authResponse.User?.Id);
-                    await _localStorage.SetItemAsync("userRole", authResponse.User?.Role.ToString() ?? UserRole.User.ToString());
-                    await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
-                    _snackbar.Add("Successfully logged in!", Severity.Success);
-                    return true;
+                    await _localStorage.SetItemAsync("authToken", result.Token);
+                    await _authStateProvider.NotifyUserAuthenticationAsync(result.Token);
+                    _logger.LogInformation("User {Email} logged in successfully with role {Role}", 
+                        request.Email, request.SelectedRole);
+                    return result;
                 }
             }
 
-            var errorMessage = "Invalid email or password";
-            try
+            _logger.LogWarning("Login response status: {Status}", response.StatusCode);
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
-                var errorResponse = JsonSerializer.Deserialize<AuthResponse>(responseContent, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-                if (!string.IsNullOrEmpty(errorResponse?.Message))
-                {
-                    errorMessage = errorResponse.Message;
-                }
+                var error = JsonSerializer.Deserialize<Dictionary<string, string>>(responseContent, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                _logger.LogWarning("Login failed: {Error}", error?["message"] ?? "Unknown error");
+                return new AuthResponse 
+                { 
+                    Success = false, 
+                    Message = error?["message"] ?? "Invalid email, password, or selected role" 
+                };
             }
-            catch { }
 
-            _snackbar.Add(errorMessage, Severity.Error);
-            return false;
+            return new AuthResponse 
+            { 
+                Success = false, 
+                Message = "An error occurred during login" 
+            };
         }
         catch (Exception ex)
         {
-            _snackbar.Add($"An error occurred during login: {ex.Message}", Severity.Error);
-            return false;
+            _logger.LogError(ex, "Error during login for user: {Email}", request.Email);
+            return new AuthResponse 
+            { 
+                Success = false, 
+                Message = "An error occurred during login" 
+            };
         }
     }
 
@@ -198,7 +208,7 @@ public class UserService : IUserService
                     await _localStorage.SetItemAsync("authToken", authResponse.Token);
                     await _localStorage.SetItemAsync("userId", authResponse.User?.Id);
                     await _localStorage.SetItemAsync("userRole", authResponse.User?.Role.ToString() ?? UserRole.User.ToString());
-                    await ((CustomAuthStateProvider)_authStateProvider).NotifyUserAuthentication(authResponse.Token);
+                    await _authStateProvider.NotifyUserAuthenticationAsync(authResponse.Token);
                     _snackbar.Add("Successfully registered!", Severity.Success);
                     return true;
                 }
@@ -231,7 +241,7 @@ public class UserService : IUserService
     public async Task LogoutAsync()
     {
         await _localStorage.RemoveItemAsync("authToken");
-        await ((CustomAuthStateProvider)_authStateProvider).NotifyUserLogout();
+        await _authStateProvider.NotifyUserLogoutAsync();
         _snackbar.Add("Successfully logged out!", Severity.Success);
     }
 
@@ -386,7 +396,8 @@ public class UserService : IUserService
             var response = await _httpClient.DeleteAsync("api/users/me");
             if (response.IsSuccessStatusCode)
             {
-                await _authStateProvider.NotifyUserLogout();
+                await _localStorage.RemoveItemAsync("authToken");
+                await _authStateProvider.NotifyUserLogoutAsync();
                 _snackbar.Add("Account deleted successfully", Severity.Success);
                 return true;
             }
@@ -398,6 +409,25 @@ public class UserService : IUserService
             _logger.LogError(ex, "Error deleting account");
             _snackbar.Add("An error occurred while deleting your account", Severity.Error);
             return false;
+        }
+    }
+
+    public async Task<IList<string>> GetUserRolesAsync(string userId)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/users/{userId}/roles");
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
+            }
+            _logger.LogWarning("Failed to get user roles");
+            return new List<string>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting user roles");
+            return new List<string>();
         }
     }
 }

@@ -131,7 +131,7 @@
                                     </MudButton>
                                     <MudButton Color="Color.Primary" 
                                               Variant="Variant.Filled"
-                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{eventItem.Id}/register"))">
+                                              OnClick="@(() => HandleRegisterClick(eventItem))">
                                         Register
                                     </MudButton>
                                 </div>
@@ -404,8 +404,8 @@
 @code {
     private List<Event> events = new();
     private List<Event> searchResults = new();
-    private bool isLoading = false;
     private string searchQuery = "";
+    private bool isLoading = false;
     private DateTime? selectedDate = DateTime.Today;
     private HashSet<string> selectedCategories = new();
     private System.Timers.Timer? searchTimer;
@@ -514,5 +514,26 @@
 
         var dialog = await DialogService.ShowAsync<EventDetailsDialog>("Event Details", parameters);
         var result = await dialog.Result;
+    }
+
+    private async Task HandleRegisterClick(Event eventItem)
+    {
+        try
+        {
+            var (success, errorMessage) = await EventService.RegisterForEventAsync(eventItem.Id);
+            if (success)
+            {
+                Snackbar.Add("Successfully registered for the event!", Severity.Success);
+                await LoadEvents();
+            }
+            else
+            {
+                Snackbar.Add(errorMessage ?? "Failed to register for the event.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
     }
 }

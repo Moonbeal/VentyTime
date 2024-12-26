@@ -11,13 +11,17 @@ namespace VentyTime.Client.Services
         Task<Event> UpdateEventAsync(Event eventItem);
         Task<bool> DeleteEventAsync(int id);
         Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId);
-        Task<List<Event>> SearchEventsAsync(string searchTerm);
-        Task<List<Event>> GetUpcomingEventsAsync(int count = 10);
-        Task<List<Event>> GetPopularEventsAsync(int count = 5);
-        Task<bool> IsEventFullAsync(int id);
-        Task<bool> CancelEventAsync(int id);
-        Task<ApiResponse<string>> UploadEventImage(MultipartFormDataContent content);
-        Task<byte[]> GenerateReportAsync(ReportPeriod period);
+        Task<List<Event>> SearchEventsAsync(string query);
+        Task<List<Event>> GetUpcomingEventsAsync();
+        Task<List<Event>> GetPopularEventsAsync();
+        Task<bool> IsEventFullAsync(int eventId);
+        Task<bool> CancelEventAsync(int eventId);
+        Task<byte[]> GenerateReportAsync(int eventId);
+        Task<string> UploadEventImage(MultipartFormDataContent content);
         Task<List<string>> GetCategoriesAsync();
+        Task<(bool Success, string? ErrorMessage)> RegisterForEventAsync(int eventId);
+        Task<List<Event>> GetRegisteredEventsAsync();
+        Task<bool> UnregisterFromEventAsync(int eventId);
+        Task<bool> CheckRegistrationStatusAsync(int eventId);
     }
 }

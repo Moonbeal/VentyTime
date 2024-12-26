@@ -16,6 +16,8 @@ namespace VentyTime.Server.Services
         Task<bool> AddToRoleAsync(ApplicationUser user, string role);
         Task<bool> RemoveFromRolesAsync(ApplicationUser user, IEnumerable<string> roles);
         Task UpdateUserLastLoginAsync(ApplicationUser user);
+        Task<List<ApplicationUser>> GetAllUsersAsync();
+        Task<ApplicationUser?> GetUserByIdAsync(string userId);
     }
 
     public class UserService : IUserService
@@ -47,27 +49,35 @@ namespace VentyTime.Server.Services
                 LastName = model.LastName,
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true,
-                EmailConfirmed = true // Тимчасово, поки не налаштована відправка email
+                EmailConfirmed = true // Temporary until email confirmation is set up
             };
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
-                    // Додаємо користувача до ролі за замовчуванням
-                    await _userManager.AddToRoleAsync(user, UserRole.User.ToString());
-                    await transaction.CommitAsync();
-                    return (true, Array.Empty<string>());
+                    var roleResult = await _userManager.AddToRoleAsync(user, UserRole.User.ToString());
+                    if (roleResult.Succeeded)
+                    {
+                        _logger.LogInformation("Successfully created user {Email} and assigned User role", model.Email);
+                        return (true, Array.Empty<string>());
+                    }
+                    
+                    _logger.LogError("Failed to assign User role to {Email}. Errors: {Errors}", 
+                        model.Email, string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+                    
+                    // If role assignment fails, delete the user and return the error
+                    await _userManager.DeleteAsync(user);
+                    return (false, roleResult.Errors.Select(e => e.Description).ToArray());
                 }
 
-                await transaction.RollbackAsync();
+                _logger.LogError("Failed to create user {Email}. Errors: {Errors}", 
+                    model.Email, string.Join(", ", result.Errors.Select(e => e.Description)));
                 return (false, result.Errors.Select(e => e.Description).ToArray());
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
                 _logger.LogError(ex, "Error creating user {Email}", model.Email);
                 throw;
             }
@@ -83,11 +93,34 @@ namespace VentyTime.Server.Services
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null || !user.IsActive)
             {
+                _logger.LogWarning("Login failed - user not found or inactive: {Email}", model.Email);
                 return false;
             }
 
+            // First check if the password is correct
             var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, true);
-            return result.Succeeded;
+            if (!result.Succeeded)
+            {
+                _logger.LogWarning("Login failed - invalid password for user: {Email}", model.Email);
+                return false;
+            }
+
+            // Then check if the user has the selected role
+            var hasRole = await _userManager.IsInRoleAsync(user, model.SelectedRole.ToString());
+            if (!hasRole)
+            {
+                _logger.LogWarning("Login failed - user {Email} does not have the selected role: {Role}", 
+                    model.Email, model.SelectedRole);
+                return false;
+            }
+
+            // Update last login timestamp
+            user.LastLoginAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+
+            _logger.LogInformation("User {Email} logged in successfully with role {Role}", 
+                model.Email, model.SelectedRole);
+            return true;
         }
 
         public async Task<IList<string>> GetUserRolesAsync(ApplicationUser user)
@@ -117,6 +150,16 @@ namespace VentyTime.Server.Services
             user.LastLoginAt = DateTime.UtcNow;
             user.UpdatedAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
+        }
+
+        public async Task<List<ApplicationUser>> GetAllUsersAsync()
+        {
+            return await _context.Users.ToListAsync();
+        }
+
+        public async Task<ApplicationUser?> GetUserByIdAsync(string userId)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
         }
     }
 }

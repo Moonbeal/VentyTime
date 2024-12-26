@@ -108,13 +108,8 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<Registration>> UpdateRegistration(int id, Registration registration)
+        public async Task<ActionResult<Registration>> UpdateRegistration(int id, [FromBody] Registration registration)
         {
-            if (id != registration.Id)
-            {
-                return BadRequest();
-            }
-
             try
             {
                 var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -123,21 +118,25 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.UpdateRegistrationAsync(registration, userId);
-                return Ok(result);
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return Forbid();
+                var existingRegistration = await _registrationService.GetRegistrationByIdAsync(id);
+                if (existingRegistration == null)
+                {
+                    return NotFound();
+                }
+
+                if (existingRegistration.UserId != userId)
+                {
+                    return Forbid();
+                }
+
+                registration.Id = id;
+                var updatedRegistration = await _registrationService.UpdateRegistrationAsync(registration, registration.Status, userId);
+                return Ok(updatedRegistration);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating registration {RegistrationId}", id);
-                return StatusCode(500, new { message = "An error occurred while updating the registration" });
+                _logger.LogError(ex, "Error updating registration");
+                return StatusCode(500, "An error occurred while updating the registration");
             }
         }
 

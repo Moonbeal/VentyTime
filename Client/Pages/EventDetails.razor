@@ -3,7 +3,6 @@
 @using System.Security.Claims
 @inject IEventService EventService
 @inject IUserService UserService
-@inject IRegistrationService RegistrationService
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -53,99 +52,80 @@
 
                     <MudText Typo="Typo.body1" Class="mb-4">@eventModel.Description</MudText>
 
-                    <MudDivider Class="my-6" />
-
+                    <MudDivider Class="my-4" />
+                    
                     <MudGrid>
                         <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.h6" Class="mb-2">Event Details</MudText>
-                            <MudList Dense="true">
-                                <MudListItem Icon="@Icons.Material.Filled.Category">
-                                    <MudText>Category: @eventModel.Category</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.LocationOn">
-                                    <MudText>Location: @eventModel.Location</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.CalendarToday">
-                                    <MudText>Date: @eventModel.StartDate.ToShortDateString()</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.Schedule">
-                                    <MudText>Time: @eventModel.StartTime.ToString(@"hh\:mm")</MudText>
-                                </MudListItem>
-                            </MudList>
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">Event Details</MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                                @eventModel.StartDate.ToString("dddd, MMMM d, yyyy")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                                @eventModel.StartDate.ToString("h:mm tt") - @eventModel.EndDate.ToString("h:mm tt")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                @eventModel.Location
+                            </MudText>
                         </MudItem>
+                        
                         <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.h6" Class="mb-2">Organizer</MudText>
-                            <MudList Dense="true">
-                                <MudListItem Icon="@Icons.Material.Filled.Person">
-                                    <MudText>@eventModel.Organizer?.UserName</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.Email">
-                                    <MudText>@eventModel.Organizer?.Email</MudText>
-                                </MudListItem>
-                            </MudList>
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">Organizer</MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+                                @(eventModel.Organizer?.FullName ?? "Unknown")
+                            </MudText>
                         </MudItem>
                     </MudGrid>
                 </MudPaper>
             </MudItem>
-
+            
             <MudItem xs="12" sm="4">
                 <MudPaper Elevation="3" Class="pa-6 rounded-lg">
                     <MudText Typo="Typo.h5" Class="mb-4">Registration</MudText>
                     
                     @if (!isAuthenticated)
                     {
-                        <MudAlert Severity="Severity.Info" Class="mb-4">
-                            Please <MudLink Href="/login">log in</MudLink> to register for this event.
-                        </MudAlert>
+                        <MudAlert Severity="Severity.Info" Class="mb-4">Please log in to register for this event.</MudAlert>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/login"))">
+                            Log In
+                        </MudButton>
                     }
-                    else if (eventModel.HasStarted())
+                    else if (isRegistered)
                     {
-                        <MudAlert Severity="Severity.Warning" Class="mb-4">
-                            This event has already started.
-                        </MudAlert>
+                        <MudAlert Severity="Severity.Success" Class="mb-4">You are registered for this event!</MudAlert>
+                        <MudText Typo="Typo.body1" Class="mb-4">
+                            Date: @eventModel.StartDate.ToString("dddd, MMMM d, yyyy")<br />
+                            Time: @eventModel.StartDate.ToString("h:mm tt") - @eventModel.EndDate.ToString("h:mm tt")
+                        </MudText>
                     }
-                    else if (eventModel.IsFinished())
+                    else if (eventModel.IsFull)
                     {
-                        <MudAlert Severity="Severity.Error" Class="mb-4">
-                            This event has ended.
-                        </MudAlert>
+                        <MudAlert Severity="Severity.Warning" Class="mb-4">This event is full.</MudAlert>
                     }
                     else
                     {
-                        <MudStack>
-                            <MudText>
-                                @if (eventModel.Registrations?.Count > 0)
-                                {
-                                    <span>@eventModel.Registrations.Count registered</span>
-                                }
-                                else
-                                {
-                                    <span>No registrations yet</span>
-                                }
-                            </MudText>
-
-                            @if (!isOrganizer)
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  OnClick="RegisterForEvent" 
+                                  Disabled="@(isRegistering || eventModel.IsFull)"
+                                  Class="mb-4">
+                            @if (isRegistering)
                             {
-                                @if (eventModel.Registrations?.Any(r => r.UserId == currentUserId) == true)
-                                {
-                                    <MudButton Variant="Variant.Filled" 
-                                              Color="Color.Error"
-                                              OnClick="CancelRegistrationAsync"
-                                              FullWidth="true">
-                                        Cancel Registration
-                                    </MudButton>
-                                }
-                                else
-                                {
-                                    <MudButton Variant="Variant.Filled" 
-                                              Color="Color.Primary"
-                                              OnClick="RegisterAsync"
-                                              FullWidth="true">
-                                        Register Now
-                                    </MudButton>
-                                }
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                <MudText Class="ms-2">Registering...</MudText>
                             }
-                        </MudStack>
+                            else
+                            {
+                                @("Register Now")
+                            }
+                        </MudButton>
+                        
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @eventModel.AvailableSpots spots remaining
+                        </MudText>
                     }
                 </MudPaper>
             </MudItem>
@@ -161,42 +141,38 @@
 
 @code {
     [Parameter] public int Id { get; set; }
-
     private Event? eventModel;
     private bool loading = true;
     private bool isAuthenticated;
     private bool isOrganizer;
-    private string? currentUserId;
+    private string? userId;
+    private bool isRegistering;
+    private bool isRegistered;
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        isAuthenticated = user.Identity?.IsAuthenticated ?? false;
-        
-        if (isAuthenticated)
-        {
-            currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        }
-
-        await LoadEventAsync();
-    }
-
-    private async Task LoadEventAsync()
-    {
+        loading = true;
         try
         {
-            loading = true;
-            eventModel = await EventService.GetEventByIdAsync(Id);
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+            userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             
-            if (eventModel != null && isAuthenticated)
+            eventModel = await EventService.GetEventByIdAsync(Id);
+            if (eventModel != null)
             {
-                isOrganizer = eventModel.OrganizerId == currentUserId;
+                isOrganizer = userId == eventModel.OrganizerId;
+                if (isAuthenticated)
+                {
+                    var registeredEvents = await EventService.GetRegisteredEventsAsync();
+                    isRegistered = registeredEvents.Any(e => e.Id == Id);
+                }
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error loading event: {ex.Message}", Severity.Error);
+            Snackbar.Add("Error loading event details", Severity.Error);
         }
         finally
         {
@@ -204,45 +180,36 @@
         }
     }
 
-    private async Task RegisterAsync()
+    private async Task RegisterForEvent()
     {
-        try
+        if (!isAuthenticated)
         {
-            var response = await RegistrationService.RegisterForEventAsync(Id);
-            if (response.Success)
-            {
-                await LoadEventAsync();
-                Snackbar.Add("Successfully registered for the event!", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add($"Registration failed: {response.Message}", Severity.Error);
-            }
+            NavigationManager.NavigateTo("/login");
+            return;
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Registration failed: {ex.Message}", Severity.Error);
-        }
-    }
 
-    private async Task CancelRegistrationAsync()
-    {
+        isRegistering = true;
         try
         {
-            var success = await RegistrationService.CancelRegistrationAsync(Id);
+            var (success, errorMessage) = await EventService.RegisterForEventAsync(Id);
             if (success)
             {
-                await LoadEventAsync();
-                Snackbar.Add("Registration cancelled successfully", Severity.Success);
+                isRegistered = true;
+                Snackbar.Add("Successfully registered for the event!", Severity.Success);
+                StateHasChanged();
             }
             else
             {
-                Snackbar.Add("Failed to cancel registration", Severity.Error);
+                Snackbar.Add(errorMessage ?? "Failed to register for the event. Please try again.", Severity.Warning);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to cancel registration: {ex.Message}", Severity.Error);
+            Snackbar.Add("An error occurred while registering for the event.", Severity.Error);
+        }
+        finally
+        {
+            isRegistering = false;
         }
     }
 }

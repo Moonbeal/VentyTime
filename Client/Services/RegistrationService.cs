@@ -32,29 +32,51 @@ namespace VentyTime.Client.Services
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
-                    return new RegistrationResponse(false, "User not authenticated");
+                {
+                    _snackbar.Add("You must be logged in to register for events", Severity.Warning);
+                    return new RegistrationResponse(false, "You must be logged in to register for events");
+                }
 
+                // Ensure the auth token is set
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var response = await _httpClient.PostAsync($"api/registrations/{eventId}/register", null);
+                var response = await _httpClient.PostAsync($"api/registration/event/{eventId}", null);
+                var content = await response.Content.ReadAsStringAsync();
+                
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Successfully registered for the event!", Severity.Success);
                     return new RegistrationResponse(true, "Successfully registered for the event!");
                 }
-                else
+                
+                // Try to parse the error message from the response
+                try
                 {
-                    var error = await response.Content.ReadAsStringAsync();
-                    _snackbar.Add(error, Severity.Error);
-                    return new RegistrationResponse(false, error);
+                    var errorResponse = System.Text.Json.JsonSerializer.Deserialize<ErrorResponse>(content);
+                    var errorMessage = errorResponse?.Message ?? "Registration failed";
+                    _snackbar.Add(errorMessage, Severity.Error);
+                    return new RegistrationResponse(false, errorMessage);
+                }
+                catch
+                {
+                    // If we can't parse the error, just return the raw content
+                    _snackbar.Add(content, Severity.Error);
+                    return new RegistrationResponse(false, content);
                 }
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return new RegistrationResponse(false, ex.Message);
+                var errorMessage = $"An error occurred while registering for the event: {ex.Message}";
+                Console.WriteLine($"Registration error: {ex}");
+                _snackbar.Add(errorMessage, Severity.Error);
+                return new RegistrationResponse(false, errorMessage);
             }
+        }
+
+        private class ErrorResponse
+        {
+            public string? Message { get; set; }
         }
 
         public async Task<RegistrationResponse> UnregisterFromEventAsync(int eventId)

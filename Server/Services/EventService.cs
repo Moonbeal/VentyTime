@@ -18,6 +18,8 @@ namespace VentyTime.Server.Services
         Task<bool> IsUserAuthorizedForEvent(int eventId, string userId, string[] allowedRoles);
         Task<IEnumerable<Event>> GetEventsByOrganizerAsync(string organizerId);
         Task<IEnumerable<string>> GetCategoriesAsync();
+        Task<Registration> RegisterUserForEventAsync(int eventId, string userId);
+        Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
     }
 
     public class EventService : IEventService
@@ -435,6 +437,98 @@ namespace VentyTime.Server.Services
                 _logger.LogError(ex, "Error getting events for organizer {OrganizerId}", organizerId);
                 throw;
             }
+        }
+
+        public async Task<Registration> RegisterUserForEventAsync(int eventId, string userId)
+        {
+            // Load event with active registrations
+            var @event = await _context.Events
+                .Include(e => e.Registrations.Where(r => r.Status != RegistrationStatus.Cancelled))
+                .FirstOrDefaultAsync(e => e.Id == eventId);
+
+            if (@event == null)
+            {
+                _logger.LogError("Event {EventId} not found during registration", eventId);
+                throw new InvalidOperationException("Event not found");
+            }
+
+            // Check if event is full
+            var currentRegistrations = @event.Registrations?.Count ?? 0;
+            if (currentRegistrations >= @event.MaxAttendees)
+            {
+                _logger.LogWarning("Event {EventId} is full. Max attendees: {MaxAttendees}, Current registrations: {CurrentRegistrations}", 
+                    eventId, @event.MaxAttendees, currentRegistrations);
+                throw new InvalidOperationException("Event is full");
+            }
+
+            // Check for existing registration
+            var existingRegistration = await _context.Registrations
+                .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+
+            var utcNow = DateTime.UtcNow;
+
+            // Check if there's already an active registration
+            if (existingRegistration != null)
+            {
+                if (existingRegistration.Status == RegistrationStatus.Confirmed)
+                {
+                    _logger.LogWarning("User {UserId} is already registered for event {EventId}", userId, eventId);
+                    throw new InvalidOperationException("You are already registered for this event.");
+                }
+
+                // Reactivate cancelled registration
+                if (existingRegistration.Status == RegistrationStatus.Cancelled)
+                {
+                    existingRegistration.Status = RegistrationStatus.Confirmed;
+                    existingRegistration.UpdatedAt = utcNow;
+                    _context.Entry(existingRegistration).State = EntityState.Modified;
+                }
+            }
+            else
+            {
+                // Create new registration
+                existingRegistration = new Registration
+                {
+                    UserId = userId,
+                    EventId = eventId,
+                    Status = RegistrationStatus.Confirmed,
+                    CreatedAt = utcNow,
+                    UpdatedAt = utcNow
+                };
+                await _context.Registrations.AddAsync(existingRegistration);
+            }
+
+            try
+            {
+                // Update event capacity
+                @event.CurrentCapacity = currentRegistrations + 1;
+                _context.Entry(@event).State = EntityState.Modified;
+
+                // Save changes
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
+                return existingRegistration;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error registering user {UserId} for event {EventId}", userId, eventId);
+                throw new InvalidOperationException("You are already registered for this event.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering user {UserId} for event {EventId}", userId, eventId);
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId)
+        {
+            return await _context.Events
+                .Include(e => e.Organizer)
+                .Where(e => e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
+                .OrderBy(e => e.StartDate)
+                .ToListAsync();
         }
 
         private void InvalidateEventCache()

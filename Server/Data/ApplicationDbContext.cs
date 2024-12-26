@@ -12,8 +12,8 @@ namespace VentyTime.Server.Data
         }
 
         public DbSet<Event> Events { get; set; } = null!;
-        public DbSet<Registration> Registrations { get; set; } = null!;
         public DbSet<Comment> Comments { get; set; } = null!;
+        public DbSet<Registration> Registrations { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -74,9 +74,40 @@ namespace VentyTime.Server.Data
                     .IsRequired();
             });
 
+            builder.Entity<Event>()
+                .HasOne(e => e.Creator)
+                .WithMany()
+                .HasForeignKey(e => e.CreatorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Entity<Event>()
+                .HasOne(e => e.Organizer)
+                .WithMany()
+                .HasForeignKey(e => e.OrganizerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             builder.Entity<Registration>(entity =>
             {
                 entity.HasKey(r => r.Id);
+
+                entity.HasIndex(r => new { r.EventId, r.UserId, r.Status })
+                    .IsUnique()
+                    .HasFilter("[Status] != 'Cancelled'");
+
+                entity.Property(r => r.Status)
+                    .IsRequired()
+                    .HasConversion<string>();
+
+                entity.Property(r => r.CreatedAt)
+                    .IsRequired()
+                    .HasConversion(
+                        v => v,
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+                entity.Property(r => r.UpdatedAt)
+                    .HasConversion(
+                        v => v,
+                        v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
 
                 entity.HasOne(r => r.Event)
                     .WithMany(e => e.Registrations)
@@ -86,14 +117,14 @@ namespace VentyTime.Server.Data
                 entity.HasOne(r => r.User)
                     .WithMany()
                     .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasIndex(r => new { r.EventId, r.UserId })
-                    .IsUnique();
-
-                entity.Property(r => r.CreatedAt)
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .OnDelete(DeleteBehavior.Cascade);
             });
+
+            builder.Entity<Comment>()
+                .HasOne(c => c.Event)
+                .WithMany(e => e.Comments)
+                .HasForeignKey(c => c.EventId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

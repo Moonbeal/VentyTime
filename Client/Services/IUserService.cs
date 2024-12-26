@@ -5,7 +5,7 @@ namespace VentyTime.Client.Services;
 
 public interface IUserService
 {
-    Task<bool> LoginAsync(LoginRequest request);
+    Task<AuthResponse> LoginAsync(LoginRequest request);
     Task<bool> RegisterAsync(RegisterRequest request);
     Task LogoutAsync();
     Task<ApplicationUser?> GetUserProfileAsync();
@@ -20,4 +20,5 @@ public interface IUserService
     Task SendMessageAsync(int conversationId, string content);
     Task<List<Conversation>> GetConversationsAsync();
     Task<List<ApplicationUser>> GetAllUsersAsync();
+    Task<IList<string>> GetUserRolesAsync(string userId);
 }

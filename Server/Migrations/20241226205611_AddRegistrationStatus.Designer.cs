@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using VentyTime.Server.Data;
 
@@ -11,9 +12,11 @@ using VentyTime.Server.Data;
 namespace VentyTime.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20241226205611_AddRegistrationStatus")]
+    partial class AddRegistrationStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -400,7 +403,9 @@ namespace VentyTime.Server.Migrations
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<int>("EventId")
                         .HasColumnType("int");
@@ -409,9 +414,11 @@ namespace VentyTime.Server.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                    b.Property<DateTime>("RegistrationDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -426,9 +433,8 @@ namespace VentyTime.Server.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("EventId", "UserId", "Status")
-                        .IsUnique()
-                        .HasFilter("[Status] != 'Cancelled'");
+                    b.HasIndex("EventId", "UserId")
+                        .IsUnique();
 
                     b.ToTable("Registrations");
                 });

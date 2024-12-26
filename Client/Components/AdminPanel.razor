@@ -6,6 +6,7 @@
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
 @attribute [Authorize(Roles = "Admin")]
 
 <div class="container-fluid mt-4">
@@ -106,7 +107,7 @@
                                     <RowTemplate>
                                         <MudTd DataLabel="Username">@context.UserName</MudTd>
                                         <MudTd DataLabel="Email">@context.Email</MudTd>
-                                        <MudTd DataLabel="Role">@(context.Role.ToString())</MudTd>
+                                        <MudTd DataLabel="Role">@(GetUserRole(context))</MudTd>
                                         <MudTd>
                                             <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
                                                      OnClick="@(() => ViewUserDetails(context))">
@@ -178,15 +179,10 @@
                                             <div class="card-body">
                                                 <h5 class="card-title">Generate Reports</h5>
                                                 <div class="mb-3">
-                                                    <label class="form-label">Report Period</label>
-                                                    <select class="form-select" @bind="selectedReportPeriod">
-                                                        @foreach (var period in Enum.GetValues(typeof(ReportPeriod)))
-                                                        {
-                                                            <option value="@period">@period</option>
-                                                        }
-                                                    </select>
+                                                    <label class="form-label">Event ID</label>
+                                                    <input type="number" class="form-control" @bind="selectedEventId" />
                                                 </div>
-                                                <button class="btn btn-primary" @onclick="() => GenerateReport(selectedReportPeriod)">
+                                                <button class="btn btn-primary" @onclick="GenerateReport">
                                                     Generate Report
                                                 </button>
                                             </div>
@@ -233,7 +229,8 @@
     private List<Event> events = new();
     private string userSearchTerm = "";
     private string eventSearchTerm = "";
-    private ReportPeriod selectedReportPeriod = ReportPeriod.Daily;
+    private int selectedEventId;
+    private string selectedReportPeriod = "";
 
     private SystemSettings settings = new()
     {
@@ -248,6 +245,8 @@
         TotalRevenue = 0
     };
 
+    private Dictionary<string, string> userRoles = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
@@ -259,6 +258,12 @@
         {
             users = (await UserService.GetAllUsersAsync()).ToList();
             events = (await EventService.GetEventsAsync()).ToList();
+
+            foreach (var user in users)
+            {
+                var roles = await UserService.GetUserRolesAsync(user.Id);
+                userRoles[user.Id] = roles.FirstOrDefault() ?? "User";
+            }
 
             statistics = new SystemStatistics
             {
@@ -308,16 +313,17 @@
         }
     }
 
-    private async Task GenerateReport(ReportPeriod period)
+    private async Task GenerateReport()
     {
         try 
         {
-            var report = await EventService.GenerateReportAsync(period);
-            Snackbar.Add("Report generated successfully", Severity.Success);
+            var bytes = await EventService.GenerateReportAsync(selectedEventId);
+            await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "event-report.pdf", bytes);
+            Snackbar.Add("Report generated successfully!", Severity.Success);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to generate report: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
         }
     }
 
@@ -342,6 +348,11 @@
     private void ViewEventDetails(int eventId)
     {
         NavigationManager.NavigateTo($"/events/{eventId}");
+    }
+
+    private string GetUserRole(ApplicationUser user)
+    {
+        return userRoles.TryGetValue(user.Id, out var role) ? role : "User";
     }
 
     private class SystemSettings

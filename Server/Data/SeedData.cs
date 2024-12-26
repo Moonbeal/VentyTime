@@ -8,7 +8,9 @@ namespace VentyTime.Server.Data
     {
         public static async Task EnsureRolesAsync(RoleManager<IdentityRole> roleManager)
         {
-            string[] roles = { "Admin", "User" };
+            // Get all enum values from UserRole
+            var roles = Enum.GetNames(typeof(UserRole))
+                           .Where(r => r != "None"); // Skip the None value
 
             foreach (var role in roles)
             {
@@ -27,7 +29,7 @@ namespace VentyTime.Server.Data
                 var testUser1 = await userManager.FindByEmailAsync("test@example.com");
                 if (testUser1 == null)
                 {
-                    testUser1 = new ApplicationUser
+                    testUser1 = new()
                     {
                         UserName = "test@example.com",
                         Email = "test@example.com",
@@ -38,13 +40,13 @@ namespace VentyTime.Server.Data
                         Bio = "Event organizer and tech enthusiast"
                     };
                     await userManager.CreateAsync(testUser1, "Test123!");
-                    await userManager.AddToRoleAsync(testUser1, "User");
+                    await userManager.AddToRoleAsync(testUser1, UserRole.User.ToString());
                 }
 
                 var testUser2 = await userManager.FindByEmailAsync("organizer@example.com");
                 if (testUser2 == null)
                 {
-                    testUser2 = new ApplicationUser
+                    testUser2 = new()
                     {
                         UserName = "organizer@example.com",
                         Email = "organizer@example.com",
@@ -55,12 +57,12 @@ namespace VentyTime.Server.Data
                         Bio = "Professional event manager with 5+ years of experience"
                     };
                     await userManager.CreateAsync(testUser2, "Test123!");
-                    await userManager.AddToRoleAsync(testUser2, "User");
+                    await userManager.AddToRoleAsync(testUser2, UserRole.Organizer.ToString());
                 }
 
                 var events = new List<Event>
                 {
-                    new Event
+                    new()
                     {
                         Title = "Tech Conference 2024",
                         Description = "Join us for the biggest tech conference in Ukraine! Topics include AI, Web Development, and Cloud Computing.",
@@ -77,7 +79,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Startup Networking Night",
                         Description = "Connect with fellow entrepreneurs and investors in a casual atmosphere.",
@@ -87,46 +89,61 @@ namespace VentyTime.Server.Data
                         MaxAttendees = 200,
                         Price = 0.00m,
                         ImageUrl = "/images/events/business-event.jpg",
-                        Type = EventType.Networking,
+                        Type = EventType.Social,
                         Category = "Business",
                         IsActive = true,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "AI Workshop: Machine Learning Basics",
                         Description = "Learn the fundamentals of machine learning in this hands-on workshop.",
                         StartDate = new DateTime(2024, 12, 27, 10, 0, 0),
                         EndDate = new DateTime(2024, 12, 27, 16, 0, 0),
-                        Location = "IT Hub Lviv",
+                        Location = "UNIT.City, Kyiv",
                         MaxAttendees = 50,
                         Price = 50.00m,
-                        ImageUrl = "/images/events/technology-event.jpg",
+                        ImageUrl = "/images/events/ai-workshop.jpg",
                         Type = EventType.Workshop,
                         Category = "Technology",
                         IsActive = true,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
-                    new Event
+                    new()
                     {
-                        Title = "Web Development Bootcamp",
-                        Description = "Intensive 2-day bootcamp covering modern web development technologies.",
-                        StartDate = new DateTime(2024, 12, 29, 9, 0, 0),
-                        EndDate = new DateTime(2024, 12, 30, 17, 0, 0),
-                        Location = "Creative Quarter, Kyiv",
-                        MaxAttendees = 30,
-                        Price = 200.00m,
-                        ImageUrl = "images/events/webdev-bootcamp.jpg",
-                        Type = EventType.Workshop,
+                        Title = "JavaScript Meetup",
+                        Description = "Monthly meetup for JavaScript developers to share knowledge and experiences.",
+                        StartDate = new DateTime(2024, 12, 29, 19, 0, 0),
+                        EndDate = new DateTime(2024, 12, 29, 21, 0, 0),
+                        Location = "Coworking Space Hub, Kyiv",
+                        MaxAttendees = 50,
+                        Price = 0.00m,
+                        ImageUrl = "/images/events/meetup.jpg",
+                        Type = EventType.Meetup,
                         Category = "Technology",
                         IsActive = true,
-                        IsFeatured = true,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
-                    new Event
+                    new()
+                    {
+                        Title = "Cloud Computing Webinar",
+                        Description = "Learn about the latest trends in cloud computing and DevOps practices.",
+                        StartDate = new DateTime(2024, 12, 30, 14, 0, 0),
+                        EndDate = new DateTime(2024, 12, 30, 16, 0, 0),
+                        Location = "Online",
+                        MaxAttendees = 1000,
+                        Price = 25.00m,
+                        ImageUrl = "/images/events/webinar.jpg",
+                        Type = EventType.Webinar,
+                        Category = "Technology",
+                        IsActive = true,
+                        OrganizerId = testUser1.Id,
+                        CreatorId = testUser1.Id
+                    },
+                    new()
                     {
                         Title = "GameDev Meetup",
                         Description = "Monthly meetup for game developers to share experiences and showcase projects.",
@@ -142,7 +159,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Cybersecurity Forum 2024",
                         Description = "Expert talks on the latest cybersecurity trends and threats.",
@@ -159,7 +176,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Jazz Night at Atlas",
                         Description = "An evening of smooth jazz with local and international artists.",
@@ -175,7 +192,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Ukrainian Premier League Match",
                         Description = "Dynamo Kyiv vs Shakhtar Donetsk - The biggest match of the season!",
@@ -192,7 +209,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Wine Tasting Evening",
                         Description = "Discover the finest Ukrainian wines paired with local cuisine.",
@@ -208,7 +225,7 @@ namespace VentyTime.Server.Data
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
-                    new Event
+                    new()
                     {
                         Title = "Contemporary Art Exhibition",
                         Description = "Featuring works from emerging Ukrainian artists exploring modern themes.",

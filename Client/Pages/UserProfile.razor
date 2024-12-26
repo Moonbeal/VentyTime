@@ -1,184 +1,129 @@
 @page "/profile"
 @using VentyTime.Shared.Models
-@using VentyTime.Shared.Models.Auth
-@using VentyTime.Client.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using MudBlazor
-@inject IAuthService AuthService
-@inject IUserService UserService
-@inject IEventService EventService
-@inject NavigationManager NavigationManager
+@using VentyTime.Client.Services
+@using System.Linq
+@using System
+@using System.Threading.Tasks
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Authorization
+
+@inherits ComponentBase
 @attribute [Authorize]
 
-<div class="profile-container">
-    <div class="profile-header">
-        <div class="profile-avatar-container">
-            @if (user != null)
-            {
-                <div class="d-flex flex-column align-items-center">
-                    <div class="mb-4">
-                        <MudAvatar Size="Size.Large" Style="width: 128px; height: 128px;">
-                            @if (!string.IsNullOrEmpty(user.AvatarUrl))
-                            {
-                                <img src="@user.AvatarUrl" alt="@user.FullName" />
-                            }
-                            else
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
-                            }
-                        </MudAvatar>
-                    </div>
-
-                    <MudText Typo="Typo.h4" Class="mb-4">@user.FullName</MudText>
-
-                    <MudTabs Class="mt-4" Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
-                        <MudTabPanel Text="Organized Events">
-                            @if (user.OrganizedEvents?.Any() == true)
-                            {
-                                <div class="d-flex flex-wrap gap-4">
-                                    @foreach (var eventId in user.OrganizedEvents)
-                                    {
-                                        <EventCard EventId="@eventId.Id.ToString()" />
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <MudText>No organized events yet.</MudText>
-                            }
-                        </MudTabPanel>
-
-                        <MudTabPanel Text="Registered Events">
-                            @if (user.Registrations?.Any() == true)
-                            {
-                                <div class="d-flex flex-wrap gap-4">
-                                    @foreach (var registration in user.Registrations)
-                                    {
-                                        <EventCard EventId="@registration.EventId.ToString()" />
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <MudText>No registered events yet.</MudText>
-                            }
-                        </MudTabPanel>
-                    </MudTabs>
-                </div>
-            }
-        </div>
-    </div>
-
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     @if (loading)
     {
-        <div class="text-center mt-4">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="d-flex justify-center align-center" style="height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
         </div>
     }
-    else if (user == null)
+    else if (currentUser == null)
     {
-        <MudAlert Severity="Severity.Error" Class="mt-4">Unable to load user profile.</MudAlert>
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="my-4">User not found.</MudAlert>
     }
-</div>
-
-<style>
-    .profile-container {
-        width: 100%;
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
+                    <MudAvatar Size="Size.Large" Color="Color.Primary" Class="mb-4">
+                        @(currentUser.FirstName?.Substring(0, 1).ToUpper() ?? "U")
+                    </MudAvatar>
+                    
+                    <MudText Typo="Typo.h5" Class="mb-4">@($"{currentUser.FirstName} {currentUser.LastName}")</MudText>
+                    
+                    <MudList Dense="true">
+                        <MudListItem Icon="@Icons.Material.Filled.Email">
+                            @currentUser.Email
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Phone">
+                            @(currentUser.PhoneNumber ?? "No phone number")
+                        </MudListItem>
+                    </MudList>
+                </MudPaper>
+            </MudItem>
+            
+            <MudItem xs="12" sm="8">
+                <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                    <MudTabPanel Text="My Events">
+                        @if (registeredEvents == null || !registeredEvents.Any())
+                        {
+                            <MudAlert Severity="Severity.Info" Class="my-4">You haven't registered for any events yet.</MudAlert>
+                        }
+                        else
+                        {
+                            <MudList Dense="true">
+                                @foreach (var eventItem in registeredEvents)
+                                {
+                                    <MudListItem>
+                                        <MudPaper Elevation="0" Class="pa-4">
+                                            <div class="d-flex justify-space-between align-center">
+                                                <div>
+                                                    <MudText Typo="Typo.h6">@eventItem.Title</MudText>
+                                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                                        @eventItem.StartDate.ToString("dddd, MMMM d, yyyy")
+                                                    </MudText>
+                                                    <MudText Typo="Typo.body2">
+                                                        @eventItem.StartDate.ToString("h:mm tt") - @eventItem.EndDate.ToString("h:mm tt")
+                                                    </MudText>
+                                                </div>
+                                                <MudButton Variant="Variant.Outlined"
+                                                          Color="Color.Primary"
+                                                          Size="Size.Small"
+                                                          OnClick="@(() => ViewEventDetails(eventItem.Id))">
+                                                    View Details
+                                                </MudButton>
+                                            </div>
+                                        </MudPaper>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                    </MudTabPanel>
+                </MudTabs>
+            </MudItem>
+        </MudGrid>
     }
-
-    .profile-header {
-        background: linear-gradient(90deg, #9C27B0 0%, #E91E63 100%);
-        height: 200px;
-        position: relative;
-        margin-bottom: 80px;
-    }
-
-    .profile-avatar-container {
-        position: absolute;
-        bottom: -60px;
-        left: 50px;
-    }
-
-    .profile-avatar, .profile-avatar-placeholder {
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        border: 4px solid white;
-        background: #f5f5f5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2.5rem;
-        color: #757575;
-    }
-
-    .profile-content {
-        padding: 0 50px;
-    }
-
-    .profile-info {
-        margin-bottom: 40px;
-    }
-
-    .bio {
-        color: #666;
-        margin: 15px 0;
-    }
-
-    .contact-info {
-        margin: 20px 0;
-    }
-
-    .contact-info div {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 8px 0;
-        color: #666;
-    }
-
-    .event-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px;
-        border-bottom: 1px solid #eee;
-    }
-
-    .event-date, .event-popularity {
-        margin-left: auto;
-        color: #666;
-        font-size: 0.9rem;
-    }
-
-    .settings-options {
-        max-width: 600px;
-    }
-
-    .settings-options .mud-button {
-        width: 100%;
-        justify-content: flex-start;
-    }
-</style>
+</MudContainer>
 
 @code {
+    [Inject] private IAuthService AuthService { get; set; } = default!;
+    [Inject] private IUserService UserService { get; set; } = default!;
+    [Inject] private IEventService EventService { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private ISnackbar Snackbar { get; set; } = default!;
+
+    private User? currentUser;
+    private List<Event>? registeredEvents;
     private bool loading = true;
-    private ApplicationUser? user;
+
+    private void ViewEventDetails(int eventId)
+    {
+        NavigationManager.NavigateTo($"/events/{eventId}");
+    }
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            user = await UserService.GetUserProfileAsync();
+            loading = true;
+            currentUser = await UserService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                registeredEvents = (await EventService.GetRegisteredEventsAsync()).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error loading profile", Severity.Error);
         }
         finally
         {
             loading = false;
         }
-    }
-
-    private async Task HandleLogout()
-    {
-        await AuthService.LogoutAsync();
-        NavigationManager.NavigateTo("/");
     }
 }

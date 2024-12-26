@@ -1,11 +1,11 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
-using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
-using Microsoft.AspNetCore.Components;
+using VentyTime.Client.Auth;
 
 namespace VentyTime.Client.Services
 {
@@ -45,7 +45,7 @@ namespace VentyTime.Client.Services
                 if (response.IsSuccessStatusCode && result?.Token != null)
                 {
                     await _localStorage.SetItemAsync("authToken", result.Token);
-                    await _authStateProvider.NotifyUserAuthentication(result.Token);
+                    await _authStateProvider.NotifyUserAuthenticationAsync(result.Token);
                     _navigationManager.NavigateTo("/");
                     _logger.LogInformation("User {Email} logged in successfully.", request.Email);
                     return result;
@@ -82,7 +82,7 @@ namespace VentyTime.Client.Services
                 if (result?.Token != null)
                 {
                     await _localStorage.SetItemAsync("authToken", result.Token);
-                    await _authStateProvider.NotifyUserAuthentication(result.Token);
+                    await _authStateProvider.NotifyUserAuthenticationAsync(result.Token);
                     _navigationManager.NavigateTo("/");
                     _logger.LogInformation("User {Email} registered successfully.", request.Email);
                     return result;
@@ -102,7 +102,7 @@ namespace VentyTime.Client.Services
             try
             {
                 await _localStorage.RemoveItemAsync("authToken");
-                await _authStateProvider.NotifyUserLogout();
+                await _authStateProvider.NotifyUserLogoutAsync();
                 _navigationManager.NavigateTo("/");
                 _logger.LogInformation("User logged out successfully.");
                 return true;

@@ -40,9 +40,9 @@
                                 Date & Time
                             </MudText>
                             <MudText Typo="Typo.body2">
-                                @Event.StartDate.ToString("MMMM dd, yyyy")
+                                @Event.StartDate.ToString("dddd, MMMM d, yyyy")
                                 <br />
-                                @Event.StartTime.ToString(@"hh\:mm tt")
+                                @Event.StartDate.ToString("h:mm tt") - @Event.EndDate.ToString("h:mm tt")
                             </MudText>
                         </MudStack>
                     </MudItem>
@@ -88,6 +88,6 @@
     private void NavigateToEventRegistration(int eventId)
     {
         MudDialog.Close();
-        NavigationManager.NavigateTo($"/events/{eventId}/register");
+        NavigationManager.NavigateTo($"/events/{eventId}");
     }
 }

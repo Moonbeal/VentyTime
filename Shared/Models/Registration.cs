@@ -19,18 +19,13 @@ namespace VentyTime.Shared.Models
         [StringLength(500)]
         public string? Notes { get; set; }
 
-        public DateTime CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 
-        [JsonIgnore]
         public virtual Event? Event { get; set; }
 
-        [JsonIgnore]
         public virtual ApplicationUser? User { get; set; }
-
-        // This is used to track when the registration was made
-        public DateTime RegistrationDate { get; set; }
     }
 
     public enum RegistrationStatus

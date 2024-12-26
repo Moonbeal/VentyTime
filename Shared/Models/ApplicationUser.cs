@@ -44,6 +44,5 @@ namespace VentyTime.Shared.Models
         public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
 
         public bool IsActive { get; set; } = true;
-        public UserRole Role { get; set; } = UserRole.User;
     }
 }

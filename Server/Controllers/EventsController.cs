@@ -221,5 +221,40 @@ namespace VentyTime.Server.Controllers
                 return StatusCode(500, new { message = "An error occurred while deleting the event" });
             }
         }
+
+        [HttpPost("{eventId}/register")]
+        [Authorize]
+        public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            try
+            {
+                var registration = await _eventService.RegisterUserForEventAsync(eventId, userId);
+                return Ok(registration);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("registered")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<Event>>> GetRegisteredEvents()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var events = await _eventService.GetRegisteredEventsAsync(userId);
+            return Ok(events);
+        }
     }
 }

@@ -11,8 +11,8 @@ namespace VentyTime.Shared.Models
         Conference,
         Workshop,
         Meetup,
-        Networking,
-        Hackathon,
+        Webinar,
+        Social,
         Other
     }
 
@@ -45,16 +45,8 @@ namespace VentyTime.Shared.Models
         [StringLength(100, ErrorMessage = "Title must be between 3 and 100 characters", MinimumLength = 3)]
         public string Title { get; set; } = string.Empty;
 
-        public EventType Type { get; set; } = EventType.Other;
-
-        [Required(ErrorMessage = "Category is required")]
-        public string Category { get; set; } = EventCategories.Technology;
-
-        [Required(ErrorMessage = "Location is required")]
-        public string Location { get; set; } = string.Empty;
-
         [Required(ErrorMessage = "Description is required")]
-        [StringLength(500, ErrorMessage = "Description must be between 10 and 500 characters", MinimumLength = 10)]
+        [StringLength(1000, ErrorMessage = "Description must be between 10 and 1000 characters", MinimumLength = 10)]
         public string Description { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Start date is required")]
@@ -66,83 +58,69 @@ namespace VentyTime.Shared.Models
         [Required(ErrorMessage = "Start time is required")]
         public TimeSpan StartTime { get; set; }
 
-        public bool IsFeatured { get; set; }
+        [Required(ErrorMessage = "Location is required")]
+        [StringLength(200)]
+        public string Location { get; set; } = string.Empty;
 
-        public string CreatorId { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Maximum attendees is required")]
+        [Range(0, int.MaxValue, ErrorMessage = "Maximum attendees must be 0 or greater")]
+        public int MaxAttendees { get; set; }
 
-        public DateTime GetStartDateTime()
-        {
-            return StartDate.Add(StartTime);
-        }
+        public int CurrentCapacity { get; set; }
 
-        public bool HasStarted()
-        {
-            return GetStartDateTime() <= DateTime.UtcNow;
-        }
+        [NotMapped]
+        public int AvailableSpots => MaxAttendees - CurrentCapacity;
 
-        public bool IsFinished()
-        {
-            // Events are considered finished 24 hours after their start time
-            return GetStartDateTime().AddHours(24) <= DateTime.UtcNow;
-        }
+        [Required(ErrorMessage = "Category is required")]
+        [StringLength(50)]
+        public string Category { get; set; } = string.Empty;
 
-        public TimeSpan TimeUntilStart()
-        {
-            return GetStartDateTime() - DateTime.UtcNow;
-        }
+        [Required(ErrorMessage = "Event type is required")]
+        public EventType Type { get; set; } = EventType.Other;
 
-        public TimeSpan TimeSinceStart()
-        {
-            return DateTime.UtcNow - GetStartDateTime();
-        }
-
-        public TimeSpan TimeUntilEnd()
-        {
-            return EndDate.Add(StartTime) - DateTime.UtcNow;
-        }
-
-        public TimeSpan TimeSinceEnd()
-        {
-            return DateTime.UtcNow - EndDate.Add(StartTime);
-        }
-
-        [Required(ErrorMessage = "Price is required")]
         [Range(0, double.MaxValue, ErrorMessage = "Price must be 0 or greater")]
         public decimal Price { get; set; }
-
-        [Required(ErrorMessage = "Capacity is required")]
-        [Range(0, int.MaxValue, ErrorMessage = "Capacity must be 0 or greater")]
-        public int MaxAttendees { get; set; }
 
         public string? ImageUrl { get; set; }
 
         public bool IsActive { get; set; } = true;
 
+        public bool IsFeatured { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
 
-        [Required]
+        public string CreatorId { get; set; } = string.Empty;
+
         public string OrganizerId { get; set; } = string.Empty;
 
+        // Navigation properties
         [JsonIgnore]
-        public virtual ICollection<Registration>? Registrations { get; set; }
-
-        [JsonIgnore]
-        public virtual ICollection<Comment>? Comments { get; set; }
+        public virtual ApplicationUser? Creator { get; set; }
 
         [JsonIgnore]
         public virtual ApplicationUser? Organizer { get; set; }
 
-        public bool IsFull => MaxAttendees > 0 && Registrations?.Count >= MaxAttendees;
+        [JsonIgnore]
+        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
 
+        [JsonIgnore]
+        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+
+        // Computed properties
+        public bool IsFull => MaxAttendees > 0 && CurrentParticipants >= MaxAttendees;
         public int CurrentParticipants => Registrations?.Count ?? 0;
-
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
+        public bool IsRegistrationOpen => MaxAttendees == 0 || CurrentParticipants < MaxAttendees;
 
-        public bool IsRegistrationOpen => MaxAttendees == 0 || Registrations?.Count < MaxAttendees;
-
-        // For backward compatibility
-        public string Name => Title;
+        // Helper methods
+        public DateTime GetStartDateTime() => StartDate.Add(StartTime);
+        public bool HasStarted() => GetStartDateTime() <= DateTime.UtcNow;
+        public bool IsFinished() => GetStartDateTime().AddHours(24) <= DateTime.UtcNow;
+        public TimeSpan TimeUntilStart() => GetStartDateTime() - DateTime.UtcNow;
+        public TimeSpan TimeSinceStart() => DateTime.UtcNow - GetStartDateTime();
+        public TimeSpan TimeUntilEnd() => EndDate.Add(StartTime) - DateTime.UtcNow;
+        public TimeSpan TimeSinceEnd() => DateTime.UtcNow - EndDate.Add(StartTime);
     }
 }

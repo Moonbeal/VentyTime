@@ -132,15 +132,30 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<ApplicationDbContext>();
         var userManager = services.GetRequiredService<UserManager<VentyTime.Shared.Models.ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
         
+        logger.LogInformation("Running database migrations...");
         await context.Database.MigrateAsync();
+
+        logger.LogInformation("Ensuring roles are seeded...");
         await SeedData.EnsureRolesAsync(roleManager);
+
+        // Verify roles were created
+        foreach (var roleName in Enum.GetNames(typeof(UserRole)).Where(r => r != "None"))
+        {
+            var roleExists = await roleManager.RoleExistsAsync(roleName);
+            logger.LogInformation("Role {RoleName} exists: {Exists}", roleName, roleExists);
+        }
+
+        logger.LogInformation("Seeding events and test users...");
         await SeedData.SeedEventsAsync(context, userManager);
+        logger.LogInformation("Database initialization completed successfully.");
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred while seeding the database.");
+        throw; // Rethrow to prevent the application from starting with an improperly initialized database
     }
 }
 
@@ -149,6 +164,29 @@ if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
     app.UseDeveloperExceptionPage();
+    
+    // Add detailed error handling in development
+    app.Use(async (context, next) =>
+    {
+        try
+        {
+            await next();
+        }
+        catch (Exception ex)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
+            
+            var message = "An error occurred while processing your request";
+            var error = ex.Message;
+            var stackTrace = ex.StackTrace;
+            
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            
+            await context.Response.WriteAsJsonAsync(new { message, error, stackTrace });
+        }
+    });
 }
 else
 {
