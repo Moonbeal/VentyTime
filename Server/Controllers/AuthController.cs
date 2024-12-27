@@ -69,6 +69,13 @@ namespace VentyTime.Server.Controllers
                 _logger.LogInformation("Generating JWT token for user: {Email}", model.Email);
                 var token = await _tokenService.GenerateJwtToken(user);
                 
+                // Get user roles
+                var roles = await _userService.GetUserRolesAsync(user);
+                var userRole = roles.Contains("Organizer") ? UserRole.Organizer :
+                             roles.Contains("Admin") ? UserRole.Admin :
+                             roles.Contains("Participant") ? UserRole.Participant :
+                             UserRole.User;
+
                 _logger.LogInformation("User registered successfully: {Email}", model.Email);
                 return Ok(new AuthResponse
                 {
@@ -81,7 +88,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = UserRole.User
+                        Role = userRole
                     }
                 });
             }
@@ -132,8 +139,16 @@ namespace VentyTime.Server.Controllers
                 }
 
                 var token = await _tokenService.GenerateJwtToken(user);
+                
+                // Get user roles
+                var roles = await _userService.GetUserRolesAsync(user);
+                var userRole = roles.Contains("Organizer") ? UserRole.Organizer :
+                             roles.Contains("Admin") ? UserRole.Admin :
+                             roles.Contains("Participant") ? UserRole.Participant :
+                             UserRole.User;
+
                 _logger.LogInformation("User logged in successfully: {Email} with role {Role}", 
-                    model.Email, model.SelectedRole);
+                    model.Email, userRole);
 
                 return Ok(new AuthResponse
                 {
@@ -146,7 +161,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = model.SelectedRole
+                        Role = userRole
                     }
                 });
             }

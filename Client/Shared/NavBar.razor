@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <MudAppBar Elevation="1">
     <MudContainer MaxWidth="MaxWidth.ExtraLarge">
@@ -13,13 +14,6 @@
 
             <!-- Navigation Links -->
             <div class="d-flex align-center">
-                <MudLink Href="" Color="Color.Inherit" Class="mx-4">Home</MudLink>
-                <AuthorizeView>
-                    <Authorized>
-                        <MudLink Href="create-event" Color="Color.Inherit" Class="mx-4">Create Event</MudLink>
-                        <MudLink Href="my-events" Color="Color.Inherit" Class="mx-4">My Events</MudLink>
-                    </Authorized>
-                </AuthorizeView>
             </div>
 
             <!-- Auth Buttons -->
@@ -44,8 +38,13 @@
                                 </MudAvatar>
                             </ActivatorContent>
                             <ChildContent>
-                                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/profile"))">Profile Settings</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/profile"))">Profile</MudMenuItem>
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/my-events"))">My Events</MudMenuItem>
+                                <AuthorizeView Roles="Admin, Organizer">
+                                    <Authorized Context="innerAuth">
+                                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/create-event"))">Create Event</MudMenuItem>
+                                    </Authorized>
+                                </AuthorizeView>
                                 <MudDivider />
                                 <MudMenuItem OnClick="Logout">Logout</MudMenuItem>
                             </ChildContent>

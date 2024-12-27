@@ -290,41 +290,56 @@ namespace VentyTime.Client.Services
             return user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
         }
 
-        public async Task<User> GetCurrentUserAsync()
+        public async Task<User?> GetCurrentUserAsync()
         {
             try
             {
                 var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return new User();
+                if (string.IsNullOrEmpty(token))
+                {
+                    _logger.LogWarning("No auth token found");
+                    return null;
+                }
 
-                _httpClient.DefaultRequestHeaders.Authorization =
+                _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                return await _httpClient.GetFromJsonAsync<User>("api/users/current") ?? new User();
+                var response = await _httpClient.GetAsync("api/user/current");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<User>();
+                }
+                
+                _logger.LogWarning("Failed to get current user. Status code: {StatusCode}", response.StatusCode);
+                return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting current user: {ex.Message}");
-                return new User();
+                _logger.LogError(ex, "Error getting current user");
+                return null;
             }
         }
 
-        public async Task UpdateUserAsync(User user, string newPassword)
+        public async Task<HttpResponseMessage> UpdateUserAsync(string userId, UpdateProfileRequest request)
         {
             try
             {
                 var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return;
+                if (string.IsNullOrEmpty(token)) 
+                    return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
 
                 _httpClient.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                await _httpClient.PutAsJsonAsync($"api/users/{user.Id}", new { User = user, NewPassword = newPassword });
+                return await _httpClient.PutAsJsonAsync($"api/user/{userId}", request);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating user: {ex.Message}");
-                _snackbar.Add("Failed to update user", Severity.Error);
+                _logger.LogError(ex, "Error updating user");
+                return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) 
+                { 
+                    Content = new StringContent(ex.Message) 
+                };
             }
         }
 
@@ -446,6 +461,80 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogError(ex, "Error getting user roles");
                 return new List<string>();
+            }
+        }
+
+        public async Task<HttpResponseMessage> UploadAvatarAsync(string userId, MultipartFormDataContent content)
+        {
+            return await _httpClient.PostAsync($"api/user/{userId}/avatar", content);
+        }
+
+        public async Task<bool> UpdateProfileAsync(string firstName, string lastName, string email, string phoneNumber)
+        {
+            try
+            {
+                var request = new UpdateProfileRequest
+                {
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Email = email,
+                    PhoneNumber = phoneNumber
+                };
+
+                var userId = await GetCurrentUserIdAsync();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return false;
+                }
+
+                var response = await UpdateUserAsync(userId, request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating user profile");
+                return false;
+            }
+        }
+
+        public async Task<bool> ChangePasswordAsync(string currentPassword, string newPassword)
+        {
+            try
+            {
+                var request = new
+                {
+                    CurrentPassword = currentPassword,
+                    NewPassword = newPassword
+                };
+
+                var response = await _httpClient.PostAsJsonAsync("api/user/change-password", request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateNotificationSettingsAsync(bool emailNotifications, bool pushNotifications, bool eventReminders)
+        {
+            try
+            {
+                var request = new
+                {
+                    EmailNotifications = emailNotifications,
+                    PushNotifications = pushNotifications,
+                    EventReminders = eventReminders
+                };
+
+                var response = await _httpClient.PostAsJsonAsync("api/user/notification-settings", request);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating notification settings");
+                return false;
             }
         }
     }

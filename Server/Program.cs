@@ -114,6 +114,7 @@ builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IStorageService, LocalStorageService>();
 
 // Configure form options for file uploads
 builder.Services.Configure<FormOptions>(options =>

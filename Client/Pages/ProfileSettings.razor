@@ -1,0 +1,385 @@
+@page "/profile-settings"
+@using VentyTime.Shared.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using MudBlazor
+@using VentyTime.Shared.Models.Auth
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (currentUser == null)
+    {
+        <MudAlert Severity="Severity.Error">Failed to load user profile</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4" Elevation="3">
+                    <div class="d-flex flex-column align-center">
+                        <MudAvatar Color="Color.Primary" Size="Size.Large" Class="ma-2">
+                            @{
+                                var initials = "U";
+                                if (!string.IsNullOrEmpty(currentUser.FirstName))
+                                {
+                                    initials = currentUser.FirstName[0].ToString().ToUpper();
+                                    if (!string.IsNullOrEmpty(currentUser.LastName))
+                                    {
+                                        initials += currentUser.LastName[0].ToString().ToUpper();
+                                    }
+                                }
+                                else if (!string.IsNullOrEmpty(currentUser.Username))
+                                {
+                                    initials = currentUser.Username[0].ToString().ToUpper();
+                                }
+                                @initials
+                            }
+                        </MudAvatar>
+                        <MudText Typo="Typo.h5" Class="mt-3">@currentUser.Username</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">@currentUser.Role.ToString()</MudText>
+                    </div>
+
+                    <MudDivider Class="my-4"/>
+
+                    <MudList>
+                        <MudListItem Icon="@Icons.Material.Filled.Person">
+                            <MudText>@($"{currentUser.FirstName} {currentUser.LastName}")</MudText>
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Email">
+                            <MudText>@currentUser.Email</MudText>
+                        </MudListItem>
+                        <MudListItem Icon="@Icons.Material.Filled.Phone">
+                            <MudText>@(string.IsNullOrEmpty(currentUser.PhoneNumber) ? "No phone number" : currentUser.PhoneNumber)</MudText>
+                        </MudListItem>
+                    </MudList>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" sm="8">
+                <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                    <!-- Personal Information -->
+                    <MudTabPanel Text="Personal Information" Icon="@Icons.Material.Filled.Person">
+                        <EditForm Model="@editModel" OnValidSubmit="OnValidSubmit">
+                            <DataAnnotationsValidator />
+
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="editModel.FirstName"
+                                                Label="First Name"
+                                                Variant="Variant.Outlined"
+                                                For="@(() => editModel.FirstName)" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="editModel.LastName"
+                                                Label="Last Name"
+                                                Variant="Variant.Outlined"
+                                                For="@(() => editModel.LastName)" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="editModel.Email"
+                                                Label="Email"
+                                                Variant="Variant.Outlined"
+                                                InputType="InputType.Email"
+                                                For="@(() => editModel.Email)" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="editModel.PhoneNumber"
+                                                Label="Phone Number"
+                                                Variant="Variant.Outlined"
+                                                For="@(() => editModel.PhoneNumber)" />
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex justify-end">
+                                    <MudButton ButtonType="ButtonType.Submit"
+                                              Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              Class="ml-auto"
+                                              Disabled="@isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                            <MudText Class="ms-2">Saving</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText>Save Changes</MudText>
+                                        }
+                                    </MudButton>
+                                </MudItem>
+                            </MudGrid>
+                        </EditForm>
+                    </MudTabPanel>
+
+                    <!-- Security Settings -->
+                    <MudTabPanel Text="Security" Icon="@Icons.Material.Filled.Security">
+                        <EditForm Model="@passwordModel" OnValidSubmit="OnChangePasswordSubmit">
+                            <DataAnnotationsValidator />
+
+                            <MudGrid>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="passwordModel.CurrentPassword"
+                                                Label="Current Password"
+                                                Variant="Variant.Outlined"
+                                                InputType="@(showPassword ? InputType.Text : InputType.Password)"
+                                                Adornment="Adornment.End"
+                                                AdornmentIcon="@(showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                OnAdornmentClick="() => showPassword = !showPassword"
+                                                For="@(() => passwordModel.CurrentPassword)" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="passwordModel.NewPassword"
+                                                Label="New Password"
+                                                Variant="Variant.Outlined"
+                                                InputType="@(showPassword ? InputType.Text : InputType.Password)"
+                                                Adornment="Adornment.End"
+                                                AdornmentIcon="@(showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                OnAdornmentClick="() => showPassword = !showPassword"
+                                                For="@(() => passwordModel.NewPassword)" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="passwordModel.ConfirmPassword"
+                                                Label="Confirm New Password"
+                                                Variant="Variant.Outlined"
+                                                InputType="@(showPassword ? InputType.Text : InputType.Password)"
+                                                Adornment="Adornment.End"
+                                                AdornmentIcon="@(showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                OnAdornmentClick="() => showPassword = !showPassword"
+                                                For="@(() => passwordModel.ConfirmPassword)" />
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex justify-end">
+                                    <MudButton ButtonType="ButtonType.Submit"
+                                              Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              Class="ml-auto"
+                                              Disabled="@isChangingPassword">
+                                        @if (isChangingPassword)
+                                        {
+                                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                            <MudText Class="ms-2">Changing Password</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText>Change Password</MudText>
+                                        }
+                                    </MudButton>
+                                </MudItem>
+                            </MudGrid>
+                        </EditForm>
+                    </MudTabPanel>
+
+                    <!-- Notification Settings -->
+                    <MudTabPanel Text="Notifications" Icon="@Icons.Material.Filled.Notifications">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@notificationSettings.EmailNotifications"
+                                          Color="Color.Primary"
+                                          Label="Email Notifications" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@notificationSettings.PushNotifications"
+                                          Color="Color.Primary"
+                                          Label="Push Notifications" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@notificationSettings.EventReminders"
+                                          Color="Color.Primary"
+                                          Label="Event Reminders" />
+                            </MudItem>
+                            <MudItem xs="12" Class="d-flex justify-end">
+                                <MudButton OnClick="SaveNotificationSettings"
+                                          Variant="Variant.Filled"
+                                          Color="Color.Primary"
+                                          Class="ml-auto"
+                                          Disabled="@isSavingNotifications">
+                                    @if (isSavingNotifications)
+                                    {
+                                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                        <MudText Class="ms-2">Saving</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText>Save Settings</MudText>
+                                    }
+                                </MudButton>
+                            </MudItem>
+                        </MudGrid>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private User? currentUser;
+    private bool isLoading = true;
+    private bool isSaving;
+    private bool isChangingPassword;
+    private bool isSavingNotifications;
+    private bool showPassword;
+
+    private EditUserModel editModel = new();
+    private ChangePasswordModel passwordModel = new();
+    private NotificationSettingsModel notificationSettings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+            currentUser = await UserService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                editModel = new EditUserModel
+                {
+                    FirstName = currentUser.FirstName,
+                    LastName = currentUser.LastName,
+                    Email = currentUser.Email,
+                    PhoneNumber = currentUser.PhoneNumber
+                };
+
+                // TODO: Load actual notification settings from the server
+                notificationSettings = new NotificationSettingsModel
+                {
+                    EmailNotifications = true,
+                    PushNotifications = true,
+                    EventReminders = true
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to load user profile", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task OnValidSubmit()
+    {
+        try
+        {
+            isSaving = true;
+            var success = await UserService.UpdateProfileAsync(
+                editModel.FirstName ?? string.Empty,
+                editModel.LastName ?? string.Empty,
+                editModel.Email ?? string.Empty,
+                editModel.PhoneNumber ?? string.Empty
+            );
+
+            if (success)
+            {
+                Snackbar.Add("Profile updated successfully", Severity.Success);
+                // Reload the current user to reflect changes
+                currentUser = await UserService.GetCurrentUserAsync();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update profile", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to update profile", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task OnChangePasswordSubmit()
+    {
+        if (passwordModel.NewPassword != passwordModel.ConfirmPassword)
+        {
+            Snackbar.Add("New passwords do not match", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            isChangingPassword = true;
+            var success = await UserService.ChangePasswordAsync(
+                passwordModel.CurrentPassword,
+                passwordModel.NewPassword
+            );
+
+            if (success)
+            {
+                Snackbar.Add("Password changed successfully", Severity.Success);
+                passwordModel = new ChangePasswordModel();
+            }
+            else
+            {
+                Snackbar.Add("Failed to change password", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to change password", Severity.Error);
+        }
+        finally
+        {
+            isChangingPassword = false;
+        }
+    }
+
+    private async Task SaveNotificationSettings()
+    {
+        try
+        {
+            isSavingNotifications = true;
+            var success = await UserService.UpdateNotificationSettingsAsync(
+                notificationSettings.EmailNotifications,
+                notificationSettings.PushNotifications,
+                notificationSettings.EventReminders
+            );
+
+            if (success)
+            {
+                Snackbar.Add("Notification settings saved", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to save notification settings", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to save notification settings", Severity.Error);
+        }
+        finally
+        {
+            isSavingNotifications = false;
+        }
+    }
+
+    public class EditUserModel
+    {
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+    }
+
+    public class ChangePasswordModel
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    public class NotificationSettingsModel
+    {
+        public bool EmailNotifications { get; set; }
+        public bool PushNotifications { get; set; }
+        public bool EventReminders { get; set; }
+    }
+}

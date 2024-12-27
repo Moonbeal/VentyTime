@@ -1,4 +1,5 @@
 @page "/create-event"
+@attribute [Authorize(Roles = "Admin, Organizer")]
 @using VentyTime.Shared.Models
 @using System.ComponentModel.DataAnnotations
 @using System.Security.Claims
