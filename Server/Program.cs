@@ -86,7 +86,8 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 
-    options.FallbackPolicy = null; // This allows [AllowAnonymous] to work properly
+    // This is important - we want to allow anonymous access by default
+    options.FallbackPolicy = null;
 });
 
 // Configure CORS
@@ -94,10 +95,15 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("https://localhost:5242", "http://localhost:5242")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        policy.WithOrigins(
+                "https://localhost:7242",
+                "http://localhost:5242",
+                "https://localhost:7241",
+                "http://localhost:5241"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 

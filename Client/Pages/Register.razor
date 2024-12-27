@@ -1,116 +1,99 @@
 @page "/register"
 @using VentyTime.Shared.Models.Auth
-@using System.ComponentModel.DataAnnotations
-@inject IAuthService AuthService
+@inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex flex-column align-center justify-center" Style="min-height: calc(100vh - 64px);">
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: calc(100vh - 64px);">
     <MudPaper Elevation="3" Class="pa-8 rounded-lg" Style="width: 100%; max-width: 500px;">
         <div class="d-flex flex-column align-center mb-8">
             <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Size="Size.Large" Class="mb-4" Style="width: 64px; height: 64px;" />
             <MudText Typo="Typo.h4" Color="Color.Primary" Class="mb-2 font-weight-bold">Create Account</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="text-center">Join VentyTime to create and discover amazing events</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="text-center">Join our community today</MudText>
         </div>
-        
-        <MudForm @ref="form" @bind-IsValid="@success">
-            <MudGrid>
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="registerRequest.FirstName"
-                                Label="First Name"
-                                For="@(() => registerRequest.FirstName)"
-                                Required="true"
-                                RequiredError="First name is required!"
-                                Variant="Variant.Outlined"
-                                id="firstName"
-                                name="firstName"
-                                autocomplete="given-name"
-                                Class="mb-4" />
-                </MudItem>
 
-                <MudItem xs="12" md="6">
-                    <MudTextField @bind-Value="registerRequest.LastName"
-                                Label="Last Name"
-                                For="@(() => registerRequest.LastName)"
-                                Required="true"
-                                RequiredError="Last name is required!"
-                                Variant="Variant.Outlined"
-                                id="lastName"
-                                name="lastName"
-                                autocomplete="family-name"
-                                Class="mb-4" />
-                </MudItem>
-            </MudGrid>
+        <EditForm Model="@registerRequest" OnValidSubmit="HandleRegistrationAsync">
+            <DataAnnotationsValidator />
+
+            <div class="d-flex gap-4 mb-3">
+                <MudTextField @bind-Value="registerRequest.FirstName"
+                            Label="First Name"
+                            Variant="Variant.Outlined"
+                            Required="true"
+                            RequiredError="First name is required!" />
+
+                <MudTextField @bind-Value="registerRequest.LastName"
+                            Label="Last Name"
+                            Variant="Variant.Outlined"
+                            Required="true"
+                            RequiredError="Last name is required!" />
+            </div>
 
             <MudTextField @bind-Value="registerRequest.Email"
                          Label="Email"
-                         For="@(() => registerRequest.Email)"
+                         Variant="Variant.Outlined"
+                         Class="mb-3"
                          Required="true"
                          RequiredError="Email is required!"
-                         InputType="InputType.Email"
-                         Validation="@(new EmailAddressAttribute() {ErrorMessage = "The email address is invalid"})"
-                         Variant="Variant.Outlined"
-                         Adornment="Adornment.Start"
-                         AdornmentIcon="@Icons.Material.Filled.Email"
-                         id="email"
-                         name="email"
-                         autocomplete="email"
-                         Class="mb-4" />
+                         InputType="InputType.Email" />
 
             <MudTextField @bind-Value="registerRequest.Password"
                          Label="Password"
-                         For="@(() => registerRequest.Password)"
+                         Variant="Variant.Outlined"
+                         InputType="@PasswordInput"
+                         Class="mb-3"
                          Required="true"
                          RequiredError="Password is required!"
-                         InputType="@PasswordInput"
                          Adornment="Adornment.End"
                          AdornmentIcon="@PasswordInputIcon"
-                         OnAdornmentClick="TogglePasswordVisibility"
-                         Variant="Variant.Outlined"
-                         id="password"
-                         name="password"
-                         autocomplete="new-password"
-                         HelperText="Password must be at least 6 characters long and contain uppercase, lowercase, number and special character"
-                         Class="mb-4" />
+                         OnAdornmentClick="TogglePasswordVisibility" />
 
             <MudTextField @bind-Value="registerRequest.ConfirmPassword"
                          Label="Confirm Password"
-                         For="@(() => registerRequest.ConfirmPassword)"
+                         Variant="Variant.Outlined"
+                         InputType="@PasswordInput"
+                         Class="mb-6"
                          Required="true"
                          RequiredError="Password confirmation is required!"
-                         InputType="@PasswordInput"
                          Adornment="Adornment.End"
                          AdornmentIcon="@PasswordInputIcon"
-                         OnAdornmentClick="TogglePasswordVisibility"
-                         Validation="@(new Func<string, IEnumerable<string>>(ConfirmPasswordValidation))"
-                         Variant="Variant.Outlined"
-                         id="confirmPassword"
-                         name="confirmPassword"
-                         autocomplete="new-password"
-                         Class="mb-4" />
+                         OnAdornmentClick="TogglePasswordVisibility" />
 
-            <div class="d-flex justify-center mt-6">
-                <MudText>Already have an account?</MudText>
-                <MudLink Href="/login" Underline="Underline.Always" Class="ml-2">Login here</MudLink>
-            </div>
-
-            <MudButton Variant="Variant.Filled" 
-                      Color="Color.Primary" 
+            <MudButton ButtonType="ButtonType.Submit"
+                      Variant="Variant.Filled"
+                      Color="Color.Primary"
                       Size="Size.Large"
                       FullWidth="true"
-                      OnClick="HandleRegistration"
-                      Disabled="@(!success)"
-                      Class="mt-4">
-                CREATE ACCOUNT
+                      Disabled="@isLoading"
+                      Class="mb-3">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Creating account...</MudText>
+                }
+                else
+                {
+                    <MudText>Register</MudText>
+                }
             </MudButton>
-        </MudForm>
+
+            <div class="d-flex justify-center">
+                <MudText Class="mr-2">Already have an account?</MudText>
+                <MudLink Href="/login" Underline="Underline.None" Color="Color.Primary">Login here</MudLink>
+            </div>
+        </EditForm>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4" Variant="Variant.Filled">@errorMessage</MudAlert>
+        }
     </MudPaper>
 </MudContainer>
 
 @code {
-    private RegisterRequest registerRequest = new();
-    private bool success;
-    private MudForm? form;
+    private RegisterRequest registerRequest = new() { Role = "User" };
+    private string errorMessage = string.Empty;
+    private bool isLoading = false;
 
     private InputType PasswordInput = InputType.Password;
     private string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
@@ -129,43 +112,31 @@
         }
     }
 
-    private IEnumerable<string> ConfirmPasswordValidation(string confirmPassword)
-    {
-        if (confirmPassword != registerRequest.Password)
-            yield return "Passwords do not match!";
-    }
-
-    private async Task HandleRegistration()
+    private async Task HandleRegistrationAsync()
     {
         try
         {
-            if (form != null)
+            isLoading = true;
+            errorMessage = string.Empty;
+
+            var (success, errors) = await UserService.RegisterAsync(registerRequest);
+            if (success)
             {
-                await form.Validate();
-                
-                if (form.IsValid)
-                {
-                    var result = await AuthService.RegisterAsync(registerRequest);
-                    if (result.Success)
-                    {
-                        Snackbar.Add("Registration successful! Please login.", Severity.Success);
-                        NavigationManager.NavigateTo("/login");
-                    }
-                    else
-                    {
-                        Snackbar.Add(result.Message ?? "Registration failed. Please try again.", Severity.Error);
-                    }
-                }
-                else
-                {
-                    Snackbar.Add("Please fix the validation errors.", Severity.Warning);
-                }
+                Snackbar.Add("Registration successful! Please login to continue.", Severity.Success);
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                errorMessage = string.Join("\n", errors);
             }
         }
-        catch (Exception error)
+        catch (Exception ex)
         {
-            Console.WriteLine($"Registration error: {error.Message}");
-            Snackbar.Add("An unexpected error occurred. Please try again.", Severity.Error);
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 }

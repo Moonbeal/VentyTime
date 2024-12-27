@@ -49,42 +49,54 @@ namespace VentyTime.Server.Controllers
                     return BadRequest(new { message = "Email already registered" });
                 }
 
+                _logger.LogInformation("Creating user with email: {Email}", model.Email);
                 var (succeeded, errors) = await _userService.CreateUserAsync(model);
-                if (succeeded)
+                
+                if (!succeeded)
                 {
-                    var user = await _userService.GetUserByEmailAsync(model.Email);
-                    if (user == null)
-                    {
-                        _logger.LogError("User was created but could not be retrieved: {Email}", model.Email);
-                        return StatusCode(500, new { message = "User was created but could not be retrieved" });
-                    }
-
-                    var token = await _tokenService.GenerateJwtToken(user);
-                    _logger.LogInformation("User registered successfully: {Email}", model.Email);
-
-                    return Ok(new AuthResponse
-                    {
-                        Success = true,
-                        Token = token,
-                        User = new UserDto
-                        {
-                            Id = user.Id,
-                            Email = user.Email!,
-                            FirstName = user.FirstName,
-                            LastName = user.LastName,
-                            AvatarUrl = user.AvatarUrl,
-                            Role = UserRole.User
-                        }
-                    });
+                    _logger.LogWarning("User creation failed for {Email}: {Errors}", model.Email, string.Join(", ", errors));
+                    return BadRequest(new { errors });
                 }
 
-                _logger.LogWarning("Registration failed for {Email}: {Errors}", model.Email, string.Join(", ", errors));
-                return BadRequest(new { errors });
+                _logger.LogInformation("User created successfully, retrieving user details: {Email}", model.Email);
+                var user = await _userService.GetUserByEmailAsync(model.Email);
+                if (user == null)
+                {
+                    _logger.LogError("User was created but could not be retrieved: {Email}", model.Email);
+                    return StatusCode(500, new { message = "User was created but could not be retrieved" });
+                }
+
+                _logger.LogInformation("Generating JWT token for user: {Email}", model.Email);
+                var token = await _tokenService.GenerateJwtToken(user);
+                
+                _logger.LogInformation("User registered successfully: {Email}", model.Email);
+                return Ok(new AuthResponse
+                {
+                    Success = true,
+                    Token = token,
+                    User = new UserDto
+                    {
+                        Id = user.Id,
+                        Email = user.Email!,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        AvatarUrl = user.AvatarUrl,
+                        Role = UserRole.User
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during registration for email: {Email}", model.Email);
-                return StatusCode(500, new { message = "An error occurred during registration", error = ex.Message, stackTrace = ex.StackTrace });
+                _logger.LogError(ex, "Error during registration for email: {Email}. Error: {Error}", 
+                    model.Email, ex.ToString());
+                
+                return StatusCode(500, new { 
+                    message = "An error occurred during registration",
+                    error = ex.Message,
+                    details = ex.ToString(),
+                    stackTrace = ex.StackTrace,
+                    innerException = ex.InnerException?.ToString()
+                });
             }
         }
 
@@ -141,7 +153,13 @@ namespace VentyTime.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during login for email: {Email}", model.Email);
-                return StatusCode(500, new { message = "An error occurred during login" });
+                var response = new { 
+                    message = "An error occurred during login", 
+                    error = ex.Message,
+                    details = ex.ToString(),
+                    stackTrace = ex.StackTrace
+                };
+                return StatusCode(500, response);
             }
         }
 
@@ -162,7 +180,13 @@ namespace VentyTime.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during logout");
-                return StatusCode(500, new { message = "An error occurred during logout" });
+                var response = new { 
+                    message = "An error occurred during logout", 
+                    error = ex.Message,
+                    details = ex.ToString(),
+                    stackTrace = ex.StackTrace
+                };
+                return StatusCode(500, response);
             }
         }
 
@@ -201,7 +225,13 @@ namespace VentyTime.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting current user");
-                return StatusCode(500, new { message = "An error occurred while getting user information" });
+                var response = new { 
+                    message = "An error occurred while getting user information", 
+                    error = ex.Message,
+                    details = ex.ToString(),
+                    stackTrace = ex.StackTrace
+                };
+                return StatusCode(500, response);
             }
         }
 
@@ -242,7 +272,13 @@ namespace VentyTime.Server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error refreshing token");
-                return StatusCode(500, new { message = "An error occurred while refreshing token" });
+                var response = new { 
+                    message = "An error occurred while refreshing token", 
+                    error = ex.Message,
+                    details = ex.ToString(),
+                    stackTrace = ex.StackTrace
+                };
+                return StatusCode(500, response);
             }
         }
     }

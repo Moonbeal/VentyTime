@@ -57,15 +57,22 @@ namespace VentyTime.Server.Services
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
-                    var roleResult = await _userManager.AddToRoleAsync(user, UserRole.User.ToString());
+                    // Ensure we have a valid role, defaulting to User if not specified
+                    var selectedRole = !string.IsNullOrEmpty(model.Role) && (model.Role == "User" || model.Role == "Organizer") 
+                        ? model.Role 
+                        : "User";
+
+                    var roleResult = await _userManager.AddToRoleAsync(user, selectedRole);
+                    
                     if (roleResult.Succeeded)
                     {
-                        _logger.LogInformation("Successfully created user {Email} and assigned User role", model.Email);
+                        _logger.LogInformation("Successfully created user {Email} with {Role} role", 
+                            model.Email, selectedRole);
                         return (true, Array.Empty<string>());
                     }
                     
-                    _logger.LogError("Failed to assign User role to {Email}. Errors: {Errors}", 
-                        model.Email, string.Join(", ", roleResult.Errors.Select(e => e.Description)));
+                    _logger.LogError("Failed to assign {Role} role to {Email}. Errors: {Errors}", 
+                        selectedRole, model.Email, string.Join(", ", roleResult.Errors.Select(e => e.Description)));
                     
                     // If role assignment fails, delete the user and return the error
                     await _userManager.DeleteAsync(user);

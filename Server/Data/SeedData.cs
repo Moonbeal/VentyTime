@@ -9,8 +9,7 @@ namespace VentyTime.Server.Data
         public static async Task EnsureRolesAsync(RoleManager<IdentityRole> roleManager)
         {
             // Get all enum values from UserRole
-            var roles = Enum.GetNames(typeof(UserRole))
-                           .Where(r => r != "None"); // Skip the None value
+            var roles = Enum.GetNames(typeof(UserRole));
 
             foreach (var role in roles)
             {
