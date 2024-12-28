@@ -24,17 +24,20 @@ namespace VentyTime.Server.Services
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<UserService> _logger;
 
         public UserService(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
+            RoleManager<IdentityRole> roleManager,
             ApplicationDbContext context,
             ILogger<UserService> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _roleManager = roleManager;
             _context = context;
             _logger = logger;
         }
@@ -97,37 +100,78 @@ namespace VentyTime.Server.Services
 
         public async Task<bool> ValidateUserAsync(LoginRequest model)
         {
-            var user = await _userManager.FindByEmailAsync(model.Email);
-            if (user == null || !user.IsActive)
+            try
             {
-                _logger.LogWarning("Login failed - user not found or inactive: {Email}", model.Email);
-                return false;
-            }
+                _logger.LogInformation("Validating user {Email} with role {Role}", model.Email, model.SelectedRole);
 
-            // First check if the password is correct
-            var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, true);
-            if (!result.Succeeded)
-            {
-                _logger.LogWarning("Login failed - invalid password for user: {Email}", model.Email);
-                return false;
-            }
+                var user = await _userManager.FindByEmailAsync(model.Email);
+                if (user == null || !user.IsActive)
+                {
+                    _logger.LogWarning("User {Email} not found or inactive", model.Email);
+                    return false;
+                }
 
-            // Then check if the user has the selected role
-            var hasRole = await _userManager.IsInRoleAsync(user, model.SelectedRole.ToString());
-            if (!hasRole)
-            {
-                _logger.LogWarning("Login failed - user {Email} does not have the selected role: {Role}", 
+                var result = await _signInManager.CheckPasswordSignInAsync(user, model.Password, false);
+                if (!result.Succeeded)
+                {
+                    _logger.LogWarning("Password validation failed for user {Email}", model.Email);
+                    return false;
+                }
+
+                // Check if the role exists
+                var roleName = model.SelectedRole.ToString();
+                var roleExists = await _roleManager.RoleExistsAsync(roleName);
+                if (!roleExists)
+                {
+                    _logger.LogError("Role {Role} does not exist", roleName);
+                    return false;
+                }
+
+                // Get current user roles
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("Current roles for user {Email}: {Roles}", model.Email, string.Join(", ", currentRoles));
+                
+                // Remove any existing roles
+                if (currentRoles.Any())
+                {
+                    _logger.LogInformation("Removing existing roles for user {Email}: {Roles}", 
+                        model.Email, string.Join(", ", currentRoles));
+                    var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                    if (!removeResult.Succeeded)
+                    {
+                        _logger.LogError("Failed to remove existing roles for user {Email}. Errors: {Errors}",
+                            model.Email, string.Join(", ", removeResult.Errors.Select(e => e.Description)));
+                        return false;
+                    }
+                }
+
+                // Add the selected role
+                _logger.LogInformation("Adding role {Role} to user {Email}", roleName, model.Email);
+                var addRoleResult = await _userManager.AddToRoleAsync(user, roleName);
+                if (!addRoleResult.Succeeded)
+                {
+                    _logger.LogError("Failed to add role {Role} to user {Email}. Errors: {Errors}",
+                        roleName, model.Email, string.Join(", ", addRoleResult.Errors.Select(e => e.Description)));
+                    return false;
+                }
+
+                // Verify that the role was added successfully
+                var updatedRoles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("Updated roles for user {Email}: {Roles}", model.Email, string.Join(", ", updatedRoles));
+
+                // Update last login timestamp
+                user.LastLoginAt = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+
+                _logger.LogInformation("User {Email} validated successfully with role {Role}", 
                     model.Email, model.SelectedRole);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating user {Email}", model.Email);
                 return false;
             }
-
-            // Update last login timestamp
-            user.LastLoginAt = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
-
-            _logger.LogInformation("User {Email} logged in successfully with role {Role}", 
-                model.Email, model.SelectedRole);
-            return true;
         }
 
         public async Task<IList<string>> GetUserRolesAsync(ApplicationUser user)

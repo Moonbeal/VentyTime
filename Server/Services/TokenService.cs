@@ -11,60 +11,61 @@ namespace VentyTime.Server.Services
 {
     public interface ITokenService
     {
-        Task<string> GenerateJwtToken(ApplicationUser user);
+        string GenerateJwtToken(ApplicationUser user, UserRole selectedRole);
         Task<ClaimsPrincipal> ValidateToken(string token);
         bool IsTokenExpired(string token);
     }
 
     public class TokenService : ITokenService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly ILogger<TokenService> _logger;
 
         public TokenService(
-            UserManager<ApplicationUser> userManager,
             IConfiguration configuration,
             ILogger<TokenService> logger)
         {
-            _userManager = userManager;
             _configuration = configuration;
             _logger = logger;
         }
 
-        public async Task<string> GenerateJwtToken(ApplicationUser user)
+        public string GenerateJwtToken(ApplicationUser user, UserRole selectedRole)
         {
             try
             {
+                _logger.LogInformation("Generating JWT token for user {Email} with role {Role}", 
+                    user.Email, selectedRole);
+
                 var claims = new List<Claim>
                 {
                     new(JwtRegisteredClaimNames.Sub, user.Email!),
                     new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                     new(ClaimTypes.NameIdentifier, user.Id),
-                    new(ClaimTypes.Name, user.UserName!),
+                    new(ClaimTypes.Name, user.Email!),
                     new(ClaimTypes.Email, user.Email!),
                     new("firstName", user.FirstName),
-                    new("lastName", user.LastName)
+                    new("lastName", user.LastName),
+                    new(ClaimTypes.Role, selectedRole.ToString())
                 };
 
-                var roles = await _userManager.GetRolesAsync(user);
-                foreach (var role in roles)
-                {
-                    claims.Add(new Claim(ClaimTypes.Role, role));
-                }
+                _logger.LogInformation("Claims for user {Email}: {Claims}", 
+                    user.Email, string.Join(", ", claims.Select(c => $"{c.Type}: {c.Value}")));
 
                 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                    _configuration["JwtSettings:Key"] ?? throw new InvalidOperationException("JWT Key not configured")));
+                    _configuration["JwtSettings:SecretKey"] ?? throw new InvalidOperationException("JWT Key not configured")));
                 var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
                 var token = new JwtSecurityToken(
                     issuer: _configuration["JwtSettings:Issuer"],
                     audience: _configuration["JwtSettings:Audience"],
                     claims: claims,
-                    expires: DateTime.UtcNow.AddHours(8),
+                    expires: DateTime.UtcNow.AddDays(14),
                     signingCredentials: creds);
 
-                return new JwtSecurityTokenHandler().WriteToken(token);
+                var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+                _logger.LogInformation("JWT token generated successfully for user {Email}", user.Email);
+                return tokenString;
             }
             catch (Exception ex)
             {
@@ -78,7 +79,7 @@ namespace VentyTime.Server.Services
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var key = Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!);
+                var key = Encoding.UTF8.GetBytes(_configuration["JwtSettings:SecretKey"]!);
 
                 var validationParameters = new TokenValidationParameters
                 {

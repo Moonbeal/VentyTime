@@ -75,7 +75,31 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
         ValidAudience = builder.Configuration["JwtSettings:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.Zero,
+        RoleClaimType = System.Security.Claims.ClaimTypes.Role
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            var claims = context.Principal?.Claims.Select(c => $"{c.Type}: {c.Value}");
+            logger.LogInformation("Token validated. Claims: {Claims}", string.Join(", ", claims ?? Array.Empty<string>()));
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(context.Exception, "Authentication failed");
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("Authentication challenge. Error: {Error}", context.Error);
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -88,6 +112,15 @@ builder.Services.AddAuthorization(options =>
 
     // This is important - we want to allow anonymous access by default
     options.FallbackPolicy = null;
+
+    options.AddPolicy("RequireAdminRole", policy =>
+        policy.RequireRole("Admin"));
+
+    options.AddPolicy("RequireOrganizerRole", policy =>
+        policy.RequireRole("Admin", "Organizer"));
+
+    options.AddPolicy("RequireUserRole", policy =>
+        policy.RequireRole("Admin", "Organizer", "User"));
 });
 
 // Configure CORS
@@ -156,6 +189,18 @@ using (var scope = app.Services.CreateScope())
 
         logger.LogInformation("Seeding events and test users...");
         await SeedData.SeedEventsAsync(context, userManager);
+
+        // Ensure roles exist
+        var roles = new[] { "Admin", "Organizer", "User" };
+        foreach (var role in roles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                logger.LogInformation("Creating role: {Role}", role);
+                await roleManager.CreateAsync(new IdentityRole(role));
+            }
+        }
+
         logger.LogInformation("Database initialization completed successfully.");
     }
     catch (Exception ex)

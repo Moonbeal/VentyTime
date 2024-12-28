@@ -74,6 +74,15 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
     {
         var handler = new JwtSecurityTokenHandler();
         var token = handler.ReadJwtToken(jwt);
-        return token.Claims;
+        var claims = token.Claims.ToList();
+
+        // Log all claims for debugging
+        Console.WriteLine("JWT Claims:");
+        foreach (var claim in claims)
+        {
+            Console.WriteLine($"Type: {claim.Type}, Value: {claim.Value}");
+        }
+
+        return claims;
     }
 }

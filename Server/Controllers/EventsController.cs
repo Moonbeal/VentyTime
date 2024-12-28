@@ -30,6 +30,10 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
+                _logger.LogInformation("Getting events. User authenticated: {IsAuthenticated}, User role: {Role}",
+                    User.Identity?.IsAuthenticated,
+                    User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value);
+
                 var (events, totalCount) = await _eventService.GetEventsAsync();
                 return Ok(events);
             }
@@ -114,25 +118,29 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPost]
-        [Authorize]
-        public async Task<ActionResult<Event>> CreateEvent([FromBody] Event eventItem)
+        [Authorize(Policy = "RequireOrganizerRole")]
+        public async Task<ActionResult<Event>> CreateEvent([FromBody] Event eventModel)
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized(new { message = "User not authenticated" });
-                }
-
-                eventItem.CreatorId = userId;
+                _logger.LogInformation("Creating event. User authenticated: {IsAuthenticated}, User role: {Role}",
+                    User.Identity?.IsAuthenticated,
+                    User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value);
 
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
                 }
 
-                var createdEvent = await _eventService.CreateEventAsync(eventItem, userId);
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogError("User ID not found in claims");
+                    return BadRequest(new { message = "User ID not found" });
+                }
+
+                eventModel.OrganizerId = userId;
+                var createdEvent = await _eventService.CreateEventAsync(eventModel, userId);
                 return CreatedAtAction(nameof(GetEvent), new { id = createdEvent.Id }, createdEvent);
             }
             catch (Exception ex)
@@ -143,7 +151,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize]
+        [Authorize(Roles = "Admin,Organizer")]
         public async Task<IActionResult> UpdateEvent(int id, [FromBody] Event @event)
         {
             try
@@ -186,7 +194,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize]
+        [Authorize(Roles = "Admin,Organizer")]
         public async Task<IActionResult> DeleteEvent(int id)
         {
             try

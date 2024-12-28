@@ -13,15 +13,18 @@ namespace VentyTime.Server.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly ITokenService _tokenService;
         private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             IUserService userService,
+            UserManager<ApplicationUser> userManager,
             ITokenService tokenService,
             ILogger<AuthController> logger)
         {
             _userService = userService;
+            _userManager = userManager;
             _tokenService = tokenService;
             _logger = logger;
         }
@@ -67,15 +70,11 @@ namespace VentyTime.Server.Controllers
                 }
 
                 _logger.LogInformation("Generating JWT token for user: {Email}", model.Email);
-                var token = await _tokenService.GenerateJwtToken(user);
+                var defaultRole = UserRole.User; // При реєстрації даємо базову роль User
+                _logger.LogInformation("Generating token for user {Email} with role {Role}", 
+                    model.Email, defaultRole);
+                var token = _tokenService.GenerateJwtToken(user, defaultRole);
                 
-                // Get user roles
-                var roles = await _userService.GetUserRolesAsync(user);
-                var userRole = roles.Contains("Organizer") ? UserRole.Organizer :
-                             roles.Contains("Admin") ? UserRole.Admin :
-                             roles.Contains("Participant") ? UserRole.Participant :
-                             UserRole.User;
-
                 _logger.LogInformation("User registered successfully: {Email}", model.Email);
                 return Ok(new AuthResponse
                 {
@@ -88,7 +87,7 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = userRole
+                        Role = defaultRole
                     }
                 });
             }
@@ -138,17 +137,17 @@ namespace VentyTime.Server.Controllers
                     return StatusCode(500, new { message = "An error occurred during login" });
                 }
 
-                var token = await _tokenService.GenerateJwtToken(user);
-                
-                // Get user roles
-                var roles = await _userService.GetUserRolesAsync(user);
-                var userRole = roles.Contains("Organizer") ? UserRole.Organizer :
-                             roles.Contains("Admin") ? UserRole.Admin :
-                             roles.Contains("Participant") ? UserRole.Participant :
-                             UserRole.User;
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("Current roles for user {Email}: {Roles}", 
+                    model.Email, string.Join(", ", currentRoles));
+
+                _logger.LogInformation("Generating token for user {Email} with role {Role}", 
+                    model.Email, model.SelectedRole);
+
+                var token = _tokenService.GenerateJwtToken(user, model.SelectedRole);
 
                 _logger.LogInformation("User logged in successfully: {Email} with role {Role}", 
-                    model.Email, userRole);
+                    model.Email, model.SelectedRole);
 
                 return Ok(new AuthResponse
                 {
@@ -161,20 +160,14 @@ namespace VentyTime.Server.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         AvatarUrl = user.AvatarUrl,
-                        Role = userRole
+                        Role = model.SelectedRole
                     }
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during login for email: {Email}", model.Email);
-                var response = new { 
-                    message = "An error occurred during login", 
-                    error = ex.Message,
-                    details = ex.ToString(),
-                    stackTrace = ex.StackTrace
-                };
-                return StatusCode(500, response);
+                return StatusCode(500, new { message = "An error occurred during login" });
             }
         }
 
@@ -223,7 +216,7 @@ namespace VentyTime.Server.Controllers
                     return NotFound(new { message = "User not found" });
                 }
 
-                var roles = await _userService.GetUserRolesAsync(user);
+                var roles = await _userManager.GetRolesAsync(user);
                 var role = roles.FirstOrDefault();
                 var userRole = Enum.TryParse<UserRole>(role, out var parsedRole) ? parsedRole : UserRole.None;
 
@@ -281,7 +274,15 @@ namespace VentyTime.Server.Controllers
                     return NotFound(new { message = "User not found" });
                 }
 
-                var newToken = await _tokenService.GenerateJwtToken(user);
+                var roles = await _userManager.GetRolesAsync(user);
+                var currentRole = roles.Contains("Organizer") ? UserRole.Organizer :
+                             roles.Contains("Admin") ? UserRole.Admin :
+                             roles.Contains("Participant") ? UserRole.Participant :
+                             UserRole.User;
+
+                _logger.LogInformation("Generating token for user {Email} with role {Role}", 
+                    email, currentRole);
+                var newToken = _tokenService.GenerateJwtToken(user, currentRole);
                 return Ok(new { token = newToken });
             }
             catch (Exception ex)
