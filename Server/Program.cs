@@ -219,7 +219,28 @@ if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
     app.UseDeveloperExceptionPage();
-    
+
+    // Configure development-specific middleware
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
+        {
+            context.Response.ContentType = "application/javascript";
+            await context.Response.WriteAsync(@"
+                (function() {
+                    const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
+                    eventSource.onmessage = function(event) {
+                        if (event.data === 'reload') {
+                            window.location.reload();
+                        }
+                    };
+                })();
+            ");
+            return;
+        }
+        await next();
+    });
+
     // Add detailed error handling in development
     app.Use(async (context, next) =>
     {
@@ -232,14 +253,21 @@ if (app.Environment.IsDevelopment())
             var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
             logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
             
-            var message = "An error occurred while processing your request";
-            var error = ex.Message;
-            var stackTrace = ex.StackTrace;
-            
-            context.Response.StatusCode = 500;
-            context.Response.ContentType = "application/json";
-            
-            await context.Response.WriteAsJsonAsync(new { message, error, stackTrace });
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 500;
+                context.Response.ContentType = "application/json";
+                
+                var error = new
+                {
+                    message = "An error occurred while processing your request",
+                    error = ex.Message,
+                    stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
+                    innerError = ex.InnerException?.Message
+                };
+                
+                await context.Response.WriteAsJsonAsync(error);
+            }
         }
     });
 }
@@ -251,6 +279,7 @@ else
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 
 // Configure CORS
 app.UseCors(policy =>
@@ -259,41 +288,25 @@ app.UseCors(policy =>
           .AllowAnyHeader()
           .AllowCredentials());
 
-// Configure static files with default configuration first
-app.UseStaticFiles();
-
 // Ensure wwwroot exists
 if (!Directory.Exists(builder.Environment.WebRootPath))
 {
     Directory.CreateDirectory(builder.Environment.WebRootPath);
 }
 
-// Then configure uploads with a specific path
-var uploadsPath = Path.Combine(builder.Environment.WebRootPath, "uploads");
-var thumbnailsPath = Path.Combine(uploadsPath, "thumbnails");
-
-if (!Directory.Exists(uploadsPath))
+// Create uploads directory if it doesn't exist
+var uploadsDirectory = Path.Combine(builder.Environment.WebRootPath, "uploads");
+if (!Directory.Exists(uploadsDirectory))
 {
-    Directory.CreateDirectory(uploadsPath);
-}
-if (!Directory.Exists(thumbnailsPath))
-{
-    Directory.CreateDirectory(thumbnailsPath);
+    Directory.CreateDirectory(uploadsDirectory);
 }
 
-// Configure static files for uploads
-app.UseStaticFiles(new StaticFileOptions
+// Create thumbnails directory if it doesn't exist
+var thumbnailsDirectory = Path.Combine(builder.Environment.WebRootPath, "thumbnails");
+if (!Directory.Exists(thumbnailsDirectory))
 {
-    FileProvider = new PhysicalFileProvider(uploadsPath),
-    RequestPath = "/uploads"
-});
-
-// Configure static files for thumbnails
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(thumbnailsPath),
-    RequestPath = "/uploads/thumbnails"
-});
+    Directory.CreateDirectory(thumbnailsDirectory);
+}
 
 app.UseRouting();
 app.UseAuthentication();

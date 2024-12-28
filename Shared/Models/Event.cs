@@ -50,49 +50,59 @@ namespace VentyTime.Shared.Models
         public string Description { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Start date is required")]
+        [DataType(DataType.DateTime)]
         public DateTime StartDate { get; set; }
 
         [Required(ErrorMessage = "End date is required")]
+        [DataType(DataType.DateTime)]
         public DateTime EndDate { get; set; }
 
         [Required(ErrorMessage = "Start time is required")]
+        [DataType(DataType.Time)]
         public TimeSpan StartTime { get; set; }
 
         [Required(ErrorMessage = "Location is required")]
-        [StringLength(200)]
+        [StringLength(200, ErrorMessage = "Location must be between 3 and 200 characters", MinimumLength = 3)]
         public string Location { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Maximum attendees is required")]
-        [Range(0, int.MaxValue, ErrorMessage = "Maximum attendees must be 0 or greater")]
+        [Range(1, int.MaxValue, ErrorMessage = "Maximum attendees must be greater than 0")]
         public int MaxAttendees { get; set; }
 
+        [Range(0, int.MaxValue, ErrorMessage = "Current capacity must be 0 or greater")]
         public int CurrentCapacity { get; set; }
 
         [NotMapped]
         public int AvailableSpots => MaxAttendees - CurrentCapacity;
 
         [Required(ErrorMessage = "Category is required")]
-        [StringLength(50)]
+        [StringLength(50, ErrorMessage = "Category must be between 3 and 50 characters", MinimumLength = 3)]
         public string Category { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Event type is required")]
         public EventType Type { get; set; } = EventType.Other;
 
         [Range(0, double.MaxValue, ErrorMessage = "Price must be 0 or greater")]
+        [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
 
+        [StringLength(2000)]
         public string? ImageUrl { get; set; }
 
         public bool IsActive { get; set; } = true;
 
         public bool IsFeatured { get; set; }
 
+        [DataType(DataType.DateTime)]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        [DataType(DataType.DateTime)]
         public DateTime? UpdatedAt { get; set; }
 
+        [Required(ErrorMessage = "Creator ID is required")]
         public string CreatorId { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "Organizer ID is required")]
         public string OrganizerId { get; set; } = string.Empty;
 
         // Navigation properties
@@ -103,10 +113,10 @@ namespace VentyTime.Shared.Models
         public virtual ApplicationUser? Organizer { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
+        public virtual ICollection<Registration>? Registrations { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+        public virtual ICollection<Comment>? Comments { get; set; }
 
         // Computed properties
         public bool IsFull => MaxAttendees > 0 && CurrentParticipants >= MaxAttendees;

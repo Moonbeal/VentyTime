@@ -9,8 +9,11 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_DETAILED_ERRORS": "1",
-        "ASPNETCORE_URLS": "https://localhost:7242"
-      }
+        "ASPNETCORE_URLS": "https://localhost:7242",
+        "ASPNETCORE_HOSTINGSTARTUPASSEMBLIES": "Microsoft.AspNetCore.Watch.BrowserRefresh"
+      },
+      "hotReloadEnabled": true,
+      "hotReloadProfile": "aspnetcore"
     }
   }
 }

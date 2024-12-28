@@ -142,6 +142,50 @@ namespace VentyTime.Server.Controllers
                 }
 
                 _logger.LogInformation("Creating event with data: {@EventModel}", eventModel);
+
+                // Validate required fields
+                if (string.IsNullOrEmpty(eventModel.Title))
+                {
+                    _logger.LogWarning("Event title is required");
+                    return BadRequest("Event title is required");
+                }
+
+                if (string.IsNullOrEmpty(eventModel.Description))
+                {
+                    _logger.LogWarning("Event description is required");
+                    return BadRequest("Event description is required");
+                }
+
+                if (string.IsNullOrEmpty(eventModel.Location))
+                {
+                    _logger.LogWarning("Event location is required");
+                    return BadRequest("Event location is required");
+                }
+
+                if (string.IsNullOrEmpty(eventModel.Category))
+                {
+                    _logger.LogWarning("Event category is required");
+                    return BadRequest("Event category is required");
+                }
+
+                if (eventModel.StartDate == default)
+                {
+                    _logger.LogWarning("Event start date is required");
+                    return BadRequest("Event start date is required");
+                }
+
+                if (eventModel.EndDate == default)
+                {
+                    _logger.LogWarning("Event end date is required");
+                    return BadRequest("Event end date is required");
+                }
+
+                if (eventModel.MaxAttendees <= 0)
+                {
+                    _logger.LogWarning("Event max attendees must be greater than 0");
+                    return BadRequest("Event max attendees must be greater than 0");
+                }
+
                 var createdEvent = await _eventService.CreateEventAsync(eventModel, userId);
                 _logger.LogInformation("Event created successfully: {@CreatedEvent}", createdEvent);
 
@@ -149,8 +193,18 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating event: {Error}", ex.ToString());
-                return StatusCode(500, new { message = "An error occurred while creating the event", error = ex.Message });
+                _logger.LogError(ex, "Error creating event. Message: {Error}, Stack Trace: {StackTrace}, Inner Exception: {InnerException}",
+                    ex.Message,
+                    ex.StackTrace,
+                    ex.InnerException?.Message);
+
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while creating the event",
+                    error = ex.Message,
+                    innerError = ex.InnerException?.Message,
+                    stackTrace = ex.StackTrace
+                });
             }
         }
 

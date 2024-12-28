@@ -169,21 +169,54 @@ namespace VentyTime.Server.Services
 
             try
             {
-                _logger.LogInformation("Creating event by user {UserIdOrEmail}", userIdOrEmail);
+                _logger.LogInformation("Creating event by user {UserIdOrEmail} with date {StartDate}", userIdOrEmail, @event.StartDate);
 
-                var user = await _userManager.FindByIdAsync(userIdOrEmail);
-                user ??= await _userManager.FindByEmailAsync(userIdOrEmail);
-                
-                if (user is null)
+                // Validate required fields
+                if (string.IsNullOrEmpty(@event.Title))
+                    throw new ArgumentException("Event title is required");
+                if (string.IsNullOrEmpty(@event.Description))
+                    throw new ArgumentException("Event description is required");
+                if (string.IsNullOrEmpty(@event.Location))
+                    throw new ArgumentException("Event location is required");
+                if (string.IsNullOrEmpty(@event.Category))
+                    throw new ArgumentException("Event category is required");
+                if (@event.StartDate == default)
+                    throw new ArgumentException("Event start date is required");
+                if (@event.EndDate == default)
+                    throw new ArgumentException("Event end date is required");
+                if (@event.MaxAttendees <= 0)
+                    throw new ArgumentException("Event max attendees must be greater than 0");
+
+                // Convert dates to UTC
+                if (@event.StartDate.Kind != DateTimeKind.Utc)
                 {
-                    throw new KeyNotFoundException($"User with ID/Email {userIdOrEmail} not found");
+                    _logger.LogInformation("Converting StartDate from {Kind} to UTC", @event.StartDate.Kind);
+                    @event.StartDate = @event.StartDate.ToUniversalTime();
                 }
 
-                @event.OrganizerId = user.Id; // Use the actual user ID
-                @event.CreatorId = user.Id; // Set the creator ID as well
+                if (@event.EndDate.Kind != DateTimeKind.Utc)
+                {
+                    _logger.LogInformation("Converting EndDate from {Kind} to UTC", @event.EndDate.Kind);
+                    @event.EndDate = @event.EndDate.ToUniversalTime();
+                }
+
+                // Set StartTime from StartDate
+                @event.StartTime = @event.StartDate.TimeOfDay;
+
+                // Load and set the creator/organizer
+                var user = await _userManager.FindByIdAsync(userIdOrEmail) ?? 
+                    await _userManager.FindByEmailAsync(userIdOrEmail) ??
+                    throw new InvalidOperationException("User not found");
+
+                @event.CreatorId = user.Id;
+                @event.OrganizerId = user.Id;
+                @event.Creator = user;
+                @event.Organizer = user;
+
                 @event.CreatedAt = DateTime.UtcNow;
                 @event.UpdatedAt = null;
                 @event.IsActive = true;
+                @event.CurrentCapacity = 0;
 
                 // Ensure EndDate is at least StartDate plus one hour if not set
                 if (@event.EndDate <= @event.StartDate)
@@ -191,11 +224,39 @@ namespace VentyTime.Server.Services
                     @event.EndDate = @event.StartDate.Add(TimeSpan.FromHours(1));
                 }
 
+                _logger.LogInformation("Saving event with UTC dates - Start: {StartDate}, End: {EndDate}, StartTime: {StartTime}", 
+                    @event.StartDate, @event.EndDate, @event.StartTime);
+
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
                     _context.Events.Add(@event);
-                    await _context.SaveChangesAsync();
+                    try
+                    {
+                        await _context.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException dbEx)
+                    {
+                        _logger.LogError(dbEx, "Database error details: {Message}", dbEx.Message);
+                        if (dbEx.InnerException != null)
+                        {
+                            _logger.LogError("Inner exception details: {Message}", dbEx.InnerException.Message);
+                            _logger.LogError("Inner exception stack trace: {StackTrace}", dbEx.InnerException.StackTrace);
+                        }
+
+                        var entries = _context.ChangeTracker.Entries()
+                            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+                            .Select(e => new 
+                            { 
+                                Entity = e.Entity.GetType().Name,
+                                e.State,
+                                Properties = e.CurrentValues.Properties
+                                    .Select(p => new { p.Name, Value = e.CurrentValues[p] })
+                            });
+
+                        _logger.LogError("Change tracker entries: {@Entries}", entries);
+                        throw;
+                    }
                     await transaction.CommitAsync();
 
                     InvalidateEventCache();
@@ -206,13 +267,22 @@ namespace VentyTime.Server.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error saving event to database");
+                    _logger.LogError(ex, "Error saving event to database: {Error}", ex.Message);
+                    if (ex.InnerException != null)
+                    {
+                        _logger.LogError("Inner exception: {Error}", ex.InnerException.Message);
+                        _logger.LogError("Inner exception stack trace: {StackTrace}", ex.InnerException.StackTrace);
+                    }
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating event");
+                _logger.LogError(ex, "Error creating event: {Error}", ex.Message);
+                if (ex.InnerException != null)
+                {
+                    _logger.LogError("Inner exception: {Error}", ex.InnerException.Message);
+                }
                 throw;
             }
         }
@@ -455,7 +525,7 @@ namespace VentyTime.Server.Services
         {
             // Load event with active registrations
             var @event = await _context.Events
-                .Include(e => e.Registrations.Where(r => r.Status != RegistrationStatus.Cancelled))
+                .Include(e => e.Registrations)
                 .FirstOrDefaultAsync(e => e.Id == eventId);
 
             if (@event == null)
@@ -465,62 +535,41 @@ namespace VentyTime.Server.Services
             }
 
             // Check if event is full
-            var currentRegistrations = @event.Registrations?.Count ?? 0;
-            if (currentRegistrations >= @event.MaxAttendees)
+            var activeRegistrations = @event.Registrations?
+                .Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+
+            if (activeRegistrations >= @event.MaxAttendees)
             {
-                _logger.LogWarning("Event {EventId} is full. Max attendees: {MaxAttendees}, Current registrations: {CurrentRegistrations}", 
-                    eventId, @event.MaxAttendees, currentRegistrations);
+                _logger.LogWarning("Event {EventId} is full. Cannot register user {UserId}", eventId, userId);
                 throw new InvalidOperationException("Event is full");
             }
 
-            // Check for existing registration
-            var existingRegistration = await _context.Registrations
-                .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+            // Check if user is already registered
+            var existingRegistration = @event.Registrations?
+                .FirstOrDefault(r => r.UserId == userId && r.Status != RegistrationStatus.Cancelled);
 
-            var utcNow = DateTime.UtcNow;
-
-            // Check if there's already an active registration
             if (existingRegistration != null)
             {
-                if (existingRegistration.Status == RegistrationStatus.Confirmed)
-                {
-                    _logger.LogWarning("User {UserId} is already registered for event {EventId}", userId, eventId);
-                    throw new InvalidOperationException("You are already registered for this event.");
-                }
-
-                // Reactivate cancelled registration
-                if (existingRegistration.Status == RegistrationStatus.Cancelled)
-                {
-                    existingRegistration.Status = RegistrationStatus.Confirmed;
-                    existingRegistration.UpdatedAt = utcNow;
-                    _context.Entry(existingRegistration).State = EntityState.Modified;
-                }
-            }
-            else
-            {
-                // Create new registration
-                existingRegistration = new Registration
-                {
-                    UserId = userId,
-                    EventId = eventId,
-                    Status = RegistrationStatus.Confirmed,
-                    CreatedAt = utcNow,
-                    UpdatedAt = utcNow
-                };
-                await _context.Registrations.AddAsync(existingRegistration);
+                _logger.LogWarning("User {UserId} is already registered for event {EventId}", userId, eventId);
+                throw new InvalidOperationException("You are already registered for this event");
             }
 
             try
             {
-                // Update event capacity
-                @event.CurrentCapacity = currentRegistrations + 1;
-                _context.Entry(@event).State = EntityState.Modified;
+                var registration = new Registration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    Status = RegistrationStatus.Confirmed,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-                // Save changes
+                _context.Registrations.Add(registration);
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
-                return existingRegistration;
+                return registration;
             }
             catch (DbUpdateException ex)
             {
@@ -538,9 +587,25 @@ namespace VentyTime.Server.Services
         {
             return await _context.Events
                 .Include(e => e.Organizer)
-                .Where(e => e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
+                .Include(e => e.Registrations)
+                .Where(e => e.Registrations != null && e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
                 .OrderBy(e => e.StartDate)
                 .ToListAsync();
+        }
+
+        public async Task<bool> HasAvailableSpacesAsync(int eventId)
+        {
+            var eventItem = await _context.Events
+                .Include(e => e.Registrations)
+                .FirstOrDefaultAsync(e => e.Id == eventId);
+
+            if (eventItem == null || eventItem.Registrations == null)
+                return false;
+
+            var activeRegistrations = eventItem.Registrations
+                .Count(r => r.Status == RegistrationStatus.Confirmed);
+
+            return activeRegistrations < eventItem.MaxAttendees;
         }
 
         private void InvalidateEventCache()

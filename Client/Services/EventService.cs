@@ -1,10 +1,12 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using VentyTime.Shared.Models;
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace VentyTime.Client.Services
 {
@@ -12,11 +14,16 @@ namespace VentyTime.Client.Services
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILocalStorageService _localStorage;
+        private readonly AuthenticationStateProvider _authStateProvider;
 
-        public EventService(IHttpClientFactory httpClientFactory, ILocalStorageService localStorage)
+        public EventService(
+            IHttpClientFactory httpClientFactory, 
+            ILocalStorageService localStorage,
+            AuthenticationStateProvider authStateProvider)
         {
             _httpClientFactory = httpClientFactory;
             _localStorage = localStorage;
+            _authStateProvider = authStateProvider;
         }
 
         private async Task<HttpClient> CreateClientAsync()
@@ -69,16 +76,43 @@ namespace VentyTime.Client.Services
                 Console.WriteLine($"Creating event with date: {eventItem.StartDate}");
                 var client = await CreateClientAsync();
 
+                // Get the current user's ID
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User ID not found. Please make sure you are logged in.");
+                }
+
+                // Set the creator and organizer IDs
+                eventItem.CreatorId = userId;
+                eventItem.OrganizerId = userId;
+
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
+
+                // Convert dates to UTC before sending
+                eventItem.StartDate = DateTime.SpecifyKind(eventItem.StartDate, DateTimeKind.Local).ToUniversalTime();
+                eventItem.EndDate = DateTime.SpecifyKind(eventItem.EndDate, DateTimeKind.Local).ToUniversalTime();
+                eventItem.StartTime = eventItem.StartDate.TimeOfDay;
+
+                Console.WriteLine($"Sending event with UTC dates - Start: {eventItem.StartDate}, End: {eventItem.EndDate}");
 
                 using var request = new HttpRequestMessage(HttpMethod.Post, "api/events");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
                 var response = await client.SendAsync(request);
-                response.EnsureSuccessStatusCode();
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Server error: {errorContent}");
+                    throw new HttpRequestException($"Server error: {errorContent}", null, response.StatusCode);
+                }
 
                 var createdEvent = await response.Content.ReadFromJsonAsync<Event>();
                 return createdEvent ?? throw new Exception("Created event is null");

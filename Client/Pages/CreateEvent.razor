@@ -6,6 +6,7 @@
 @using System.Net.Http
 @using System.Net.Http.Headers
 @using Microsoft.AspNetCore.Components.Forms
+@using VentyTime.Client.Extensions
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
@@ -211,16 +212,20 @@
     {
         StartDate = DateTime.Now.Date.AddDays(1).AddHours(12),
         EndDate = DateTime.Now.Date.AddDays(1).AddHours(13),
+        StartTime = TimeSpan.FromHours(12), // Set default start time
+        Type = EventType.Other,
         Category = EventCategories.Technology,
-        Type = EventType.Conference,
+        MaxAttendees = 50,
         Price = 0,
-        MaxAttendees = 100
+        Location = string.Empty,
+        IsActive = true,
+        CurrentCapacity = 0
     };
 
     private MudForm? form;
     private bool isValid;
-    private bool processing;
-    private IBrowserFile? uploadedFile;
+    private bool isLoading;
+    private IBrowserFile? selectedFile;
 
     private DateTime? startDate;
     private TimeSpan? startTime;
@@ -257,8 +262,8 @@
                 return;
             }
 
-            uploadedFile = file;
-            processing = true;
+            selectedFile = file;
+            isLoading = true;
             StateHasChanged();
 
             try
@@ -277,13 +282,13 @@
             }
             finally
             {
-                processing = false;
+                isLoading = false;
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            processing = false;
+            isLoading = false;
             Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
             StateHasChanged();
         }
@@ -297,7 +302,7 @@
     private void ClearImage()
     {
         eventModel.ImageUrl = null;
-        uploadedFile = null;
+        selectedFile = null;
         StateHasChanged();
     }
 
@@ -336,7 +341,7 @@
 
         try
         {
-            processing = true;
+            isLoading = true;
             await form.Validate();
 
             if (form.IsValid)
@@ -351,12 +356,19 @@
                     return;
                 }
 
+                eventModel.CreatorId = userId;
                 eventModel.OrganizerId = userId;
+
                 try 
                 {
                     await EventService.CreateEventAsync(eventModel);
                     Snackbar.Add("Event created successfully!", Severity.Success);
                     NavigationManager.NavigateTo("/events");
+                }
+                catch (HttpRequestException ex)
+                {
+                    var errorMessage = await ex.GetResponseBodyAsync();
+                    Snackbar.Add($"Failed to create event: {errorMessage}", Severity.Error);
                 }
                 catch (Exception ex)
                 {
@@ -370,7 +382,7 @@
         }
         finally
         {
-            processing = false;
+            isLoading = false;
         }
     }
 

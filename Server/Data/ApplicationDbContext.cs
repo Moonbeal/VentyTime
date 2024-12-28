@@ -33,6 +33,11 @@ namespace VentyTime.Server.Data
             {
                 entity.HasKey(e => e.Id);
 
+                entity.HasOne(e => e.Creator)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatorId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasOne(e => e.Organizer)
                     .WithMany(u => u.OrganizedEvents)
                     .HasForeignKey(e => e.OrganizerId)
@@ -60,6 +65,15 @@ namespace VentyTime.Server.Data
                         v => v,
                         v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
 
+                entity.Property(e => e.EndDate)
+                    .IsRequired()
+                    .HasConversion(
+                        v => v,
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+                entity.Property(e => e.StartTime)
+                    .IsRequired();
+
                 entity.Property(e => e.Price)
                     .HasPrecision(18, 2)
                     .IsRequired();
@@ -67,24 +81,27 @@ namespace VentyTime.Server.Data
                 entity.Property(e => e.MaxAttendees)
                     .IsRequired();
 
+                entity.Property(e => e.CurrentCapacity)
+                    .IsRequired()
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.Type)
+                    .IsRequired()
+                    .HasConversion<string>();
+
                 entity.Property(e => e.ImageUrl)
                     .HasMaxLength(2000);
 
                 entity.Property(e => e.OrganizerId)
                     .IsRequired();
+
+                entity.Property(e => e.CreatorId)
+                    .IsRequired();
+
+                entity.Property(e => e.IsActive)
+                    .IsRequired()
+                    .HasDefaultValue(true);
             });
-
-            builder.Entity<Event>()
-                .HasOne(e => e.Creator)
-                .WithMany()
-                .HasForeignKey(e => e.CreatorId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            builder.Entity<Event>()
-                .HasOne(e => e.Organizer)
-                .WithMany()
-                .HasForeignKey(e => e.OrganizerId)
-                .OnDelete(DeleteBehavior.Restrict);
 
             builder.Entity<Registration>(entity =>
             {
