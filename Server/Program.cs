@@ -33,6 +33,9 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
+// Register ImageService
+builder.Services.AddScoped<IImageService, ImageService>();
+
 // Configure file upload limits
 builder.Services.Configure<FormOptions>(options =>
 {
@@ -158,8 +161,8 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
-builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
+builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
@@ -259,17 +262,37 @@ app.UseCors(policy =>
 // Configure static files with default configuration first
 app.UseStaticFiles();
 
+// Ensure wwwroot exists
+if (!Directory.Exists(builder.Environment.WebRootPath))
+{
+    Directory.CreateDirectory(builder.Environment.WebRootPath);
+}
+
 // Then configure uploads with a specific path
 var uploadsPath = Path.Combine(builder.Environment.WebRootPath, "uploads");
+var thumbnailsPath = Path.Combine(uploadsPath, "thumbnails");
+
 if (!Directory.Exists(uploadsPath))
 {
     Directory.CreateDirectory(uploadsPath);
 }
+if (!Directory.Exists(thumbnailsPath))
+{
+    Directory.CreateDirectory(thumbnailsPath);
+}
 
+// Configure static files for uploads
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadsPath),
     RequestPath = "/uploads"
+});
+
+// Configure static files for thumbnails
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(thumbnailsPath),
+    RequestPath = "/uploads/thumbnails"
 });
 
 app.UseRouting();

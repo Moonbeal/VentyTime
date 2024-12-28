@@ -268,19 +268,11 @@
                 fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
                 content.Add(fileContent, "file", file.Name);
 
-                var client = ClientFactory.CreateClient("VentyTime.ServerAPI");
-                var response = await client.PostAsync("api/Upload", content);
-                
-                if (response.IsSuccessStatusCode)
+                var imageUrl = await EventService.UploadEventImage(content);
+                if (!string.IsNullOrEmpty(imageUrl))
                 {
-                    var uploadedPath = await response.Content.ReadAsStringAsync();
-                    eventModel.ImageUrl = uploadedPath;
+                    eventModel.ImageUrl = imageUrl;
                     Snackbar.Add("Image uploaded successfully!", Severity.Success);
-                }
-                else
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    Snackbar.Add($"Failed to upload image: {error}", Severity.Error);
                 }
             }
             finally

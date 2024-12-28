@@ -1,7 +1,10 @@
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using VentyTime.Shared.Models;
 using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 
 namespace VentyTime.Client.Services
 {
@@ -22,7 +25,7 @@ namespace VentyTime.Client.Services
             var token = await _localStorage.GetItemAsync<string>("authToken");
             if (!string.IsNullOrEmpty(token))
             {
-                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             }
             return client;
         }
@@ -288,15 +291,33 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
-                var response = await client.PostAsync("api/events/upload", content);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
+                var response = await client.PostAsync("api/Upload", content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Upload failed. Status: {response.StatusCode}, Error: {errorContent}");
+                    throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorContent}");
+                }
+                
+                var result = await response.Content.ReadFromJsonAsync<ImageUploadResult>();
+                if (result == null || string.IsNullOrEmpty(result.ImageUrl))
+                {
+                    throw new Exception("Server returned invalid image upload result");
+                }
+                return result.ImageUrl;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error uploading image: {ex.Message}");
                 throw;
             }
+        }
+
+        private class ImageUploadResult
+        {
+            public string ImageUrl { get; set; } = string.Empty;
+            public string ThumbnailUrl { get; set; } = string.Empty;
         }
 
         public async Task<List<Event>> SearchEventsAsync(string searchTerm)

@@ -1,46 +1,89 @@
 @using System.Net.Http.Headers
 @using System.IO
-@inject IHttpClientFactory HttpClientFactory
+@inject IEventService EventService
 @inject ISnackbar Snackbar
 
 <MudPaper Class="pa-4 my-4">
-    <InputFile id="fileInput" OnChange="OnInputFileChanged" hidden multiple />
-    <MudButton HtmlTag="label"
-               Variant="Variant.Filled"
-               Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.CloudUpload"
-               for="fileInput">
-        Upload Photos
-    </MudButton>
+    <div class="d-flex flex-column gap-4">
+        <div>
+            <InputFile id="fileInput" OnChange="OnInputFileChanged" hidden multiple />
+            <MudButton HtmlTag="label"
+                      Variant="Variant.Filled"
+                      Color="Color.Primary"
+                      StartIcon="@Icons.Material.Filled.CloudUpload"
+                      for="fileInput"
+                      Disabled="@_uploading">
+                @if (_uploading)
+                {
+                    <span>Uploading...</span>
+                }
+                else
+                {
+                    <span>Upload Photos</span>
+                }
+            </MudButton>
+        </div>
 
-    @if (_uploading)
-    {
-        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
-    }
+        @if (_uploading)
+        {
+            <MudProgressLinear Color="Color.Primary" Value="@_progress" Class="my-2">
+                <MudText Typo="Typo.body2">@($"{_progress:F0}%")</MudText>
+            </MudProgressLinear>
+        }
 
-    @if (UploadedFiles.Any())
-    {
-        <MudGrid Class="mt-4">
-            @foreach (var file in UploadedFiles)
-            {
-                <MudItem xs="6" sm="4" md="3">
-                    <MudCard>
-                        <MudCardMedia Image="@file" Height="200" />
-                        <MudCardActions>
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                         Color="Color.Error" 
-                                         OnClick="@(() => RemovePhoto(file))" />
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
-            }
-        </MudGrid>
-    }
+        @if (UploadedFiles.Any())
+        {
+            <MudGrid>
+                @foreach (var file in UploadedFiles)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudCard Elevation="3">
+                            <MudCardMedia Image="@file" Height="200" />
+                            <MudCardActions>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                             Color="Color.Error" 
+                                             OnClick="@(() => RemovePhoto(file))"
+                                             Size="Size.Small" />
+                                <MudSpacer />
+                                <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" 
+                                             Color="Color.Primary" 
+                                             OnClick="@(() => OpenPreview(file))"
+                                             Size="Size.Small" />
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </div>
 </MudPaper>
+
+@if (_previewDialogOpen)
+{
+    <MudDialog Open="@_previewDialogOpen" 
+               OnClose="ClosePreview" 
+               DisableSidePadding="true">
+        <DialogContent>
+            <div style="position: relative; width: 100%; max-height: 80vh;">
+                <img src="@_previewImage" 
+                     style="width: 100%; height: 100%; object-fit: contain;" 
+                     alt="Preview" />
+            </div>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="ClosePreview" Color="Color.Primary">Close</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
 
 @code {
     private bool _uploading;
+    private double _progress;
+    private bool _previewDialogOpen;
+    private string _previewImage = string.Empty;
     private List<string> _uploadedFiles = new();
+    private const int MaxFileSize = 5 * 1024 * 1024; // 5MB
+    private readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif" };
 
     [Parameter]
     public List<string> UploadedFiles
@@ -64,41 +107,49 @@
         try
         {
             _uploading = true;
+            _progress = 0;
+
             var files = e.GetMultipleFiles();
+            var totalSize = files.Sum(f => f.Size);
+            var processedSize = 0L;
+
             foreach (var file in files)
             {
-                if (file.Size > 5 * 1024 * 1024) // 5MB limit
+                if (file.Size > MaxFileSize)
                 {
                     Snackbar.Add($"File {file.Name} is too large. Maximum size is 5MB.", Severity.Error);
                     continue;
                 }
 
-                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
                 var extension = Path.GetExtension(file.Name).ToLowerInvariant();
-                if (!allowedExtensions.Contains(extension))
+                if (!AllowedExtensions.Contains(extension))
                 {
-                    Snackbar.Add($"File {file.Name} has invalid format. Allowed formats are: {string.Join(", ", allowedExtensions)}", Severity.Error);
+                    Snackbar.Add($"File {file.Name} has invalid format. Allowed formats are: {string.Join(", ", AllowedExtensions)}", Severity.Error);
                     continue;
                 }
 
-                var content = new MultipartFormDataContent();
-                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-                content.Add(fileContent, "file", file.Name);
+                try
+                {
+                    var content = new MultipartFormDataContent();
+                    var fileContent = new StreamContent(file.OpenReadStream(MaxFileSize));
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+                    content.Add(fileContent, "file", file.Name);
 
-                var client = HttpClientFactory.CreateClient("VentyTime.ServerAPI");
-                var response = await client.PostAsync("api/events/upload-image", content);
-                if (response.IsSuccessStatusCode)
-                {
-                    var uploadedPath = await response.Content.ReadAsStringAsync();
-                    UploadedFiles = UploadedFiles.Append(uploadedPath).ToList();
-                    Snackbar.Add($"File {file.Name} uploaded successfully!", Severity.Success);
+                    var imageUrl = await EventService.UploadEventImage(content);
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        UploadedFiles = UploadedFiles.Append(imageUrl).ToList();
+                        Snackbar.Add($"File {file.Name} uploaded successfully!", Severity.Success);
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    var error = await response.Content.ReadAsStringAsync();
-                    Snackbar.Add($"Failed to upload {file.Name}: {error}", Severity.Error);
+                    Snackbar.Add($"Failed to upload {file.Name}: {ex.Message}", Severity.Error);
                 }
+
+                processedSize += file.Size;
+                _progress = (double)processedSize / totalSize * 100;
+                StateHasChanged();
             }
         }
         catch (Exception ex)
@@ -108,11 +159,24 @@
         finally
         {
             _uploading = false;
+            _progress = 0;
         }
     }
 
-    private void RemovePhoto(string file)
+    private void RemovePhoto(string fileUrl)
     {
-        UploadedFiles = UploadedFiles.Where(f => f != file).ToList();
+        UploadedFiles = UploadedFiles.Where(f => f != fileUrl).ToList();
+    }
+
+    private void OpenPreview(string imageUrl)
+    {
+        _previewImage = imageUrl;
+        _previewDialogOpen = true;
+    }
+
+    private void ClosePreview()
+    {
+        _previewDialogOpen = false;
+        _previewImage = string.Empty;
     }
 }
