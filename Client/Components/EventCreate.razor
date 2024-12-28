@@ -3,7 +3,8 @@
 @using VentyTime.Client.Services
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
+@inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16">
     <MudText Typo="Typo.h3" Class="mb-8">Create New Event</MudText>
@@ -121,22 +122,67 @@
             var file = e.File;
             if (file != null)
             {
+                Console.WriteLine($"Starting file upload: {file.Name}, Size: {file.Size}, Type: {file.ContentType}");
+
+                // Validate file type
+                var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif" };
+                if (!allowedTypes.Contains(file.ContentType.ToLower()))
+                {
+                    var message = $"Invalid file type: {file.ContentType}. Allowed types are: jpg, png, gif";
+                    Console.WriteLine(message);
+                    Snackbar.Add(message, Severity.Error);
+                    return;
+                }
+
+                var maxFileSize = 5 * 1024 * 1024; // 5MB limit to match server
+                if (file.Size > maxFileSize)
+                {
+                    var message = $"File size ({file.Size / 1024 / 1024:N1}MB) exceeds maximum allowed size of 5MB";
+                    Console.WriteLine(message);
+                    Snackbar.Add(message, Severity.Error);
+                    return;
+                }
+
+                Console.WriteLine("Creating form data...");
                 var content = new MultipartFormDataContent();
-                var fileContent = new StreamContent(file.OpenReadStream(4096000)); // 4MB limit
+                var fileContent = new StreamContent(file.OpenReadStream(maxFileSize));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
                 content.Add(fileContent, "file", file.Name);
 
-                var response = await Http.PostAsync("api/events/upload-image", content);
+                Console.WriteLine("Getting HttpClient...");
+                var client = HttpClientFactory.CreateClient("VentyTime.ServerAPI");
+                Console.WriteLine($"Client BaseAddress: {client.BaseAddress}");
+                
+                Console.WriteLine("Sending upload request...");
+                var response = await client.PostAsync("api/Events/UploadImage", content);
+                Console.WriteLine($"Upload response status: {response.StatusCode}");
+                Console.WriteLine($"Response headers: {string.Join(", ", response.Headers.Select(h => $"{h.Key}: {string.Join(", ", h.Value)}"))}");
+
                 if (response.IsSuccessStatusCode)
                 {
                     var imageUrl = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Upload successful, received URL: {imageUrl}");
                     eventModel.ImageUrl = imageUrl.Trim('"');
+                    Snackbar.Add("Image uploaded successfully!", Severity.Success);
                     StateHasChanged();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    var message = $"Upload failed: {error}";
+                    Console.WriteLine($"Upload failed with status {response.StatusCode}: {error}");
+                    Console.WriteLine($"Response content: {await response.Content.ReadAsStringAsync()}");
+                    Snackbar.Add(message, Severity.Error);
                 }
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error uploading file: {ex.Message}");
+            var message = $"Error uploading file: {ex.Message}";
+            Console.WriteLine(message);
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            Console.WriteLine($"Inner exception: {ex.InnerException?.Message}");
+            Snackbar.Add(message, Severity.Error);
         }
     }
 
@@ -174,7 +220,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error creating event: {ex.Message}");
+            Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
         }
     }
 

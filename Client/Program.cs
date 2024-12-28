@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Components.Authorization;
 using VentyTime.Client.Services;
 using Microsoft.AspNetCore.Components;
 using MudBlazor;
-using VentyTime.Client.Auth;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -16,14 +15,14 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Configure HttpClient for all endpoints
 builder.Services.AddHttpClient("VentyTime.ServerAPI", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7241");
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).AddHttpMessageHandler<AuthenticationHeaderHandler>();
 
 // Add NoAuth HttpClient for registration/login
 builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7241");
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
@@ -41,7 +40,7 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<ILocalStorageService, LocalStorageService>();
 
 // Add Auth State Provider
-builder.Services.AddScoped<AuthenticationStateProvider, VentyTime.Client.Auth.CustomAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddAuthorizationCore();
 
 // Add Services

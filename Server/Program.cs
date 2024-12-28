@@ -33,6 +33,17 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
+// Configure file upload limits
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 5242880; // 5MB
+});
+
+builder.Services.Configure<IISServerOptions>(options =>
+{
+    options.MaxRequestBodySize = 5242880; // 5MB
+});
+
 builder.Services.AddRazorPages();
 
 // Add DbContext
@@ -132,7 +143,8 @@ builder.Services.AddCors(options =>
                 "https://localhost:7242",
                 "http://localhost:5242",
                 "https://localhost:7241",
-                "http://localhost:5241"
+                "http://localhost:5241",
+                "https://localhost:5001"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -148,18 +160,6 @@ builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
-
-// Configure form options for file uploads
-builder.Services.Configure<FormOptions>(options =>
-{
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
-});
-
-// Configure file upload size limit
-builder.Services.Configure<IISServerOptions>(options =>
-{
-    options.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
-});
 
 var app = builder.Build();
 
@@ -248,10 +248,24 @@ else
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
+
+// Configure CORS
+app.UseCors(policy =>
+    policy.WithOrigins("https://localhost:7242")
+          .AllowAnyMethod()
+          .AllowAnyHeader()
+          .AllowCredentials());
+
+// Configure static files with default configuration first
 app.UseStaticFiles();
 
-// Configure static files for uploads
+// Then configure uploads with a specific path
 var uploadsPath = Path.Combine(builder.Environment.WebRootPath, "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadsPath),
@@ -259,18 +273,11 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseRouting();
-app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
 app.MapFallbackToFile("index.html");
-
-// Create uploads directory if it doesn't exist
-if (!Directory.Exists(uploadsPath))
-{
-    Directory.CreateDirectory(uploadsPath);
-}
 
 app.Run();

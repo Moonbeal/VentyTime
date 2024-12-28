@@ -1,6 +1,6 @@
 @using System.Net.Http.Headers
 @using System.IO
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
 @inject ISnackbar Snackbar
 
 <MudPaper Class="pa-4 my-4">
@@ -86,7 +86,8 @@
                 fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
                 content.Add(fileContent, "file", file.Name);
 
-                var response = await Http.PostAsync("api/upload", content);
+                var client = HttpClientFactory.CreateClient("VentyTime.ServerAPI");
+                var response = await client.PostAsync("api/events/upload-image", content);
                 if (response.IsSuccessStatusCode)
                 {
                     var uploadedPath = await response.Content.ReadAsStringAsync();
@@ -95,7 +96,8 @@
                 }
                 else
                 {
-                    Snackbar.Add($"Failed to upload {file.Name}", Severity.Error);
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to upload {file.Name}: {error}", Severity.Error);
                 }
             }
         }
@@ -109,8 +111,8 @@
         }
     }
 
-    private void RemovePhoto(string path)
+    private void RemovePhoto(string file)
     {
-        UploadedFiles = UploadedFiles.Where(x => x != path).ToList();
+        UploadedFiles = UploadedFiles.Where(f => f != file).ToList();
     }
 }

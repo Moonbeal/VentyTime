@@ -127,7 +127,7 @@ namespace VentyTime.Client.Services
             }
         }
 
-        private async Task<string> GetAuthTokenAsync()
+        private async Task<string?> GetAuthTokenAsync()
         {
             return await _localStorage.GetItemAsync<string>("authToken");
         }
@@ -234,6 +234,7 @@ namespace VentyTime.Client.Services
                                 return (false, errors);
                             }
                             
+
                             if (errorResponse.TryGetValue("message", out var messageObj))
                             {
                                 var message = messageObj.ToString();

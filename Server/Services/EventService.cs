@@ -10,7 +10,7 @@ namespace VentyTime.Server.Services
     {
         Task<(IEnumerable<Event> Events, int TotalCount)> GetEventsAsync(int page = 1, int pageSize = 10, string? category = null, DateTime? startDate = null, DateTime? endDate = null);
         Task<Event?> GetEventByIdAsync(int id);
-        Task<Event> CreateEventAsync(Event @event, string userId);
+        Task<Event> CreateEventAsync(Event @event, string userIdOrEmail);
         Task<Event> UpdateEventAsync(Event @event, string userId);
         Task DeleteEventAsync(int id, string userId);
         Task<IEnumerable<Event>> SearchEventsAsync(string query);
@@ -162,22 +162,34 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<Event> CreateEventAsync(Event @event, string userId)
+        public async Task<Event> CreateEventAsync(Event @event, string userIdOrEmail)
         {
             if (@event == null) throw new ArgumentNullException(nameof(@event));
-            if (string.IsNullOrEmpty(userId)) throw new ArgumentException("User ID cannot be empty", nameof(userId));
+            if (string.IsNullOrEmpty(userIdOrEmail)) throw new ArgumentException("User ID/Email cannot be empty", nameof(userIdOrEmail));
 
             try
             {
-                _logger.LogInformation("Creating event by user {UserId}", userId);
+                _logger.LogInformation("Creating event by user {UserIdOrEmail}", userIdOrEmail);
 
-                var user = await _userManager.FindByIdAsync(userId) 
-                    ?? throw new KeyNotFoundException($"User with ID {userId} not found");
+                var user = await _userManager.FindByIdAsync(userIdOrEmail);
+                user ??= await _userManager.FindByEmailAsync(userIdOrEmail);
+                
+                if (user is null)
+                {
+                    throw new KeyNotFoundException($"User with ID/Email {userIdOrEmail} not found");
+                }
 
-                @event.OrganizerId = userId;
+                @event.OrganizerId = user.Id; // Use the actual user ID
+                @event.CreatorId = user.Id; // Set the creator ID as well
                 @event.CreatedAt = DateTime.UtcNow;
                 @event.UpdatedAt = null;
                 @event.IsActive = true;
+
+                // Ensure EndDate is at least StartDate plus one hour if not set
+                if (@event.EndDate <= @event.StartDate)
+                {
+                    @event.EndDate = @event.StartDate.Add(TimeSpan.FromHours(1));
+                }
 
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
@@ -309,7 +321,7 @@ namespace VentyTime.Server.Services
                 if (_cache.TryGetValue(cacheKey, out List<Event>? cachedResults))
                 {
                     _logger.LogInformation("Retrieved {Count} search results from cache", cachedResults?.Count ?? 0);
-                    return cachedResults ?? new List<Event>();
+                    return cachedResults ??= new List<Event>();
                 }
 
                 query = query.ToLower();
@@ -354,7 +366,7 @@ namespace VentyTime.Server.Services
                 if (_cache.TryGetValue(cacheKey, out List<Event>? cachedEvents))
                 {
                     _logger.LogInformation("Retrieved {Count} upcoming events from cache", cachedEvents?.Count ?? 0);
-                    return cachedEvents ?? new List<Event>();
+                    return cachedEvents ??= new List<Event>();
                 }
 
                 var now = DateTime.UtcNow;

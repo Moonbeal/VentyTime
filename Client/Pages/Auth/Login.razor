@@ -1,63 +1,71 @@
 @page "/login"
-@using VentyTime.Shared.Models
 @using VentyTime.Shared.Models.Auth
-@using VentyTime.Client.Services
-@using VentyTime.Client.Auth
-@using Microsoft.AspNetCore.Components.Authorization
-@using Blazored.LocalStorage
-@inject IUserService UserService
+@using System.ComponentModel.DataAnnotations
+@inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-@inject ILocalStorageService LocalStorage
-@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Class="pa-8" Elevation="3">
-        <MudForm @ref="form" @bind-IsValid="@success">
-            <MudText Typo="Typo.h4" Class="mb-8">Login</MudText>
-
-            <MudTextField @bind-Value="loginRequest.Email"
+    <MudPaper Elevation="3" Class="pa-8" Style="border-radius: 12px;">
+        <MudText Typo="Typo.h4" Align="Align.Center" GutterBottom="true" Class="mb-6" Style="font-weight: 500; color: var(--mud-palette-primary);">Welcome Back!</MudText>
+        
+        <MudForm @ref="_form" @bind-IsValid="@_success">
+            <MudTextField T="string"
+                         @bind-Value="_model.Email"
                          Label="Email"
                          Required="true"
-                         RequiredError="Email is required"
-                         Class="mb-6" />
+                         RequiredError="Email is required!"
+                         Validation="@(new EmailAddressAttribute() {ErrorMessage = "Invalid email address"})"
+                         Variant="Variant.Outlined"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Email"
+                         Style="border-radius: 8px;"
+                         Class="mb-4"/>
 
-            <div class="mb-6">
-                <MudTextField @bind-Value="loginRequest.Password"
-                             Label="Password"
-                             Required="true"
-                             RequiredError="Password is required"
-                             InputType="@PasswordInput"
-                             Adornment="Adornment.End"
-                             AdornmentIcon="@PasswordInputIcon"
-                             OnAdornmentClick="TogglePasswordVisibility" />
-            </div>
+            <MudTextField T="string"
+                         @bind-Value="_model.Password"
+                         Label="Password"
+                         Required="true"
+                         RequiredError="Password is required!"
+                         InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                         Variant="Variant.Outlined"
+                         Adornment="Adornment.End"
+                         AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                         OnAdornmentClick="() => _showPassword = !_showPassword"
+                         Style="border-radius: 8px;"
+                         Class="mb-4"/>
 
-            <div class="mb-6">
-                <MudText Typo="Typo.subtitle1" Class="mb-2">Select Your Role</MudText>
-                <MudSelect T="UserRole" @bind-Value="loginRequest.SelectedRole" Label="Role" AnchorOrigin="Origin.BottomCenter" Class="mb-3">
-                    <MudSelectItem Value="@UserRole.Organizer">Event Organizer</MudSelectItem>
-                    <MudSelectItem Value="@UserRole.User">User</MudSelectItem>
-                    <MudSelectItem Value="@UserRole.Admin">Administrator</MudSelectItem>
-                </MudSelect>
-            </div>
+            <MudSelect T="UserRole"
+                      @bind-Value="_model.SelectedRole"
+                      Label="Select Your Role"
+                      Required="true"
+                      RequiredError="Role is required!"
+                      Variant="Variant.Outlined"
+                      Style="border-radius: 8px;"
+                      Class="mb-4">
+                <MudSelectItem Value="@UserRole.User">User</MudSelectItem>
+                <MudSelectItem Value="@UserRole.Organizer">Event Organizer</MudSelectItem>
+                <MudSelectItem Value="@UserRole.Admin">Administrator</MudSelectItem>
+            </MudSelect>
 
-            <MudCheckBox @bind-Checked="loginRequest.RememberMe" Label="Remember me" Class="mb-6" />
-
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <MudAlert Severity="Severity.Error" Class="mb-6">@errorMessage</MudAlert>
-            }
+            <MudCheckBox T="bool"
+                        @bind-Checked="_model.RememberMe"
+                        Label="Remember me"
+                        Color="Color.Primary"
+                        Class="mb-4"/>
 
             <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       Size="Size.Large"
-                       FullWidth="true"
-                       OnClick="HandleLogin"
-                       Disabled="isLoading">
-                @if (isLoading)
+                      Color="Color.Primary"
+                      Size="Size.Large"
+                      FullWidth="true"
+                      OnClick="LoginAsync"
+                      Disabled="@(!_success || _processing)"
+                      Style="border-radius: 25px; height: 48px; font-size: 1rem; text-transform: none;"
+                      Class="mb-4">
+                @if (_processing)
                 {
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Processing</MudText>
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                    <MudText Class="ms-2">Processing...</MudText>
                 }
                 else
                 {
@@ -65,77 +73,56 @@
                 }
             </MudButton>
 
-            <MudDivider Class="my-6" />
+            <MudDivider Class="my-6"/>
 
-            <MudText Align="Align.Center">
-                Don't have an account?
-                <MudLink Href="/register" Underline="Underline.Always">Register</MudLink>
-            </MudText>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
+                <MudLink Href="/auth/register" Color="Color.Primary" Underline="Underline.Always">Create an account</MudLink>
+                <MudLink Href="/auth/forgot-password" Color="Color.Primary" Underline="Underline.Always">Forgot password?</MudLink>
+            </MudStack>
         </MudForm>
     </MudPaper>
 </MudContainer>
 
 @code {
-    private MudForm form;
-    private bool success;
-    private LoginRequest loginRequest = new() { SelectedRole = UserRole.Organizer };
-    private string errorMessage = string.Empty;
-    private bool isLoading = false;
+    private MudForm? _form;
+    private bool _success;
+    private bool _showPassword;
+    private bool _processing;
 
-    private InputType PasswordInput = InputType.Password;
-    private string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-
-    private void TogglePasswordVisibility()
+    private LoginRequest _model = new()
     {
-        if (PasswordInput == InputType.Password)
-        {
-            PasswordInput = InputType.Text;
-            PasswordInputIcon = Icons.Material.Filled.Visibility;
-        }
-        else
-        {
-            PasswordInput = InputType.Password;
-            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-        }
-    }
+        Email = string.Empty,
+        Password = string.Empty,
+        SelectedRole = UserRole.User,
+        RememberMe = false
+    };
 
-    private async Task HandleLogin()
+    private async Task LoginAsync()
     {
+        if (_form is null) return;
+        await _form.Validate();
+        if (!_success) return;
+
+        _processing = true;
         try
         {
-            isLoading = true;
-            errorMessage = string.Empty;
-
-            Console.WriteLine($"Attempting login with role: {loginRequest.SelectedRole}");
-            var response = await UserService.LoginAsync(loginRequest);
-            
+            var response = await AuthService.LoginAsync(_model);
             if (response.Success)
             {
-                Console.WriteLine($"Login successful with role: {response.User?.Role}");
-                await LocalStorage.SetItemAsync("authToken", response.Token);
-                await ((CustomAuthStateProvider)AuthStateProvider).NotifyUserAuthenticationAsync(response.Token);
                 NavigationManager.NavigateTo("/");
             }
             else
             {
-                Console.WriteLine($"Login failed: {response.Message}");
-                errorMessage = response.Message ?? "Login failed. Please check your credentials.";
+                Snackbar.Add(response.Message ?? "Login failed", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Login error: {ex}");
-            errorMessage = "An unexpected error occurred. Please try again.";
+            Snackbar.Add($"Error during login: {ex.Message}", Severity.Error);
         }
         finally
         {
-            isLoading = false;
+            _processing = false;
         }
-    }
-
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-        Console.WriteLine($"Initial role: {loginRequest.SelectedRole}");
     }
 }

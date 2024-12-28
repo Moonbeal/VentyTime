@@ -19,25 +19,25 @@ public class LocalStorageService : ILocalStorageService
         _jsRuntime = jsRuntime;
     }
 
-    public async ValueTask<T> GetItemAsync<T>(string key, CancellationToken cancellationToken = default)
+    public async ValueTask<T?> GetItemAsync<T>(string key, CancellationToken cancellationToken = default)
     {
         var json = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", cancellationToken, key);
         if (string.IsNullOrEmpty(json))
-            return default!;
+            return default;
 
         try
         {
-            return JsonSerializer.Deserialize<T>(json)!;
+            return JsonSerializer.Deserialize<T>(json);
         }
         catch
         {
-            return default!;
+            return default;
         }
     }
 
-    public async ValueTask<string> GetItemAsStringAsync(string key, CancellationToken cancellationToken = default)
+    public async ValueTask<string?> GetItemAsStringAsync(string key, CancellationToken cancellationToken = default)
     {
-        return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", cancellationToken, key) ?? string.Empty;
+        return await _jsRuntime.InvokeAsync<string>("localStorage.getItem", cancellationToken, key);
     }
 
     public async ValueTask SetItemAsync<T>(string key, T value, CancellationToken cancellationToken = default)
@@ -95,9 +95,9 @@ public class LocalStorageService : ILocalStorageService
         return await _jsRuntime.InvokeAsync<int>("eval", cancellationToken, "localStorage.length");
     }
 
-    public async ValueTask<string> KeyAsync(int index, CancellationToken cancellationToken = default)
+    public async ValueTask<string?> KeyAsync(int index, CancellationToken cancellationToken = default)
     {
-        return await _jsRuntime.InvokeAsync<string>("eval", cancellationToken, $"localStorage.key({index})") ?? string.Empty;
+        return await _jsRuntime.InvokeAsync<string>("eval", cancellationToken, $"localStorage.key({index})");
     }
 
     public async ValueTask<bool> ContainKeyAsync(string key, CancellationToken cancellationToken = default)

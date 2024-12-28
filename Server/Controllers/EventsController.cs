@@ -118,35 +118,39 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "RequireOrganizerRole")]
+        [Authorize(Roles = "Admin,Organizer")]
         public async Task<ActionResult<Event>> CreateEvent([FromBody] Event eventModel)
         {
             try
             {
-                _logger.LogInformation("Creating event. User authenticated: {IsAuthenticated}, User role: {Role}",
-                    User.Identity?.IsAuthenticated,
-                    User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value);
+                _logger.LogInformation("Creating event. User: {User}, Role: {Role}, Claims: {@Claims}",
+                    User.Identity?.Name,
+                    User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value,
+                    User.Claims.Select(c => new { c.Type, c.Value }));
 
-                if (!ModelState.IsValid)
+                if (eventModel == null)
                 {
-                    return BadRequest(ModelState);
+                    _logger.LogWarning("Event model is null");
+                    return BadRequest("Event data is required");
                 }
 
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogError("User ID not found in claims");
-                    return BadRequest(new { message = "User ID not found" });
+                    return BadRequest("User ID not found");
                 }
 
-                eventModel.OrganizerId = userId;
+                _logger.LogInformation("Creating event with data: {@EventModel}", eventModel);
                 var createdEvent = await _eventService.CreateEventAsync(eventModel, userId);
+                _logger.LogInformation("Event created successfully: {@CreatedEvent}", createdEvent);
+
                 return CreatedAtAction(nameof(GetEvent), new { id = createdEvent.Id }, createdEvent);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating event");
-                return StatusCode(500, new { message = "An error occurred while creating the event" });
+                _logger.LogError(ex, "Error creating event: {Error}", ex.ToString());
+                return StatusCode(500, new { message = "An error occurred while creating the event", error = ex.Message });
             }
         }
 
