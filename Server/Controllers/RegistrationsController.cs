@@ -22,8 +22,8 @@ namespace VentyTime.Server.Controllers
             _logger = logger;
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Registration>> CreateRegistration(Registration registration)
+        [HttpPost("{eventId}")]
+        public async Task<ActionResult<EventRegistration>> CreateRegistration(int eventId)
         {
             try
             {
@@ -33,16 +33,16 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.CreateRegistrationAsync(registration, userId);
-                return CreatedAtAction(nameof(GetRegistration), new { id = result.Id }, result);
+                var registration = await _registrationService.CreateRegistrationAsync(eventId, userId);
+                return Ok(registration);
             }
             catch (KeyNotFoundException ex)
             {
-                return NotFound(new { message = ex.Message });
+                return NotFound(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -51,28 +51,8 @@ namespace VentyTime.Server.Controllers
             }
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Registration>> GetRegistration(int id)
-        {
-            try
-            {
-                var registration = await _registrationService.GetRegistrationByIdAsync(id);
-                if (registration == null)
-                {
-                    return NotFound();
-                }
-
-                return Ok(registration);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrieving registration {RegistrationId}", id);
-                return StatusCode(500, new { message = "An error occurred while retrieving the registration" });
-            }
-        }
-
         [HttpGet("event/{eventId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetRegistrationsByEvent(int eventId)
+        public async Task<ActionResult<IEnumerable<EventRegistration>>> GetRegistrationsByEvent(int eventId)
         {
             try
             {
@@ -87,7 +67,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("user")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations()
+        public async Task<ActionResult<IEnumerable<EventRegistration>>> GetUserRegistrations()
         {
             try
             {
@@ -107,8 +87,8 @@ namespace VentyTime.Server.Controllers
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<Registration>> UpdateRegistration(int id, [FromBody] Registration registration)
+        [HttpGet("{eventId}/user")]
+        public async Task<ActionResult<EventRegistration>> GetRegistration(int eventId)
         {
             try
             {
@@ -118,20 +98,46 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var existingRegistration = await _registrationService.GetRegistrationByIdAsync(id);
-                if (existingRegistration == null)
+                var registration = await _registrationService.GetRegistrationAsync(eventId, userId);
+                if (registration == null)
                 {
                     return NotFound();
                 }
 
-                if (existingRegistration.UserId != userId)
+                return Ok(registration);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving registration {RegistrationId}", eventId);
+                return StatusCode(500, new { message = "An error occurred while retrieving the registration" });
+            }
+        }
+
+        [HttpPut("{eventId}/status")]
+        public async Task<ActionResult<EventRegistration>> UpdateRegistration(int eventId, [FromBody] RegistrationStatus newStatus)
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
                 {
-                    return Forbid();
+                    return Unauthorized();
                 }
 
-                registration.Id = id;
-                var updatedRegistration = await _registrationService.UpdateRegistrationAsync(registration, registration.Status, userId);
-                return Ok(updatedRegistration);
+                var registration = await _registrationService.UpdateRegistrationStatusAsync(eventId, userId, newStatus);
+                return Ok(registration);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -140,8 +146,8 @@ namespace VentyTime.Server.Controllers
             }
         }
 
-        [HttpPost("{id}/cancel")]
-        public async Task<IActionResult> CancelRegistration(int id)
+        [HttpPost("{eventId}/cancel")]
+        public async Task<ActionResult> CancelRegistration(int eventId)
         {
             try
             {
@@ -151,17 +157,13 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.CancelRegistrationAsync(id, userId);
-                if (!result)
+                var success = await _registrationService.CancelRegistrationAsync(eventId, userId);
+                if (!success)
                 {
-                    return BadRequest(new { message = "Registration is already cancelled" });
+                    return NotFound();
                 }
 
                 return Ok();
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
             }
             catch (UnauthorizedAccessException)
             {
@@ -169,14 +171,14 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error cancelling registration {RegistrationId}", id);
+                _logger.LogError(ex, "Error cancelling registration {RegistrationId}", eventId);
                 return StatusCode(500, new { message = "An error occurred while cancelling the registration" });
             }
         }
 
-        [HttpPost("{id}/confirm")]
+        [HttpPost("{eventId}/confirm")]
         [Authorize(Roles = "Admin,Organizer")]
-        public async Task<IActionResult> ConfirmRegistration(int id)
+        public async Task<ActionResult> ConfirmRegistration(int eventId)
         {
             try
             {
@@ -186,29 +188,21 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.ConfirmRegistrationAsync(id, userId);
-                if (!result)
+                var success = await _registrationService.ConfirmRegistrationAsync(eventId, userId);
+                if (!success)
                 {
-                    return BadRequest(new { message = "Registration cannot be confirmed" });
+                    return NotFound();
                 }
 
                 return Ok();
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
             }
             catch (UnauthorizedAccessException)
             {
                 return Forbid();
             }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error confirming registration {RegistrationId}", id);
+                _logger.LogError(ex, "Error confirming registration {RegistrationId}", eventId);
                 return StatusCode(500, new { message = "An error occurred while confirming the registration" });
             }
         }

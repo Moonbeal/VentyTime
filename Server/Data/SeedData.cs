@@ -73,7 +73,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "images/events/tech-conference.jpg",
                         Type = EventType.Conference,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         IsFeatured = true,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
@@ -90,7 +90,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/business-event.jpg",
                         Type = EventType.Social,
                         Category = "Business",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
@@ -106,7 +106,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/ai-workshop.jpg",
                         Type = EventType.Workshop,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
@@ -122,7 +122,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/meetup.jpg",
                         Type = EventType.Meetup,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
                     },
@@ -138,7 +138,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/webinar.jpg",
                         Type = EventType.Webinar,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
@@ -154,7 +154,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/technology-event.jpg",
                         Type = EventType.Meetup,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
@@ -170,7 +170,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "images/events/cybersecurity.jpg",
                         Type = EventType.Conference,
                         Category = "Technology",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         IsFeatured = true,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
@@ -187,7 +187,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/music-event.jpg",
                         Type = EventType.Other,
                         Category = "Music",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
@@ -203,7 +203,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/sports-event.jpg",
                         Type = EventType.Other,
                         Category = "Sports",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         IsFeatured = true,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id
@@ -220,7 +220,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/food-event.jpg",
                         Type = EventType.Other,
                         Category = "Food & Drink",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         OrganizerId = testUser1.Id,
                         CreatorId = testUser1.Id
                     },
@@ -236,7 +236,7 @@ namespace VentyTime.Server.Data
                         ImageUrl = "/images/events/arts-event.jpg",
                         Type = EventType.Other,
                         Category = "Arts & Culture",
-                        IsActive = true,
+                        Status = EventStatus.Active,
                         IsFeatured = true,
                         OrganizerId = testUser2.Id,
                         CreatorId = testUser2.Id

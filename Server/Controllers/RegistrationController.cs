@@ -194,11 +194,12 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("event/{eventId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
+        public async Task<ActionResult<IEnumerable<EventRegistration>>> GetEventRegistrations(int eventId)
         {
             try
             {
-                var registrations = await _context.Registrations
+                var registrations = await _context.EventRegistrations
+                    .Include(r => r.Event)
                     .Include(r => r.User)
                     .Where(r => r.EventId == eventId)
                     .ToListAsync();
@@ -213,12 +214,13 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations(string userId)
+        public async Task<ActionResult<IEnumerable<EventRegistration>>> GetUserRegistrations(string userId)
         {
             try
             {
-                var registrations = await _context.Registrations
+                var registrations = await _context.EventRegistrations
                     .Include(r => r.Event)
+                    .Include(r => r.User)
                     .Where(r => r.UserId == userId)
                     .ToListAsync();
 
@@ -232,11 +234,11 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Registration>> GetRegistration(int id)
+        public async Task<ActionResult<EventRegistration>> GetRegistration(int id)
         {
             try
             {
-                var registration = await _context.Registrations
+                var registration = await _context.EventRegistrations
                     .Include(r => r.Event)
                     .Include(r => r.User)
                     .FirstOrDefaultAsync(r => r.Id == id);
@@ -257,7 +259,7 @@ namespace VentyTime.Server.Controllers
 
         [Authorize]
         [HttpPost("event/{eventId}")]
-        public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
+        public async Task<ActionResult<EventRegistration>> RegisterForEvent(int eventId)
         {
             try
             {
@@ -278,7 +280,7 @@ namespace VentyTime.Server.Controllers
 
                 // Load event with its registrations
                 var @event = await _context.Events
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .FirstOrDefaultAsync(e => e.Id == eventId);
 
                 if (@event == null)
@@ -306,7 +308,7 @@ namespace VentyTime.Server.Controllers
                 }
 
                 // Check current capacity
-                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+                var confirmedRegistrations = @event.EventRegistrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
                 if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
                 {
                     _logger.LogWarning("Attempted to register for full event {EventId}", eventId);
@@ -314,8 +316,7 @@ namespace VentyTime.Server.Controllers
                 }
 
                 // Check for existing registration using a direct query
-                var existingRegistration = await _context.Registrations
-                    .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
+                var existingRegistration = @event.EventRegistrations?.FirstOrDefault(r => r.UserId == userId);
 
                 if (existingRegistration != null)
                 {
@@ -327,7 +328,7 @@ namespace VentyTime.Server.Controllers
                         _logger.LogInformation("Reactivated cancelled registration for user {UserId} in event {EventId}", userId, eventId);
                         
                         // Load and return the full registration details
-                        var reactivatedRegistration = await _context.Registrations
+                        var reactivatedRegistration = await _context.EventRegistrations
                             .Include(r => r.Event)
                             .Include(r => r.User)
                             .FirstOrDefaultAsync(r => r.Id == existingRegistration.Id);
@@ -340,14 +341,15 @@ namespace VentyTime.Server.Controllers
                 }
 
                 // Create new registration
-                var registration = new Registration
+                var registration = new EventRegistration
                 {
                     EventId = eventId,
                     UserId = userId,
-                    Status = RegistrationStatus.Pending
+                    Status = RegistrationStatus.Pending,
+                    RegistrationDate = DateTime.UtcNow
                 };
 
-                _context.Registrations.Add(registration);
+                _context.EventRegistrations.Add(registration);
 
                 // Update event capacity
                 @event.CurrentCapacity = confirmedRegistrations + 1;
@@ -358,7 +360,7 @@ namespace VentyTime.Server.Controllers
                 _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
                 
                 // Load and return the full registration details
-                var savedRegistration = await _context.Registrations
+                var savedRegistration = await _context.EventRegistrations
                     .Include(r => r.Event)
                     .Include(r => r.User)
                     .FirstOrDefaultAsync(r => r.Id == registration.Id);
@@ -390,7 +392,7 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var registration = await _context.Registrations
+                var registration = await _context.EventRegistrations
                     .FirstOrDefaultAsync(r => r.Id == id);
 
                 if (registration == null)
@@ -428,7 +430,7 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var registration = await _context.Registrations
+                var registration = await _context.EventRegistrations
                     .Include(r => r.Event)
                     .FirstOrDefaultAsync(r => r.Id == id);
 
@@ -443,7 +445,7 @@ namespace VentyTime.Server.Controllers
                 }
 
                 var @event = await _context.Events
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .FirstOrDefaultAsync(e => e.Id == registration.EventId);
 
                 if (@event == null)
@@ -451,7 +453,7 @@ namespace VentyTime.Server.Controllers
                     return NotFound(new { message = "Event not found" });
                 }
 
-                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+                var confirmedRegistrations = @event.EventRegistrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
                 if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
                 {
                     return BadRequest(new { message = "Event is full" });

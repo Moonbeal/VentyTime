@@ -193,12 +193,20 @@
                                  Class="mb-4">
                             Cancel
                         </MudButton>
-                        <MudButton OnClick="@CreateEventAsync"
+                        <MudButton OnClick="@HandleValidSubmit"
                                  Variant="Variant.Filled"
                                  Color="Color.Primary"
                                  FullWidth="true"
-                                 Disabled="@(!isValid)">
-                            Create Event
+                                 Disabled="@_isLoading">
+                            @if (_isLoading)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                <MudText Class="ms-2">Creating Event...</MudText>
+                            }
+                            else
+                            {
+                                <span>Create Event</span>
+                            }
                         </MudButton>
                     </MudPaper>
                 </MudItem>
@@ -218,13 +226,13 @@
         MaxAttendees = 50,
         Price = 0,
         Location = string.Empty,
-        IsActive = true,
+        Status = EventStatus.Active,
         CurrentCapacity = 0
     };
 
     private MudForm? form;
     private bool isValid;
-    private bool isLoading;
+    private bool _isLoading;
     private IBrowserFile? selectedFile;
 
     private DateTime? startDate;
@@ -263,7 +271,7 @@
             }
 
             selectedFile = file;
-            isLoading = true;
+            _isLoading = true;
             StateHasChanged();
 
             try
@@ -282,13 +290,13 @@
             }
             finally
             {
-                isLoading = false;
+                _isLoading = false;
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            isLoading = false;
+            _isLoading = false;
             Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
             StateHasChanged();
         }
@@ -308,9 +316,9 @@
 
     private bool ValidateDates()
     {
-        if (!startDate.HasValue || !startTime.HasValue || !endDate.HasValue || !endTime.HasValue)
+        if (startDate == null || startTime == null || endDate == null || endTime == null)
         {
-            Snackbar.Add("Please select both start and end date/time", Severity.Warning);
+            Snackbar.Add("Please select both start and end dates and times.", Severity.Error);
             return false;
         }
 
@@ -319,70 +327,63 @@
 
         if (startDateTime < DateTime.Now)
         {
-            Snackbar.Add("Start date cannot be in the past", Severity.Warning);
+            Snackbar.Add("Start date cannot be in the past.", Severity.Error);
             return false;
         }
 
         if (endDateTime <= startDateTime)
         {
-            Snackbar.Add("End date must be after start date", Severity.Warning);
+            Snackbar.Add("End date must be after start date.", Severity.Error);
             return false;
         }
 
         eventModel.StartDate = startDateTime;
         eventModel.EndDate = endDateTime;
+
         return true;
     }
 
-    private async Task CreateEventAsync()
+    private async Task HandleValidSubmit()
     {
         if (!ValidateDates())
             return;
 
         try
         {
-            isLoading = true;
-            await form.Validate();
+            _isLoading = true;
+            StateHasChanged();
 
-            if (form.IsValid)
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
             {
-                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-                var user = authState.User;
-                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                Snackbar.Add("User not authenticated", Severity.Error);
+                return;
+            }
 
-                if (string.IsNullOrEmpty(userId))
-                {
-                    Snackbar.Add("User not authenticated", Severity.Error);
-                    return;
-                }
+            eventModel.OrganizerId = userId;
+            var createdEvent = await EventService.CreateEventAsync(eventModel);
 
-                eventModel.CreatorId = userId;
-                eventModel.OrganizerId = userId;
-
-                try 
-                {
-                    await EventService.CreateEventAsync(eventModel);
-                    Snackbar.Add("Event created successfully!", Severity.Success);
-                    NavigationManager.NavigateTo("/events");
-                }
-                catch (HttpRequestException ex)
-                {
-                    var errorMessage = await ex.GetResponseBodyAsync();
-                    Snackbar.Add($"Failed to create event: {errorMessage}", Severity.Error);
-                }
-                catch (Exception ex)
-                {
-                    Snackbar.Add($"Failed to create event: {ex.Message}", Severity.Error);
-                }
+            if (createdEvent != null)
+            {
+                Snackbar.Add("Event created successfully!", Severity.Success);
+                NavigationManager.NavigateTo($"/events/{createdEvent.Id}");
+            }
+            else
+            {
+                Snackbar.Add("Failed to create event", Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
         finally
         {
-            isLoading = false;
+            _isLoading = false;
+            StateHasChanged();
         }
     }
 

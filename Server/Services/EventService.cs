@@ -18,7 +18,7 @@ namespace VentyTime.Server.Services
         Task<bool> IsUserAuthorizedForEvent(int eventId, string userId, string[] allowedRoles);
         Task<IEnumerable<Event>> GetEventsByOrganizerAsync(string organizerId);
         Task<IEnumerable<string>> GetCategoriesAsync();
-        Task<Registration> RegisterUserForEventAsync(int eventId, string userId);
+        Task<EventRegistration> RegisterUserForEventAsync(int eventId, string userId);
         Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
     }
 
@@ -58,7 +58,7 @@ namespace VentyTime.Server.Services
 
                 var query = _context.Events
                     .Include(e => e.Organizer)
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .AsQueryable();
 
                 // Apply filters
@@ -93,7 +93,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events");
+                _logger.LogError(ex, "Error getting events: {Message}", ex.Message);
                 throw;
             }
         }
@@ -112,7 +112,7 @@ namespace VentyTime.Server.Services
 
                 var @event = await _context.Events
                     .Include(e => e.Organizer)
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .FirstOrDefaultAsync(e => e.Id == id);
 
                 if (@event != null)
@@ -128,7 +128,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting event {EventId}", id);
+                _logger.LogError(ex, "Error getting event {EventId}: {Message}", id, ex.Message);
                 throw;
             }
         }
@@ -157,7 +157,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting categories");
+                _logger.LogError(ex, "Error getting categories: {Message}", ex.Message);
                 throw;
             }
         }
@@ -215,7 +215,7 @@ namespace VentyTime.Server.Services
 
                 @event.CreatedAt = DateTime.UtcNow;
                 @event.UpdatedAt = null;
-                @event.IsActive = true;
+                @event.Status = EventStatus.Active;
                 @event.CurrentCapacity = 0;
 
                 // Ensure EndDate is at least StartDate plus one hour if not set
@@ -320,13 +320,13 @@ namespace VentyTime.Server.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error updating event {EventId}", @event.Id);
+                    _logger.LogError(ex, "Error updating event {EventId}: {Message}", @event.Id, ex.Message);
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating event");
+                _logger.LogError(ex, "Error updating event: {Message}", ex.Message);
                 throw;
             }
         }
@@ -338,7 +338,7 @@ namespace VentyTime.Server.Services
                 _logger.LogInformation("Deleting event {EventId} for user {UserId}", id, userId);
                 
                 var @event = await _context.Events
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .FirstOrDefaultAsync(e => e.Id == id) ?? 
                     throw new KeyNotFoundException($"Event with ID {id} not found");
 
@@ -347,7 +347,7 @@ namespace VentyTime.Server.Services
                     throw new UnauthorizedAccessException("User is not authorized to delete this event");
                 }
 
-                if (@event.Registrations?.Any(r => r.Status == RegistrationStatus.Confirmed) == true)
+                if (@event.EventRegistrations?.Any(r => r.Status == RegistrationStatus.Confirmed) == true)
                 {
                     throw new InvalidOperationException("Cannot delete event with confirmed registrations");
                 }
@@ -355,9 +355,9 @@ namespace VentyTime.Server.Services
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    if (@event.Registrations != null)
+                    if (@event.EventRegistrations != null)
                     {
-                        _context.Registrations.RemoveRange(@event.Registrations);
+                        _context.EventRegistrations.RemoveRange(@event.EventRegistrations);
                     }
 
                     _context.Events.Remove(@event);
@@ -370,13 +370,13 @@ namespace VentyTime.Server.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error deleting event {EventId}", id);
+                    _logger.LogError(ex, "Error deleting event {EventId}: {Message}", id, ex.Message);
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting event");
+                _logger.LogError(ex, "Error deleting event: {Message}", ex.Message);
                 throw;
             }
         }
@@ -397,7 +397,7 @@ namespace VentyTime.Server.Services
                 query = query.ToLower();
                 var events = await _context.Events
                     .Include(e => e.Organizer)
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .Where(e => e.IsActive &&
                            (e.Title.ToLower().Contains(query) ||
                             e.Description.ToLower().Contains(query) ||
@@ -416,7 +416,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error searching events");
+                _logger.LogError(ex, "Error searching events: {Message}", ex.Message);
                 throw;
             }
         }
@@ -441,7 +441,7 @@ namespace VentyTime.Server.Services
 
                 var now = DateTime.UtcNow;
                 var events = await _context.Events
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .Where(e => e.IsActive && e.StartDate > now)
                     .OrderBy(e => e.StartDate)
                     .Take(count)
@@ -458,7 +458,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting upcoming events");
+                _logger.LogError(ex, "Error getting upcoming events: {Message}", ex.Message);
                 throw;
             }
         }
@@ -496,7 +496,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking user authorization for event");
+                _logger.LogError(ex, "Error checking user authorization for event: {Message}", ex.Message);
                 throw;
             }
         }
@@ -509,23 +509,23 @@ namespace VentyTime.Server.Services
                 
                 return await _context.Events
                     .Include(e => e.Organizer)
-                    .Include(e => e.Registrations)
+                    .Include(e => e.EventRegistrations)
                     .Where(e => e.OrganizerId == organizerId)
                     .OrderByDescending(e => e.StartDate)
                     .ToListAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}", organizerId);
+                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}: {Message}", organizerId, ex.Message);
                 throw;
             }
         }
 
-        public async Task<Registration> RegisterUserForEventAsync(int eventId, string userId)
+        public async Task<EventRegistration> RegisterUserForEventAsync(int eventId, string userId)
         {
             // Load event with active registrations
             var @event = await _context.Events
-                .Include(e => e.Registrations)
+                .Include(e => e.EventRegistrations)
                 .FirstOrDefaultAsync(e => e.Id == eventId);
 
             if (@event == null)
@@ -535,7 +535,7 @@ namespace VentyTime.Server.Services
             }
 
             // Check if event is full
-            var activeRegistrations = @event.Registrations?
+            var activeRegistrations = @event.EventRegistrations?
                 .Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
 
             if (activeRegistrations >= @event.MaxAttendees)
@@ -545,7 +545,7 @@ namespace VentyTime.Server.Services
             }
 
             // Check if user is already registered
-            var existingRegistration = @event.Registrations?
+            var existingRegistration = @event.EventRegistrations?
                 .FirstOrDefault(r => r.UserId == userId && r.Status != RegistrationStatus.Cancelled);
 
             if (existingRegistration != null)
@@ -556,16 +556,15 @@ namespace VentyTime.Server.Services
 
             try
             {
-                var registration = new Registration
+                var registration = new EventRegistration
                 {
                     EventId = eventId,
                     UserId = userId,
-                    Status = RegistrationStatus.Confirmed,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    Status = RegistrationStatus.Pending,
+                    RegistrationDate = DateTime.UtcNow
                 };
 
-                _context.Registrations.Add(registration);
+                _context.EventRegistrations.Add(registration);
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
@@ -573,12 +572,12 @@ namespace VentyTime.Server.Services
             }
             catch (DbUpdateException ex)
             {
-                _logger.LogError(ex, "Database error registering user {UserId} for event {EventId}", userId, eventId);
+                _logger.LogError(ex, "Database error registering user {UserId} for event {EventId}: {Message}", userId, eventId, ex.Message);
                 throw new InvalidOperationException("You are already registered for this event.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error registering user {UserId} for event {EventId}", userId, eventId);
+                _logger.LogError(ex, "Error registering user {UserId} for event {EventId}: {Message}", userId, eventId, ex.Message);
                 throw;
             }
         }
@@ -587,8 +586,8 @@ namespace VentyTime.Server.Services
         {
             return await _context.Events
                 .Include(e => e.Organizer)
-                .Include(e => e.Registrations)
-                .Where(e => e.Registrations != null && e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
+                .Include(e => e.EventRegistrations)
+                .Where(e => e.EventRegistrations != null && e.EventRegistrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
                 .OrderBy(e => e.StartDate)
                 .ToListAsync();
         }
@@ -596,13 +595,13 @@ namespace VentyTime.Server.Services
         public async Task<bool> HasAvailableSpacesAsync(int eventId)
         {
             var eventItem = await _context.Events
-                .Include(e => e.Registrations)
+                .Include(e => e.EventRegistrations)
                 .FirstOrDefaultAsync(e => e.Id == eventId);
 
-            if (eventItem == null || eventItem.Registrations == null)
+            if (eventItem == null || eventItem.EventRegistrations == null)
                 return false;
 
-            var activeRegistrations = eventItem.Registrations
+            var activeRegistrations = eventItem.EventRegistrations
                 .Count(r => r.Status == RegistrationStatus.Confirmed);
 
             return activeRegistrations < eventItem.MaxAttendees;

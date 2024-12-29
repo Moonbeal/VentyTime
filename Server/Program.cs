@@ -33,8 +33,15 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
-// Register ImageService
+// Register services
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<IRegistrationService, RegistrationService>();
+builder.Services.AddScoped<ICommentService, CommentService>();
+builder.Services.AddScoped<IStorageService, LocalStorageService>();
+builder.Services.AddHttpContextAccessor();
 
 // Configure file upload limits
 builder.Services.Configure<FormOptions>(options =>
@@ -48,6 +55,18 @@ builder.Services.Configure<IISServerOptions>(options =>
 });
 
 builder.Services.AddRazorPages();
+
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:7241")
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
 
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -137,33 +156,6 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("Admin", "Organizer", "User"));
 });
 
-// Configure CORS
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
-    {
-        policy.WithOrigins(
-                "https://localhost:7242",
-                "http://localhost:5242",
-                "https://localhost:7241",
-                "http://localhost:5241",
-                "https://localhost:5001"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
-    });
-});
-
-// Add services
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IEventService, EventService>();
-builder.Services.AddScoped<IRegistrationService, RegistrationService>();
-builder.Services.AddScoped<ICommentService, CommentService>();
-builder.Services.AddScoped<IStorageService, LocalStorageService>();
-builder.Services.AddHttpContextAccessor();
-
 var app = builder.Build();
 
 // Initialize database
@@ -218,75 +210,29 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
-    app.UseDeveloperExceptionPage();
-
-    // Configure development-specific middleware
-    app.Use(async (context, next) =>
-    {
-        if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
-        {
-            context.Response.ContentType = "application/javascript";
-            await context.Response.WriteAsync(@"
-                (function() {
-                    const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
-                    eventSource.onmessage = function(event) {
-                        if (event.data === 'reload') {
-                            window.location.reload();
-                        }
-                    };
-                })();
-            ");
-            return;
-        }
-        await next();
-    });
-
-    // Add detailed error handling in development
-    app.Use(async (context, next) =>
-    {
-        try
-        {
-            await next();
-        }
-        catch (Exception ex)
-        {
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
-            
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = 500;
-                context.Response.ContentType = "application/json";
-                
-                var error = new
-                {
-                    message = "An error occurred while processing your request",
-                    error = ex.Message,
-                    stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
-                    innerError = ex.InnerException?.Message
-                };
-                
-                await context.Response.WriteAsJsonAsync(error);
-            }
-        }
-    });
 }
 else
 {
     app.UseExceptionHandler("/Error");
-    app.UseHsts();
 }
-
-app.UseHttpsRedirection();
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
 
 // Configure CORS
 app.UseCors(policy =>
-    policy.WithOrigins("https://localhost:7242")
-          .AllowAnyMethod()
-          .AllowAnyHeader()
-          .AllowCredentials());
+    policy.WithOrigins("http://localhost:7241")
+    .AllowAnyMethod()
+    .AllowAnyHeader()
+    .AllowCredentials());
+
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages();
+app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 // Ensure wwwroot exists
 if (!Directory.Exists(builder.Environment.WebRootPath))
@@ -307,13 +253,5 @@ if (!Directory.Exists(thumbnailsDirectory))
 {
     Directory.CreateDirectory(thumbnailsDirectory);
 }
-
-app.UseRouting();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapRazorPages();
-app.MapControllers();
-app.MapFallbackToFile("index.html");
 
 app.Run();

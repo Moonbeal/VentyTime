@@ -249,7 +249,7 @@
         var currentUser = await AuthService.GetCurrentUserAsync();
         if (currentUser != null)
         {
-            var allEvents = await EventService.GetEventsByOrganizerIdAsync(currentUser.Id);
+            var allEvents = await EventService.GetEventsByOrganizerAsync(currentUser.Id);
             upcomingEvents = allEvents.Where(e => !e.HasStarted()).OrderBy(e => e.StartDate).ToList();
             pastEvents = allEvents.Where(e => e.HasStarted()).OrderByDescending(e => e.StartDate).ToList();
         }

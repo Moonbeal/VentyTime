@@ -27,11 +27,4 @@ namespace VentyTime.Shared.Models
 
         public virtual ApplicationUser? User { get; set; }
     }
-
-    public enum RegistrationStatus
-    {
-        Pending,
-        Confirmed,
-        Cancelled
-    }
 }

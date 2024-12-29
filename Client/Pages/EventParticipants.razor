@@ -1,0 +1,187 @@
+@page "/events/{EventId:int}/participants"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@using VentyTime.Client.Shared
+@inject IEventService EventService
+@inject IRegistrationService RegistrationService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">Event Participants</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <AuthorizeView>
+                    <Authorized>
+                        <AuthorizeView Roles="Admin,Organizer">
+                            <Authorized Context="adminContext">
+                                @if (isOrganizerOrAdmin)
+                                {
+                                    <MudButton Color="Color.Primary" OnClick="@(() => ShowSendNotificationDialog())">Send Notification</MudButton>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
+                    </Authorized>
+                </AuthorizeView>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (loading)
+            {
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            }
+            else
+            {
+                <MudTextField @bind-Value="searchString"
+                            Placeholder="Search participants..."
+                            Adornment="Adornment.Start"
+                            AdornmentIcon="@Icons.Material.Filled.Search"
+                            IconSize="Size.Medium"
+                            Class="mt-0 mb-4" />
+
+                <MudTable Items="@participants.Where(FilterFunc)" Dense="true" Hover="true" Striped="true">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Registration Date</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Name">@context.User?.UserName</MudTd>
+                        <MudTd DataLabel="Status">@GetRegistrationStatus(context)</MudTd>
+                        <MudTd DataLabel="Registration Date">@context.RegistrationDate.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd>
+                            <MudButtonGroup>
+                                <MudIconButton Icon="@Icons.Material.Filled.Message"
+                                             Size="Size.Small"
+                                             OnClick="@(() => ShowSendNotificationDialog(context))"
+                                             Title="Send Notification" />
+                                @if (context.Status != RegistrationStatus.Confirmed)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => ConfirmRegistration(context))"
+                                                 Title="Confirm Registration" />
+                                }
+                                @if (context.Status != RegistrationStatus.Cancelled)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                                 Size="Size.Small"
+                                                 OnClick="@(() => CancelRegistration(context))"
+                                                 Title="Cancel Registration" />
+                                }
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int EventId { get; set; }
+
+    private List<VentyTime.Shared.Models.EventRegistration> participants = new();
+    private bool loading = true;
+    private string searchString = string.Empty;
+    private bool isOrganizerOrAdmin = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            participants = await RegistrationService.GetEventRegistrationsAsync(EventId);
+            loading = false;
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to load participants", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(VentyTime.Shared.Models.EventRegistration registration)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        return registration.User?.UserName?.Contains(searchString, StringComparison.OrdinalIgnoreCase) ?? false;
+    }
+
+    private string GetRegistrationStatus(VentyTime.Shared.Models.EventRegistration registration)
+    {
+        return registration.Status switch
+        {
+            RegistrationStatus.Pending => "Pending",
+            RegistrationStatus.Confirmed => "Confirmed",
+            RegistrationStatus.Cancelled => "Cancelled",
+            _ => "Unknown"
+        };
+    }
+
+    private async Task ConfirmRegistration(VentyTime.Shared.Models.EventRegistration registration)
+    {
+        try
+        {
+            if (await RegistrationService.UpdateRegistrationStatusAsync(registration.Id, RegistrationStatus.Confirmed))
+            {
+                registration.Status = RegistrationStatus.Confirmed;
+                StateHasChanged();
+                Snackbar.Add("Registration confirmed", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to confirm registration", Severity.Error);
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to confirm registration", Severity.Error);
+        }
+    }
+
+    private async Task CancelRegistration(VentyTime.Shared.Models.EventRegistration registration)
+    {
+        try
+        {
+            if (await RegistrationService.UpdateRegistrationStatusAsync(registration.Id, RegistrationStatus.Cancelled))
+            {
+                registration.Status = RegistrationStatus.Cancelled;
+                StateHasChanged();
+                Snackbar.Add("Registration cancelled", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel registration", Severity.Error);
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Failed to cancel registration", Severity.Error);
+        }
+    }
+
+    private async Task ShowSendNotificationDialog(VentyTime.Shared.Models.EventRegistration? registration = null)
+    {
+        var parameters = new DialogParameters();
+        parameters.Add(nameof(SendNotificationDialog.EventId), EventId);
+
+        if (registration != null)
+        {
+            parameters.Add(nameof(SendNotificationDialog.ParticipantId), registration.UserId);
+            parameters.Add(nameof(SendNotificationDialog.ParticipantName), registration.User?.UserName);
+        }
+
+        var dialog = await DialogService.ShowAsync<SendNotificationDialog>("Send Notification", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            Snackbar.Add("Notification sent successfully", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,112 @@
+@using VentyTime.Shared.Models
+@inject INotificationService NotificationService
+
+<MudMenu Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" Direction="Direction.Bottom" OffsetY="true">
+    <ActivatorContent>
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit">
+            @if (unreadCount > 0)
+            {
+                <MudBadge Color="Color.Secondary" Content="@unreadCount" Overlap="true" Class="ml-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Notifications" />
+                </MudBadge>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.Notifications" />
+            }
+        </MudIconButton>
+    </ActivatorContent>
+    <ChildContent>
+        <MudList Clickable="true" Dense="true">
+            @if (loading)
+            {
+                <MudListItem>
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                </MudListItem>
+            }
+            else if (!notifications.Any())
+            {
+                <MudListItem>
+                    <MudText>No notifications</MudText>
+                </MudListItem>
+            }
+            else
+            {
+                foreach (var notification in notifications.OrderByDescending(n => n.CreatedAt).Take(5))
+                {
+                    <MudListItem OnClick="@(() => MarkAsRead(notification))">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.body2">@notification.Title</MudText>
+                            <MudText Typo="Typo.caption">@notification.Message</MudText>
+                            <MudText Typo="Typo.caption" Class="mt-1">
+                                @notification.CreatedAt.ToLocalTime().ToString("g")
+                            </MudText>
+                        </div>
+                    </MudListItem>
+                }
+                <MudDivider />
+                <MudListItem OnClick="@ClearAllNotifications">
+                    <MudText>Clear All</MudText>
+                </MudListItem>
+            }
+        </MudList>
+    </ChildContent>
+</MudMenu>
+
+@code {
+    private List<NotificationMessage> notifications = new();
+    private bool loading = true;
+    private int unreadCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotifications();
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            notifications = await NotificationService.GetUserNotificationsAsync();
+            unreadCount = notifications.Count(n => !n.IsRead);
+            loading = false;
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to load notifications", NotificationType.Error);
+        }
+    }
+
+    private async Task MarkAsRead(NotificationMessage notification)
+    {
+        try
+        {
+            await NotificationService.MarkAsReadAsync(notification.Id);
+            notification.IsRead = true;
+            unreadCount = notifications.Count(n => !n.IsRead);
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to mark notification as read", NotificationType.Error);
+        }
+    }
+
+    private async Task ClearAllNotifications()
+    {
+        try
+        {
+            foreach (var notification in notifications.ToList())
+            {
+                await NotificationService.DeleteNotificationAsync(notification.Id);
+                notifications.Remove(notification);
+            }
+            unreadCount = 0;
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to clear notifications", NotificationType.Error);
+        }
+    }
+}

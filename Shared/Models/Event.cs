@@ -16,6 +16,12 @@ namespace VentyTime.Shared.Models
         Other
     }
 
+    public enum EventStatus
+    {
+        Active,
+        Cancelled
+    }
+
     public static class EventCategories
     {
         public const string Technology = "Technology";
@@ -61,6 +67,10 @@ namespace VentyTime.Shared.Models
         [DataType(DataType.Time)]
         public TimeSpan StartTime { get; set; }
 
+        [Required(ErrorMessage = "End time is required")]
+        [DataType(DataType.Time)]
+        public TimeSpan EndTime { get; set; }
+
         [Required(ErrorMessage = "Location is required")]
         [StringLength(200, ErrorMessage = "Location must be between 3 and 200 characters", MinimumLength = 3)]
         public string Location { get; set; } = string.Empty;
@@ -89,9 +99,7 @@ namespace VentyTime.Shared.Models
         [StringLength(2000)]
         public string? ImageUrl { get; set; }
 
-        public bool IsActive { get; set; } = true;
-
-        public bool IsFeatured { get; set; }
+        public EventStatus Status { get; set; } = EventStatus.Active;
 
         [DataType(DataType.DateTime)]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -105,6 +113,8 @@ namespace VentyTime.Shared.Models
         [Required(ErrorMessage = "Organizer ID is required")]
         public string OrganizerId { get; set; } = string.Empty;
 
+        public bool IsFeatured { get; set; }
+
         // Navigation properties
         [JsonIgnore]
         public virtual ApplicationUser? Creator { get; set; }
@@ -113,24 +123,27 @@ namespace VentyTime.Shared.Models
         public virtual ApplicationUser? Organizer { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<Registration>? Registrations { get; set; }
+        public virtual ICollection<EventRegistration> EventRegistrations { get; set; } = new List<EventRegistration>();
 
         [JsonIgnore]
         public virtual ICollection<Comment>? Comments { get; set; }
 
         // Computed properties
         public bool IsFull => MaxAttendees > 0 && CurrentParticipants >= MaxAttendees;
-        public int CurrentParticipants => Registrations?.Count ?? 0;
+        public int CurrentParticipants => EventRegistrations?.Count ?? 0;
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
         public bool IsRegistrationOpen => MaxAttendees == 0 || CurrentParticipants < MaxAttendees;
+        public bool IsCanceled => Status == EventStatus.Cancelled;
+        public bool IsActive => Status == EventStatus.Active;
 
         // Helper methods
         public DateTime GetStartDateTime() => StartDate.Add(StartTime);
+        public DateTime GetEndDateTime() => EndDate.Add(EndTime);
         public bool HasStarted() => GetStartDateTime() <= DateTime.UtcNow;
-        public bool IsFinished() => GetStartDateTime().AddHours(24) <= DateTime.UtcNow;
+        public bool IsFinished() => GetEndDateTime() <= DateTime.UtcNow;
         public TimeSpan TimeUntilStart() => GetStartDateTime() - DateTime.UtcNow;
         public TimeSpan TimeSinceStart() => DateTime.UtcNow - GetStartDateTime();
-        public TimeSpan TimeUntilEnd() => EndDate.Add(StartTime) - DateTime.UtcNow;
-        public TimeSpan TimeSinceEnd() => DateTime.UtcNow - EndDate.Add(StartTime);
+        public TimeSpan TimeUntilEnd() => GetEndDateTime() - DateTime.UtcNow;
+        public TimeSpan TimeSinceEnd() => DateTime.UtcNow - GetEndDateTime();
     }
 }

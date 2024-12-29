@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
 
@@ -6,244 +7,127 @@ namespace VentyTime.Server.Services
 {
     public interface IRegistrationService
     {
-        Task<Registration> CreateRegistrationAsync(Registration registration, string userId);
-        Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId);
-        Task<Registration?> GetRegistrationByIdAsync(int id);
-        Task<IEnumerable<Registration>> GetRegistrationsByEventAsync(int eventId);
-        Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId);
-        Task<bool> CancelRegistrationAsync(int id, string userId);
-        Task<bool> ConfirmRegistrationAsync(int id, string userId);
+        Task<EventRegistration> CreateRegistrationAsync(int eventId, string userId);
+        Task<EventRegistration> UpdateRegistrationStatusAsync(int eventId, string userId, RegistrationStatus newStatus);
+        Task<EventRegistration?> GetRegistrationAsync(int eventId, string userId);
+        Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId);
+        Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(string userId);
+        Task<bool> CancelRegistrationAsync(int eventId, string userId);
+        Task<bool> ConfirmRegistrationAsync(int eventId, string userId);
         Task<bool> IsEventFullAsync(int eventId);
+        Task<bool> UpdateRegistrationStatusAsync(int registrationId, RegistrationStatus status);
     }
 
     public class RegistrationService : IRegistrationService
     {
         private readonly ApplicationDbContext _context;
-        private readonly ILogger<RegistrationService> _logger;
-        private readonly IEventService _eventService;
 
-        public RegistrationService(
-            ApplicationDbContext context,
-            ILogger<RegistrationService> logger,
-            IEventService eventService)
+        public RegistrationService(ApplicationDbContext context)
         {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
+            _context = context;
         }
 
-        public async Task<Registration> CreateRegistrationAsync(Registration registration, string userId)
+        public async Task<EventRegistration> CreateRegistrationAsync(int eventId, string userId)
         {
-            try
+            var registration = new EventRegistration
             {
-                _logger.LogInformation("Creating registration for event {EventId} by user {UserId}", 
-                    registration.EventId, userId);
+                EventId = eventId,
+                UserId = userId,
+                Status = RegistrationStatus.Pending
+            };
 
-                var @event = await _eventService.GetEventByIdAsync(registration.EventId) 
-                    ?? throw new KeyNotFoundException($"Event with ID {registration.EventId} not found");
+            _context.EventRegistrations.Add(registration);
+            await _context.SaveChangesAsync();
 
-                if (await IsEventFullAsync(registration.EventId))
-                {
-                    throw new InvalidOperationException("Event is already full");
-                }
-
-                registration.UserId = userId;
-                registration.Status = RegistrationStatus.Pending;
-                registration.CreatedAt = DateTime.UtcNow;
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    _context.Registrations.Add(registration);
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Successfully created registration {RegistrationId}", registration.Id);
-
-                    return registration;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error saving registration to database");
-                    throw;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating registration");
-                throw;
-            }
+            return registration;
         }
 
-        public async Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId)
+        public async Task<EventRegistration> UpdateRegistrationStatusAsync(int eventId, string userId, RegistrationStatus newStatus)
         {
-            try
-            {
-                var existingRegistration = await _context.Registrations
-                    .Include(r => r.Event)
-                    .FirstOrDefaultAsync(r => r.Id == registration.Id)
-                    ?? throw new KeyNotFoundException($"Registration with ID {registration.Id} not found");
+            var registration = await GetRegistrationAsync(eventId, userId) ?? 
+                throw new KeyNotFoundException($"Registration not found for event {eventId} and user {userId}");
 
-                if (existingRegistration.UserId != userId)
-                {
-                    throw new UnauthorizedAccessException("User is not authorized to update this registration");
-                }
+            registration.Status = newStatus;
+            registration.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
 
-                if (existingRegistration.Status != RegistrationStatus.Pending)
-                {
-                    throw new InvalidOperationException($"Cannot update registration with status {existingRegistration.Status}");
-                }
-
-                existingRegistration.Status = newStatus;
-                existingRegistration.UpdatedAt = DateTime.UtcNow;
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Successfully updated registration {RegistrationId}", registration.Id);
-
-                    return existingRegistration;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error updating registration in database");
-                    throw;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating registration");
-                throw;
-            }
+            return registration;
         }
 
-        public async Task<Registration?> GetRegistrationByIdAsync(int id)
+        public async Task<bool> UpdateRegistrationStatusAsync(int registrationId, RegistrationStatus status)
         {
-            return await _context.Registrations
+            var registration = await _context.EventRegistrations.FindAsync(registrationId);
+            if (registration == null)
+            {
+                return false;
+            }
+
+            registration.Status = status;
+            registration.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<EventRegistration?> GetRegistrationAsync(int eventId, string userId)
+        {
+            return await _context.EventRegistrations
                 .Include(r => r.Event)
                 .Include(r => r.User)
-                .FirstOrDefaultAsync(r => r.Id == id);
+                .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
         }
 
-        public async Task<IEnumerable<Registration>> GetRegistrationsByEventAsync(int eventId)
+        public async Task<IEnumerable<EventRegistration>> GetRegistrationsByEventAsync(int eventId)
         {
-            return await _context.Registrations
+            return await _context.EventRegistrations
                 .Include(r => r.User)
                 .Where(r => r.EventId == eventId)
-                .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId)
+        public async Task<IEnumerable<EventRegistration>> GetRegistrationsByUserAsync(string userId)
         {
-            return await _context.Registrations
+            return await _context.EventRegistrations
                 .Include(r => r.Event)
                 .Where(r => r.UserId == userId)
-                .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
 
-        public async Task<bool> CancelRegistrationAsync(int id, string userId)
+        public async Task<bool> CancelRegistrationAsync(int eventId, string userId)
         {
-            try
+            var registration = await GetRegistrationAsync(eventId, userId);
+            if (registration is null)
             {
-                var registration = await _context.Registrations
-                    .Include(r => r.Event)
-                    .FirstOrDefaultAsync(r => r.Id == id)
-                    ?? throw new KeyNotFoundException($"Registration with ID {id} not found");
-
-                if (registration.UserId != userId)
-                {
-                    throw new UnauthorizedAccessException("User is not authorized to cancel this registration");
-                }
-
-                registration.Status = RegistrationStatus.Cancelled;
-                registration.UpdatedAt = DateTime.UtcNow;
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Successfully cancelled registration {RegistrationId}", id);
-
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error cancelling registration in database");
-                    throw;
-                }
+                return false;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error cancelling registration");
-                throw;
-            }
+
+            registration.Status = RegistrationStatus.Cancelled;
+            await _context.SaveChangesAsync();
+            return true;
         }
 
-        public async Task<bool> ConfirmRegistrationAsync(int id, string userId)
+        public async Task<bool> ConfirmRegistrationAsync(int eventId, string userId)
         {
-            try
+            var registration = await GetRegistrationAsync(eventId, userId);
+            if (registration is null)
             {
-                var registration = await _context.Registrations
-                    .Include(r => r.Event)
-                    .FirstOrDefaultAsync(r => r.Id == id)
-                    ?? throw new KeyNotFoundException($"Registration with ID {id} not found");
-
-                if (!await _eventService.IsUserAuthorizedForEvent(registration.EventId, userId, new[] { "Admin", "Organizer" }))
-                {
-                    throw new UnauthorizedAccessException("User is not authorized to confirm registrations");
-                }
-
-                registration.Status = RegistrationStatus.Confirmed;
-                registration.UpdatedAt = DateTime.UtcNow;
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    _logger.LogInformation("Successfully confirmed registration {RegistrationId}", id);
-
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error confirming registration in database");
-                    throw;
-                }
+                return false;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error confirming registration");
-                throw;
-            }
+
+            registration.Status = RegistrationStatus.Confirmed;
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<bool> IsEventFullAsync(int eventId)
         {
             var @event = await _context.Events
-                .Include(e => e.Registrations)
-                .FirstOrDefaultAsync(e => e.Id == eventId)
-                ?? throw new KeyNotFoundException($"Event with ID {eventId} not found");
+                .Include(e => e.EventRegistrations)
+                .FirstOrDefaultAsync(e => e.Id == eventId) ?? 
+                throw new KeyNotFoundException($"Event with ID {eventId} not found");
 
-            if (@event.Registrations == null)
-            {
-                return false;
-            }
-
-            return @event.MaxAttendees > 0 && 
-                   @event.Registrations.Count(r => r.Status != RegistrationStatus.Cancelled) >= @event.MaxAttendees;
+            var confirmedRegistrations = @event.EventRegistrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+            return @event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees;
         }
     }
 }

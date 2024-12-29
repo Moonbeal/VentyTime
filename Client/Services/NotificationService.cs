@@ -1,66 +1,94 @@
 using System;
+using System.Net.Http.Json;
 using MudBlazor;
 using VentyTime.Shared.Models;
+using VentyTime.Client.Extensions;
 
 namespace VentyTime.Client.Services
 {
-    public class NotificationService
+    public interface INotificationService
+    {
+        Task<List<NotificationMessage>> GetUserNotificationsAsync();
+        Task<NotificationMessage> CreateNotificationAsync(NotificationMessage notification);
+        Task<List<NotificationMessage>> CreateNotificationsForEventParticipantsAsync(int eventId, NotificationMessage notification);
+        Task<bool> MarkAsReadAsync(int notificationId);
+        Task<bool> DeleteNotificationAsync(int notificationId);
+        Task ShowAsync(string message, NotificationType type = NotificationType.Info);
+    }
+
+    public class NotificationService : INotificationService
     {
         private readonly ISnackbar _snackbar;
-        private event Action<NotificationMessage>? NotificationReceived;
+        private readonly HttpClient _httpClient;
 
-        public NotificationService(ISnackbar snackbar)
+        public NotificationService(ISnackbar snackbar, IHttpClientFactory httpClientFactory)
         {
             _snackbar = snackbar;
+            _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
         }
 
-        public IDisposable OnNotification(Action<NotificationMessage> action)
+        public async Task<List<NotificationMessage>> GetUserNotificationsAsync()
         {
-            NotificationReceived += action;
-            return new NotificationSubscription(() => NotificationReceived -= action);
-        }
-
-        public void Show(string message, NotificationType type = NotificationType.Info)
-        {
-            var notification = new NotificationMessage
+            var response = await _httpClient.GetAsync("api/notifications");
+            if (response.IsSuccessStatusCode)
             {
-                Message = message,
-                Type = type,
-                Timestamp = DateTime.UtcNow
+                return await response.Content.ReadFromJsonAsync<List<NotificationMessage>>() ?? new List<NotificationMessage>();
+            }
+            throw await HttpRequestExceptionExtensions.CreateFromResponseAsync(response);
+        }
+
+        public async Task<NotificationMessage> CreateNotificationAsync(NotificationMessage notification)
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/notifications", notification);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<NotificationMessage>() ?? throw new InvalidOperationException("Failed to create notification");
+            }
+            throw await HttpRequestExceptionExtensions.CreateFromResponseAsync(response);
+        }
+
+        public async Task<List<NotificationMessage>> CreateNotificationsForEventParticipantsAsync(int eventId, NotificationMessage notification)
+        {
+            var response = await _httpClient.PostAsJsonAsync($"api/notifications/events/{eventId}/participants", notification);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<List<NotificationMessage>>() ?? new List<NotificationMessage>();
+            }
+            throw await HttpRequestExceptionExtensions.CreateFromResponseAsync(response);
+        }
+
+        public async Task<bool> MarkAsReadAsync(int notificationId)
+        {
+            var response = await _httpClient.PutAsync($"api/notifications/{notificationId}/read", null);
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+            throw await HttpRequestExceptionExtensions.CreateFromResponseAsync(response);
+        }
+
+        public async Task<bool> DeleteNotificationAsync(int notificationId)
+        {
+            var response = await _httpClient.DeleteAsync($"api/notifications/{notificationId}");
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+            throw await HttpRequestExceptionExtensions.CreateFromResponseAsync(response);
+        }
+
+        public async Task ShowAsync(string message, NotificationType type = NotificationType.Info)
+        {
+            var severity = type switch
+            {
+                NotificationType.Success => Severity.Success,
+                NotificationType.Error => Severity.Error,
+                NotificationType.Warning => Severity.Warning,
+                _ => Severity.Info
             };
 
-            NotificationReceived?.Invoke(notification);
-
-            switch (type)
-            {
-                case NotificationType.Success:
-                    _snackbar.Add(message, Severity.Success);
-                    break;
-                case NotificationType.Error:
-                    _snackbar.Add(message, Severity.Error);
-                    break;
-                case NotificationType.Warning:
-                    _snackbar.Add(message, Severity.Warning);
-                    break;
-                case NotificationType.Info:
-                    _snackbar.Add(message, Severity.Info);
-                    break;
-            }
-        }
-
-        private class NotificationSubscription : IDisposable
-        {
-            private readonly Action _unsubscribe;
-
-            public NotificationSubscription(Action unsubscribe)
-            {
-                _unsubscribe = unsubscribe;
-            }
-
-            public void Dispose()
-            {
-                _unsubscribe();
-            }
+            _snackbar.Add(message, severity);
+            await Task.CompletedTask;
         }
     }
 }

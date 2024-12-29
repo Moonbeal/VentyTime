@@ -1,267 +1,93 @@
-@page "/events/{Id:int}/edit"
+@page "/events/edit/{EventId:int}"
 @using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@using VentyTime.Client.Extensions
+@using MudBlazor
 @inject IEventService EventService
-@inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    @if (loading)
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (_event == null)
     {
-        <div class="d-flex justify-center align-center" style="height: 400px;">
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-        </div>
-    }
-    else if (eventModel == null)
-    {
-        <MudAlert Severity="Severity.Error">Event not found.</MudAlert>
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
     }
     else
     {
-        <MudGrid>
-            <MudItem xs="12" sm="8">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
-                    <MudForm @ref="form" @bind-IsValid="@success">
-                        <div class="d-flex justify-space-between align-center mb-6">
-                            <div>
-                                <MudText Typo="Typo.h3" Color="Color.Primary" Class="mb-2">Edit Event</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">Update your event details below</MudText>
-                            </div>
-                        </div>
+        <MudText Typo="Typo.h4" Class="mb-4">Edit Event</MudText>
 
-                        <MudGrid>
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.Title" 
-                                            Label="Event Title"
-                                            For="@(() => eventModel.Title)"
-                                            Required="true"
-                                            RequiredError="Title is required"
-                                            Variant="Variant.Outlined" />
-                            </MudItem>
+        <EditForm Model="_event" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator />
 
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.Description"
-                                            Label="Description"
-                                            For="@(() => eventModel.Description)"
-                                            Required="true"
-                                            RequiredError="Description is required"
-                                            Lines="3"
-                                            Variant="Variant.Outlined" />
-                            </MudItem>
+            <MudCard>
+                <MudCardContent>
+                    <MudTextField @bind-Value="_event.Title" Label="Title" Required="true" />
+                    <MudTextField @bind-Value="_event.Description" Label="Description" Lines="3" />
+                    <MudTextField @bind-Value="_event.Location" Label="Location" Required="true" />
+                    <MudNumericField @bind-Value="_event.MaxAttendees" Label="Maximum Attendees" Min="0" />
 
-                            <MudItem xs="12" sm="6">
-                                <MudSelect T="string" 
-                                          Label="Category" 
-                                          For="@(() => eventModel.Category)"
-                                          @bind-Value="eventModel.Category"
-                                          Required="true"
-                                          RequiredError="Category is required"
-                                          AnchorOrigin="Origin.BottomCenter"
-                                          Variant="Variant.Outlined">
-                                    <MudSelectItem Value="@("Music")">Music</MudSelectItem>
-                                    <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
-                                    <MudSelectItem Value="@("Technology")">Technology</MudSelectItem>
-                                    <MudSelectItem Value="@("Food")">Food & Drinks</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
+                    <MudDatePicker Date="_event.StartDate" DateChanged="date => { _event.StartDate = date ?? DateTime.Today; }" Label="Start Date" Required="true" />
+                    <MudTimePicker Time="_event.StartTime" TimeChanged="time => { _event.StartTime = time ?? TimeSpan.Zero; }" Label="Start Time" Required="true" />
 
-                            <MudItem xs="12">
-                                <label class="form-label">Date and Time</label>
-                                <div class="d-flex gap-2">
-                                    <div class="flex-grow-1">
-                                        <MudDatePicker Label="Date" 
-                                                     Date="@eventModel.StartDate"
-                                                     DateChanged="@((DateTime? date) => UpdateEventDate(date))"
-                                                     Required="true"
-                                                     Variant="Variant.Outlined"
-                                                     DisableToolbar="false"
-                                                     MinDate="@DateTime.Today" />
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <MudTimePicker Label="Time"
-                                                     Time="@eventModel.StartDate.TimeOfDay"
-                                                     TimeChanged="@((TimeSpan? time) => UpdateEventTime(time))"
-                                                     Required="true"
-                                                     Variant="Variant.Outlined"
-                                                     AmPm="true" />
-                                    </div>
-                                </div>
-                                <ValidationMessage For="@(() => eventModel.StartDate)" />
-                            </MudItem>
+                    <MudDatePicker Date="_event.EndDate" DateChanged="date => { _event.EndDate = date ?? DateTime.Today; }" Label="End Date" Required="true" />
+                    <MudTimePicker Time="_event.EndTime" TimeChanged="time => { _event.EndTime = time ?? TimeSpan.Zero; }" Label="End Time" Required="true" />
 
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.Location"
-                                            Label="Location"
-                                            For="@(() => eventModel.Location)"
-                                            Variant="Variant.Outlined"
-                                            Required="true"
-                                            RequiredError="Location is required"
-                                            HelperText="Enter the event location" />
-                            </MudItem>
+                    <MudSelect @bind-Value="_event.Category" Label="Category" Required="true">
+                        @foreach (var category in categories)
+                        {
+                            <MudSelectItem Value="@category">@category</MudSelectItem>
+                        }
+                    </MudSelect>
 
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.ImageUrl"
-                                            Label="Image URL"
-                                            For="@(() => eventModel.ImageUrl)"
-                                            Variant="Variant.Outlined" />
-                            </MudItem>
+                    <MudTextField @bind-Value="_event.ImageUrl" Label="Image URL" />
+                </MudCardContent>
 
-                            <MudItem xs="12">
-                                <MudNumericField @bind-Value="eventModel.MaxAttendees"
-                                               Label="Maximum Attendees (0 for unlimited)"
-                                               For="@(() => eventModel.MaxAttendees)"
-                                               Required="true"
-                                               RequiredError="Maximum attendees is required"
-                                               Min="0"
-                                               Max="1000"
-                                               Variant="Variant.Outlined"
-                                               HelperText="Maximum number of attendees" />
-                            </MudItem>
-
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="eventModel.Price"
-                                            Label="Price"
-                                            For="@(() => eventModel.Price)"
-                                            Variant="Variant.Outlined"
-                                            Required="true"
-                                            RequiredError="Price is required"
-                                            Adornment="Adornment.Start"
-                                            AdornmentText="$"
-                                            HelperText="Enter ticket price (0 for free events)" />
-                            </MudItem>
-
-                            <MudItem xs="12" Class="d-flex justify-center mt-4">
-                                <MudButton Variant="Variant.Filled"
-                                         Color="Color.Primary"
-                                         Size="Size.Large"
-                                         OnClick="SaveChangesAsync"
-                                         Disabled="!success">
-                                    Save Changes
-                                </MudButton>
-                            </MudItem>
-                        </MudGrid>
-                    </MudForm>
-                </MudPaper>
-            </MudItem>
-
-            <MudItem xs="12" sm="4">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg">
-                    <MudText Typo="Typo.h5" Class="mb-4">Event Preview</MudText>
-                    @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
-                    {
-                        <img src="@eventModel.ImageUrl"
-                             alt="Event preview"
-                             class="rounded-lg mb-4"
-                             style="object-fit: cover; height: 200px; width: 100%;" />
-                    }
-                    else
-                    {
-                        <div class="d-flex align-center justify-center rounded-lg mb-4" style="height: 200px; background-color: var(--mud-palette-background-grey)">
-                            <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Secondary" Size="Size.Large" />
-                        </div>
-                    }
-
-                    <MudText Typo="Typo.h6" Class="mt-4">@eventModel.Title</MudText>
-                    <MudText Typo="Typo.body2" Class="mt-2">@eventModel.Description</MudText>
-                    <MudDivider Class="my-4" />
-                    <MudText Typo="Typo.body2">
-                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" Size="Size.Small" />
-                        @eventModel.StartDate.ToLocalTime().ToString("f")
-                    </MudText>
-                    <MudText Typo="Typo.body2" Class="mt-2">
-                        <MudIcon Icon="@Icons.Material.Filled.Place" Class="mr-2" Size="Size.Small" />
-                        @eventModel.Location
-                    </MudText>
-                    <MudText Typo="Typo.body2" Class="mt-2">
-                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Class="mr-2" Size="Size.Small" />
-                        @eventModel.Price
-                    </MudText>
-                    <MudText Typo="Typo.body2" Class="mt-2">
-                        <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" Size="Size.Small" />
-                        @eventModel.MaxAttendees
-                    </MudText>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                <MudCardActions>
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto">Save Changes</MudButton>
+                    <MudButton OnClick="NavigateBack" Variant="Variant.Outlined" Color="Color.Secondary">Cancel</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </EditForm>
     }
 </MudContainer>
 
 @code {
     [Parameter]
-    public int Id { get; set; }
+    public int EventId { get; set; }
 
-    private Event? eventModel;
-    private bool loading = true;
-    private bool success;
-    private MudForm? form;
-
-    private void UpdateEventDate(DateTime? date)
-    {
-        if (eventModel != null && date.HasValue)
-        {
-            var time = eventModel.StartDate.TimeOfDay;
-            eventModel.StartDate = date.Value.Date.Add(time);
-        }
-    }
-
-    private void UpdateEventTime(TimeSpan? time)
-    {
-        if (eventModel != null && time.HasValue)
-        {
-            eventModel.StartDate = eventModel.StartDate.Date.Add(time.Value);
-        }
-    }
+    private Event? _event;
+    private List<string> categories = new();
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            eventModel = await EventService.GetEventByIdAsync(Id);
-            if (eventModel == null)
-            {
-                Snackbar.Add("Event not found", Severity.Error);
-                NavigationManager.NavigateTo("/events");
-                return;
-            }
-
-            var userId = await UserService.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId) || userId != eventModel.OrganizerId)
-            {
-                Snackbar.Add("You don't have permission to edit this event", Severity.Error);
-                NavigationManager.NavigateTo("/events");
-                return;
-            }
+            _event = await EventService.GetEventByIdAsync(EventId);
+            categories = (await EventService.GetCategoriesAsync()).ToList();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            loading = false;
+            Snackbar.Add("Failed to load event", Severity.Error);
+            NavigateBack();
         }
     }
 
-    private async Task SaveChangesAsync()
+    private async Task HandleValidSubmit()
     {
         try
         {
-            if (eventModel == null) return;
-
-            var result = await EventService.UpdateEventAsync(eventModel);
-            if (result != null)
-            {
-                Snackbar.Add("Event updated successfully!", Severity.Success);
-                NavigationManager.NavigateTo($"/events/{result.Id}");
-            }
-            else
-            {
-                Snackbar.Add("Failed to update event", Severity.Error);
-            }
+            await EventService.UpdateEventAsync(_event!);
+            Snackbar.Add("Event updated successfully", Severity.Success);
+            NavigateBack();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add("Failed to update event", Severity.Error);
         }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo($"/events/{EventId}");
     }
 }

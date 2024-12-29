@@ -4,14 +4,18 @@ namespace VentyTime.Shared.Models
 {
     public class NotificationMessage
     {
-        public int Id { get; set; } = 0;
+        public int Id { get; set; }
+        public int? EventId { get; set; }
+        public string UserId { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
-        public NotificationType Type { get; set; } = NotificationType.Info;
-        public bool IsRead { get; set; } = false;
-        public bool IsDismissed { get; set; } = false;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public NotificationType Type { get; set; }
+        public bool IsDismissed { get; set; }
+        public bool IsRead { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-        public string UserId { get; set; } = string.Empty;
+
+        public virtual Event? Event { get; set; }
     }
 
     public enum NotificationType
@@ -19,6 +23,8 @@ namespace VentyTime.Shared.Models
         Info,
         Success,
         Warning,
-        Error
+        Error,
+        EventUpdate,
+        CustomMessage
     }
 }

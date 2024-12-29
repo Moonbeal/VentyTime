@@ -1,0 +1,62 @@
+@using VentyTime.Shared.Models
+@inject MudBlazor.ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@isValid">
+            <MudTextField @bind-Value="notification.Title"
+                         Label="Title"
+                         Required="true"
+                         RequiredError="Title is required" />
+            
+            <MudTextField @bind-Value="notification.Message"
+                         Label="Message"
+                         Lines="3"
+                         Required="true"
+                         RequiredError="Message is required" />
+
+            <MudSelect @bind-Value="notification.Type"
+                      Label="Type"
+                      Required="true"
+                      RequiredError="Type is required">
+                <MudSelectItem Value="@NotificationType.EventUpdate">Event Update</MudSelectItem>
+                <MudSelectItem Value="@NotificationType.CustomMessage">Custom Message</MudSelectItem>
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Disabled="@(!isValid)"
+                  OnClick="Submit">Send</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Message { get; set; } = string.Empty;
+
+    private MudForm form = null!;
+    private bool isValid;
+    private NotificationMessage notification = new()
+    {
+        Type = NotificationType.EventUpdate
+    };
+
+    protected override void OnInitialized()
+    {
+        notification.Title = Title;
+        notification.Message = Message;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(notification));
+    }
+}

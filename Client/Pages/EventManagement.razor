@@ -1,0 +1,168 @@
+@page "/event-management"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Admin,Organizer")]
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5">Event Management</MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudButton Color="Color.Primary" 
+                              Href="/create-event"
+                              StartIcon="@Icons.Material.Filled.Add">
+                        Create Event
+                    </MudButton>
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTable Items="@events" Dense="false" Hover="true" Bordered="false" Striped="true">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.h6">Your Events (@events.Count)</MudText>
+                        <MudSpacer />
+                        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start"
+                                    AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh>Title</MudTh>
+                        <MudTh>Date</MudTh>
+                        <MudTh>Location</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Title">@context.Title</MudTd>
+                        <MudTd DataLabel="Date">@context.StartDate.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd DataLabel="Location">@context.Location</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip Color="@GetStatusColor(context)" Size="Size.Small">
+                                @GetStatusText(context)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                             Href="@($"/events/{context.Id}/edit")"
+                                             Title="Edit" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Group"
+                                             Href="@($"/events/{context.Id}/participants")"
+                                             Title="Participants" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                             OnClick="@(() => DeleteEvent(context))"
+                                             Title="Delete"
+                                             Color="Color.Error" />
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    private List<Event> events = new();
+    private bool loading = true;
+    private string searchString = string.Empty;
+    private string? userId;
+    private bool isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        isAdmin = user.IsInRole("Admin");
+
+        await LoadEvents();
+        loading = false;
+    }
+
+    private async Task LoadEvents()
+    {
+        try
+        {
+            if (isAdmin)
+            {
+                // Адміністратор бачить всі події
+                var result = await EventService.GetEventsAsync();
+                events = result.Events;
+            }
+            else
+            {
+                // Організатор бачить тільки свої події
+                events = await EventService.GetEventsByOrganizerAsync(userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to load events", Severity.Error);
+        }
+    }
+
+    private async Task DeleteEvent(Event eventModel)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete event '{eventModel.Title}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                await EventService.DeleteEventAsync(eventModel.Id);
+                events.Remove(eventModel);
+                Snackbar.Add("Event deleted successfully", Severity.Success);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add("Failed to delete event", Severity.Error);
+            }
+        }
+    }
+
+    private Color GetStatusColor(Event eventModel)
+    {
+        if (eventModel.IsCanceled)
+            return Color.Error;
+        if (eventModel.EndDate < DateTime.UtcNow)
+            return Color.Default;
+        if (eventModel.IsFull)
+            return Color.Warning;
+        return Color.Success;
+    }
+
+    private string GetStatusText(Event eventModel)
+    {
+        if (eventModel.IsCanceled)
+            return "Canceled";
+        if (eventModel.EndDate < DateTime.UtcNow)
+            return "Ended";
+        if (eventModel.IsFull)
+            return "Full";
+        return "Active";
+    }
+}

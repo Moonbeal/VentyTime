@@ -220,14 +220,25 @@ namespace VentyTime.Server.Controllers
                 var role = roles.FirstOrDefault();
                 var userRole = Enum.TryParse<UserRole>(role, out var parsedRole) ? parsedRole : UserRole.None;
 
-                return Ok(new UserDto
+                return Ok(new User
                 {
                     Id = user.Id,
                     Email = user.Email!,
+                    Username = user.UserName!,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     AvatarUrl = user.AvatarUrl,
-                    Role = userRole
+                    Role = userRole,
+                    IsEmailVerified = user.EmailConfirmed,
+                    IsActive = user.LockoutEnd == null || user.LockoutEnd < DateTimeOffset.UtcNow,
+                    CreatedAt = user.CreatedAt,
+                    LastLoginAt = null, // We don't track this yet
+                    PhoneNumber = user.PhoneNumber ?? string.Empty,
+                    Location = user.Location,
+                    Bio = user.Bio,
+                    Website = user.Website,
+                    OrganizedEventIds = new List<string>(),
+                    RegisteredEventIds = new List<string>()
                 });
             }
             catch (Exception ex)

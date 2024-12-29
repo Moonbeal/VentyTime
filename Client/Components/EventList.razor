@@ -64,7 +64,7 @@
                             </div>
                         </div>
                         <div class="card-footer">
-                            <button class="btn btn-primary" @onclick="() => NavigateToDetails(evt.Id)">
+                            <button class="btn btn-primary" @onclick="() => NavigateToEvent(evt.Id)">
                                 View Details
                             </button>
                             @if (evt.IsRegistrationOpen)
@@ -85,17 +85,17 @@
                 <nav>
                     <ul class="pagination">
                         <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                            <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                            <button class="page-link" @onclick="() => OnPageChanged(currentPage - 1)">Previous</button>
                         </li>
                         @for (int i = 1; i <= totalPages; i++)
                         {
                             var pageNumber = i;
                             <li class="page-item @(currentPage == pageNumber ? "active" : "")">
-                                <button class="page-link" @onclick="() => ChangePage(pageNumber)">@pageNumber</button>
+                                <button class="page-link" @onclick="() => OnPageChanged(pageNumber)">@pageNumber</button>
                             </li>
                         }
                         <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                            <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                            <button class="page-link" @onclick="() => OnPageChanged(currentPage + 1)">Next</button>
                         </li>
                     </ul>
                 </nav>
@@ -110,7 +110,8 @@
     private string selectedCategory = "";
     private int currentPage = 1;
     private const int PageSize = 9;
-    private int totalPages => events == null ? 0 : (int)Math.Ceiling(filteredEvents.Count() / (double)PageSize);
+    private int totalEvents;
+    private int totalPages => totalEvents == 0 ? 0 : (int)Math.Ceiling(totalEvents / (double)PageSize);
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,7 +120,9 @@
 
     private async Task LoadEvents()
     {
-        events = await EventService.GetEventsAsync();
+        var result = await EventService.GetEventsAsync(currentPage, PageSize, searchTerm);
+        events = result.Events;
+        totalEvents = result.TotalCount;
     }
 
     private IEnumerable<Event> filteredEvents
@@ -127,38 +130,25 @@
         get
         {
             if (events == null) return Enumerable.Empty<Event>();
-
-            var filtered = events.AsEnumerable();
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                filtered = filtered.Where(e =>
-                    e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Location.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (!string.IsNullOrWhiteSpace(selectedCategory))
-            {
-                filtered = filtered.Where(e => e.Category == selectedCategory);
-            }
-
-            // Apply pagination
-            return filtered
-                .Skip((currentPage - 1) * PageSize)
-                .Take(PageSize);
+            return events;
         }
     }
 
     private async Task HandleSearch()
     {
         currentPage = 1;
-        await InvokeAsync(StateHasChanged);
+        await LoadEvents();
     }
 
-    private void NavigateToDetails(int eventId)
+    private async Task OnPageChanged(int page)
     {
-        NavigationManager.NavigateTo($"/event/{eventId}");
+        currentPage = page;
+        await LoadEvents();
+    }
+
+    private void NavigateToEvent(int eventId)
+    {
+        NavigationManager.NavigateTo($"/events/{eventId}");
     }
 
     private async Task RegisterForEvent(int eventId)
@@ -170,15 +160,6 @@
         else
         {
             NavigationManager.NavigateTo($"/login?returnUrl=/event/{eventId}/register");
-        }
-    }
-
-    private void ChangePage(int page)
-    {
-        if (page >= 1 && page <= totalPages)
-        {
-            currentPage = page;
-            StateHasChanged();
         }
     }
 }

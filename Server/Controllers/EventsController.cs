@@ -26,7 +26,7 @@ namespace VentyTime.Server.Controllers
         [HttpGet]
         [AllowAnonymous]
         [ResponseCache(Duration = 60)] // Кешування на стороні клієнта на 1 хвилину
-        public async Task<ActionResult<IEnumerable<Event>>> GetEvents()
+        public async Task<ActionResult<(IEnumerable<Event> Events, int TotalCount)>> GetEvents([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             try
             {
@@ -34,8 +34,8 @@ namespace VentyTime.Server.Controllers
                     User.Identity?.IsAuthenticated,
                     User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value);
 
-                var (events, totalCount) = await _eventService.GetEventsAsync();
-                return Ok(events);
+                var result = await _eventService.GetEventsAsync(page, pageSize);
+                return Ok(result);
             }
             catch (Exception ex)
             {

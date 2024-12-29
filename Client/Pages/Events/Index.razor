@@ -59,12 +59,15 @@
 
 @code {
     private List<Event>? _events;
+    private int _totalCount;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _events = await EventService.GetEventsAsync();
+            var result = await EventService.GetEventsAsync();
+            _events = result.Events;
+            _totalCount = result.TotalCount;
         }
         catch (Exception ex)
         {

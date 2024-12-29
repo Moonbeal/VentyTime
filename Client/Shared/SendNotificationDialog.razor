@@ -1,0 +1,103 @@
+@using VentyTime.Shared.Models
+@inject INotificationService NotificationService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-height: 500px; overflow-y: auto">
+            <MudForm @ref="form" @bind-IsValid="@isValid">
+                <MudTextField @bind-Value="title"
+                            Label="Title"
+                            Required="true"
+                            RequiredError="Title is required" />
+                
+                <MudTextField @bind-Value="message"
+                             Label="Message"
+                             Required="true"
+                             Lines="3"
+                             RequiredError="Message is required" />
+                             
+                <MudSelect T="NotificationType" @bind-Value="notificationType"
+                          Label="Notification Type"
+                          Required="true"
+                          RequiredError="Type is required">
+                    <MudSelectItem Value="NotificationType.EventUpdate">Event Update</MudSelectItem>
+                    <MudSelectItem Value="NotificationType.CustomMessage">Custom Message</MudSelectItem>
+                </MudSelect>
+            </MudForm>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Disabled="@(!isValid)"
+                  OnClick="Submit">Send</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int EventId { get; set; }
+    [Parameter] public string? ParticipantId { get; set; }
+    [Parameter] public string? ParticipantName { get; set; }
+
+    private MudForm form = null!;
+    private bool isValid;
+    private string title = "";
+    private string message = "";
+    private NotificationType notificationType = NotificationType.CustomMessage;
+
+    protected override void OnInitialized()
+    {
+        if (ParticipantName != null)
+        {
+            title = $"Message for {ParticipantName}";
+        }
+        else
+        {
+            title = "Message for all participants";
+        }
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            var notification = new NotificationMessage
+            {
+                Title = title,
+                Message = message,
+                Type = notificationType,
+                CreatedAt = DateTime.UtcNow,
+                UserId = ParticipantId
+            };
+
+            if (ParticipantId != null)
+            {
+                await NotificationService.ShowAsync($"Sending notification to {ParticipantName}...");
+                var response = await NotificationService.CreateNotificationAsync(notification);
+                if (response != null)
+                {
+                    await NotificationService.ShowAsync($"Notification sent to {ParticipantName}", NotificationType.Success);
+                }
+            }
+            else
+            {
+                await NotificationService.ShowAsync("Sending notifications to all participants...");
+                var notifications = await NotificationService.CreateNotificationsForEventParticipantsAsync(EventId, notification);
+                if (notifications?.Any() == true)
+                {
+                    await NotificationService.ShowAsync($"Notifications sent to {notifications.Count} participants", NotificationType.Success);
+                }
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            await NotificationService.ShowAsync($"Failed to send notification: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

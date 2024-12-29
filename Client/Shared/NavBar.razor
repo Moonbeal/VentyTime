@@ -17,7 +17,7 @@
             </div>
 
             <!-- Auth Buttons -->
-            <AuthorizeView>
+            <AuthorizeView Context="authContext">
                 <Authorized>
                     <div class="d-flex align-center">
                         <MudIconButton Icon="@Icons.Material.Filled.Chat" 
@@ -41,8 +41,9 @@
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/profile"))">Profile</MudMenuItem>
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/my-events"))">My Events</MudMenuItem>
                                 <AuthorizeView Roles="Admin, Organizer">
-                                    <Authorized Context="innerAuth">
+                                    <Authorized Context="adminContext">
                                         <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/create-event"))">Create Event</MudMenuItem>
+                                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/event-management"))">Manage Events</MudMenuItem>
                                     </Authorized>
                                 </AuthorizeView>
                                 <MudDivider />

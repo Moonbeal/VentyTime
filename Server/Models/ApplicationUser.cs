@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Identity;
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations.Schema;
 using VentyTime.Shared.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace VentyTime.Server.Models
 {
@@ -27,7 +30,10 @@ namespace VentyTime.Server.Models
         public string FullName => $"{FirstName} {LastName}".Trim();
 
         // Navigation properties
+        [JsonIgnore]
+        [NotMapped]
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
+        [JsonIgnore]
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
     }
 }

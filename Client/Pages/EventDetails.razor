@@ -26,17 +26,6 @@
                 <MudPaper Elevation="3" Class="pa-6 rounded-lg">
                     <div class="d-flex justify-space-between align-center mb-4">
                         <MudText Typo="Typo.h3" Color="Color.Primary">@eventModel.Title</MudText>
-                        @if (isOrganizer)
-                        {
-                            <div>
-                                <MudButton Variant="Variant.Outlined" 
-                                          Color="Color.Primary" 
-                                          StartIcon="@Icons.Material.Filled.Edit"
-                                          OnClick="@(() => NavigationManager.NavigateTo($"/events/{Id}/edit"))">
-                                    Edit
-                                </MudButton>
-                            </div>
-                        }
                     </div>
 
                     @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
@@ -144,7 +133,6 @@
     private Event? eventModel;
     private bool loading = true;
     private bool isAuthenticated;
-    private bool isOrganizer;
     private string? userId;
     private bool isRegistering;
     private bool isRegistered;
@@ -162,7 +150,6 @@
             eventModel = await EventService.GetEventByIdAsync(Id);
             if (eventModel != null)
             {
-                isOrganizer = userId == eventModel.OrganizerId;
                 if (isAuthenticated)
                 {
                     var registeredEvents = await EventService.GetRegisteredEventsAsync();

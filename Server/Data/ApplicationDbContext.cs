@@ -13,7 +13,9 @@ namespace VentyTime.Server.Data
 
         public DbSet<Event> Events { get; set; } = null!;
         public DbSet<Comment> Comments { get; set; } = null!;
+        public DbSet<EventRegistration> EventRegistrations { get; set; } = null!;
         public DbSet<Registration> Registrations { get; set; } = null!;
+        public DbSet<NotificationMessage> Notifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -27,114 +29,59 @@ namespace VentyTime.Server.Data
                 entity.Property(e => e.Bio).HasMaxLength(500);
                 entity.Property(e => e.Location).HasMaxLength(100);
                 entity.Property(e => e.Website).HasMaxLength(200);
+
+                // Ignore OrganizedEvents property
+                entity.Ignore(e => e.OrganizedEvents);
             });
 
             builder.Entity<Event>(entity =>
             {
                 entity.HasKey(e => e.Id);
 
-                entity.HasOne(e => e.Creator)
-                    .WithMany()
-                    .HasForeignKey(e => e.CreatorId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(e => e.Organizer)
-                    .WithMany(u => u.OrganizedEvents)
-                    .HasForeignKey(e => e.OrganizerId)
-                    .OnDelete(DeleteBehavior.Restrict);
-
                 entity.Property(e => e.Title)
-                    .HasMaxLength(100)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasMaxLength(100);
 
                 entity.Property(e => e.Description)
-                    .HasMaxLength(500)
-                    .IsRequired();
-
-                entity.Property(e => e.Category)
-                    .HasMaxLength(50)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasMaxLength(1000);
 
                 entity.Property(e => e.Location)
-                    .HasMaxLength(200)
-                    .IsRequired();
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.Property(e => e.Category)
+                    .IsRequired()
+                    .HasMaxLength(50);
 
                 entity.Property(e => e.StartDate)
-                    .IsRequired()
-                    .HasConversion(
-                        v => v,
-                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
-
-                entity.Property(e => e.EndDate)
-                    .IsRequired()
-                    .HasConversion(
-                        v => v,
-                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
-
-                entity.Property(e => e.StartTime)
                     .IsRequired();
 
-                entity.Property(e => e.Price)
-                    .HasPrecision(18, 2)
+                entity.Property(e => e.EndDate)
                     .IsRequired();
 
                 entity.Property(e => e.MaxAttendees)
                     .IsRequired();
 
-                entity.Property(e => e.CurrentCapacity)
-                    .IsRequired()
-                    .HasDefaultValue(0);
-
-                entity.Property(e => e.Type)
-                    .IsRequired()
-                    .HasConversion<string>();
-
-                entity.Property(e => e.ImageUrl)
-                    .HasMaxLength(2000);
+                entity.Property(e => e.CreatorId)
+                    .IsRequired();
 
                 entity.Property(e => e.OrganizerId)
                     .IsRequired();
 
-                entity.Property(e => e.CreatorId)
-                    .IsRequired();
-
-                entity.Property(e => e.IsActive)
-                    .IsRequired()
-                    .HasDefaultValue(true);
-            });
-
-            builder.Entity<Registration>(entity =>
-            {
-                entity.HasKey(r => r.Id);
-
-                entity.HasIndex(r => new { r.EventId, r.UserId, r.Status })
-                    .IsUnique()
-                    .HasFilter("[Status] != 'Cancelled'");
-
-                entity.Property(r => r.Status)
-                    .IsRequired()
-                    .HasConversion<string>();
-
-                entity.Property(r => r.CreatedAt)
-                    .IsRequired()
-                    .HasConversion(
-                        v => v,
-                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
-
-                entity.Property(r => r.UpdatedAt)
-                    .HasConversion(
-                        v => v,
-                        v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
-
-                entity.HasOne(r => r.Event)
-                    .WithMany(e => e.Registrations)
-                    .HasForeignKey(r => r.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(r => r.User)
+                entity.HasOne(e => e.Creator)
                     .WithMany()
-                    .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .HasForeignKey(e => e.CreatorId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                entity.HasOne(e => e.Organizer)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrganizerId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Ignore navigation properties that are not needed
+                entity.Ignore(e => e.Creator);
+                entity.Ignore(e => e.Organizer);
             });
 
             builder.Entity<Comment>()
@@ -142,6 +89,56 @@ namespace VentyTime.Server.Data
                 .WithMany(e => e.Comments)
                 .HasForeignKey(c => c.EventId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.Entity<EventRegistration>(entity =>
+            {
+                entity.HasKey(er => new { er.EventId, er.UserId });
+
+                entity.HasOne<Event>()
+                    .WithMany(e => e.EventRegistrations)
+                    .HasForeignKey(er => er.EventId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(er => er.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(er => er.RegistrationDate).IsRequired();
+                entity.Property(er => er.Status).IsRequired();
+            });
+
+            builder.Entity<NotificationMessage>(entity =>
+            {
+                entity.HasKey(n => n.Id);
+
+                entity.Property(n => n.Title)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.Property(n => n.Message)
+                    .IsRequired()
+                    .HasMaxLength(1000);
+
+                entity.Property(n => n.CreatedAt)
+                    .IsRequired();
+
+                entity.Property(n => n.Type)
+                    .IsRequired();
+
+                entity.Property(n => n.UserId)
+                    .IsRequired();
+
+                entity.HasOne<Event>()
+                    .WithMany()
+                    .HasForeignKey(n => n.EventId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(n => n.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
         }
     }
 }

@@ -11,7 +11,7 @@
         
         <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
         
-        <AuthorizeView>
+        <AuthorizeView Context="mainContext">
             <Authorized>
                 <MudNavLink Href="events" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Event">
                     Events
@@ -25,6 +25,13 @@
                 <MudNavLink Href="profile" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">
                     Profile
                 </MudNavLink>
+                <AuthorizeView Roles="Admin,Organizer" Context="adminContext">
+                    <Authorized>
+                        <MudNavLink Href="event-management" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+                            Event Management
+                        </MudNavLink>
+                    </Authorized>
+                </AuthorizeView>
                 <MudNavLink OnClick="LogoutClick" Icon="@Icons.Material.Filled.Logout">
                     Logout
                 </MudNavLink>

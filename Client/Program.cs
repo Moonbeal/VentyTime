@@ -15,14 +15,14 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // Configure HttpClient for all endpoints
 builder.Services.AddHttpClient("VentyTime.ServerAPI", client =>
 {
-    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
+    client.BaseAddress = new Uri("http://localhost:7241");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).AddHttpMessageHandler<AuthenticationHeaderHandler>();
 
 // Add NoAuth HttpClient for registration/login
 builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", client =>
 {
-    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
+    client.BaseAddress = new Uri("http://localhost:7241");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
@@ -45,6 +45,7 @@ builder.Services.AddAuthorizationCore();
 
 // Add Services
 builder.Services.AddScoped<IEventService, EventService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IAuthService>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
@@ -81,11 +82,10 @@ builder.Services.AddScoped<IUserService>(sp =>
 
 builder.Services.AddScoped<IRegistrationService>(sp =>
 {
-    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var snackbar = sp.GetRequiredService<ISnackbar>();
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    var authService = sp.GetRequiredService<IAuthService>();
-    return new RegistrationService(httpClient, snackbar, localStorage, authService);
+    return new RegistrationService(httpClientFactory, snackbar, localStorage);
 });
 
 builder.Services.AddScoped<ICommentService>(sp =>

@@ -15,7 +15,7 @@
         </MudContainer>
     </MudMainContent>
 
-    <AuthorizeView>
+    <AuthorizeView Context="authContext">
         <Authorized>
             <!-- Chat Button -->
             <div class="chat-button">
@@ -43,6 +43,11 @@
 </style>
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
     private async Task Logout()
     {
         await AuthService.LogoutAsync();

@@ -1,6 +1,7 @@
 @using VentyTime.Client.Services
 @using VentyTime.Shared.Models
-@inject NotificationService NotificationService
+@inject INotificationService NotificationService
+@implements IDisposable
 
 <div class="notifications-container @(notifications.Any() ? "show" : "")">
     @foreach (var notification in notifications.OrderByDescending(n => n.Timestamp))
@@ -9,15 +10,15 @@
             <div class="notification-content">
                 <div class="notification-title">@notification.Title</div>
                 <MudText Typo="Typo.body2">@notification.Message</MudText>
-                <MudText Typo="Typo.caption" Class="mt-1">@notification.Timestamp.ToString("g")</MudText>
-                @if (!notification.IsDismissed && notification.Id == selectedNotificationId)
+                <MudText Typo="Typo.caption" Class="mt-1">@GetTimeAgo(notification.Timestamp)</MudText>
+                @if (!notification.IsRead)
                 {
-                    <MudButton Color="Color.Primary" Size="Size.Small" OnClick="() => DismissNotification(notification.Id)">
-                        Dismiss
+                    <MudButton Color="Color.Primary" Size="Size.Small" OnClick="() => MarkAsRead(notification.Id)">
+                        Mark as Read
                     </MudButton>
                 }
             </div>
-            <button class="notification-dismiss" @onclick="() => DismissNotification(notification.Id)">
+            <button class="notification-dismiss" @onclick="() => DeleteNotification(notification.Id)">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -26,32 +27,64 @@
 
 @code {
     private List<NotificationMessage> notifications = new();
-    private int selectedNotificationId = 0;
+    private System.Timers.Timer? refreshTimer;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        NotificationService.OnNotification(HandleNotification);
+        await LoadNotifications();
+        
+        // Set up a timer to refresh notifications every minute
+        refreshTimer = new System.Timers.Timer(60000); // 60 seconds
+        refreshTimer.Elapsed += async (sender, e) => await LoadNotifications();
+        refreshTimer.Start();
     }
 
-    private void HandleNotification(NotificationMessage notification)
+    private async Task LoadNotifications()
     {
-        notifications.Add(notification);
-        InvokeAsync(StateHasChanged);
-
-        // Auto-dismiss after 5 seconds
-        Task.Delay(5000).ContinueWith(_ =>
+        try
         {
-            DismissNotification(notification.Id);
-        });
+            notifications = await NotificationService.GetUserNotificationsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to load notifications", NotificationType.Error);
+        }
     }
 
-    private void DismissNotification(int id)
+    private async Task MarkAsRead(int id)
     {
-        var notification = notifications.FirstOrDefault(n => n.Id == id);
-        if (notification != null)
+        try
         {
-            notifications.Remove(notification);
-            InvokeAsync(StateHasChanged);
+            if (await NotificationService.MarkAsReadAsync(id))
+            {
+                var notification = notifications.FirstOrDefault(n => n.Id == id);
+                if (notification != null)
+                {
+                    notification.IsRead = true;
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to mark notification as read", NotificationType.Error);
+        }
+    }
+
+    private async Task DeleteNotification(int id)
+    {
+        try
+        {
+            if (await NotificationService.DeleteNotificationAsync(id))
+            {
+                notifications.RemoveAll(n => n.Id == id);
+                StateHasChanged();
+            }
+        }
+        catch (Exception)
+        {
+            await NotificationService.ShowAsync("Failed to delete notification", NotificationType.Error);
         }
     }
 
@@ -68,6 +101,12 @@
         if (timeSpan.TotalDays < 7)
             return $"{(int)timeSpan.TotalDays}d ago";
         return timestamp.ToString("MMM dd, yyyy");
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Stop();
+        refreshTimer?.Dispose();
     }
 }
 
