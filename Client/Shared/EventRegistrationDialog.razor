@@ -1,7 +1,6 @@
 @using VentyTime.Shared.Models
-@using VentyTime.Client.Services
 @inject IRegistrationService RegistrationService
-@inject ISnackbar Snackbar
+@inject IAuthService AuthService
 
 <MudDialog>
     <DialogContent>
@@ -9,30 +8,70 @@
         <MudText Typo="Typo.body2">Date: @Event.StartDate.ToShortDateString()</MudText>
         <MudText Typo="Typo.body2">Time: @Event.StartDate.ToShortTimeString()</MudText>
         <MudText Typo="Typo.body2">Price: @Event.Price.ToString("C")</MudText>
+        @if (_errorMessage != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary" OnClick="RegisterForEvent">Register</MudButton>
+        <MudButton Color="Color.Primary" OnClick="ConfirmAsync" Disabled="@_registering">
+            @if (_registering)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Registering...</MudText>
+            }
+            else
+            {
+                <MudText>Register</MudText>
+            }
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
-    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Event Event { get; set; } = default!;
 
-    private async Task RegisterForEvent()
+    private bool _registering;
+    private string? _errorMessage;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task ConfirmAsync()
     {
         try
         {
-            await RegistrationService.RegisterForEventAsync(Event.Id);
-            Snackbar.Add("Successfully registered for the event!", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(true));
+            _registering = true;
+            _errorMessage = null;
+
+            var user = await AuthService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                _errorMessage = "You must be logged in to register for events";
+                return;
+            }
+
+            var result = await RegistrationService.RegisterForEventAsync(Event.Id, user.Id);
+            if (result.Success)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = result.Message;
+            }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to register: {ex.Message}", Severity.Error);
+            _errorMessage = "An error occurred while registering for the event";
+        }
+        finally
+        {
+            _registering = false;
         }
     }
-
-    private void Cancel() => MudDialog.Cancel();
 }

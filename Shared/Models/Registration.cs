@@ -30,8 +30,10 @@ namespace VentyTime.Shared.Models
 
     public enum RegistrationStatus
     {
-        Pending,
-        Confirmed,
-        Cancelled
+        None = 0,
+        Pending = 1,
+        Confirmed = 2,
+        Cancelled = 3,
+        Rejected = 4
     }
 }

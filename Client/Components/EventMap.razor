@@ -1,0 +1,22 @@
+@using VentyTime.Shared.Models
+@inject IJSRuntime JSRuntime
+
+<div id="map" style="height: 100%; width: 100%;"></div>
+
+@code {
+    [Parameter]
+    public List<EventDto> Events { get; set; } = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await InitializeMap();
+        }
+    }
+
+    private async Task InitializeMap()
+    {
+        await JSRuntime.InvokeVoidAsync("initializeMap", Events);
+    }
+}

@@ -208,19 +208,7 @@
 </MudContainer>
 
 @code {
-    private Event eventModel = new()
-    {
-        StartDate = DateTime.Now.Date.AddDays(1).AddHours(12),
-        EndDate = DateTime.Now.Date.AddDays(1).AddHours(13),
-        StartTime = TimeSpan.FromHours(12), // Set default start time
-        Type = EventType.Other,
-        Category = EventCategories.Technology,
-        MaxAttendees = 50,
-        Price = 0,
-        Location = string.Empty,
-        IsActive = true,
-        CurrentCapacity = 0
-    };
+    private EventDto eventModel = new EventDto();
 
     private MudForm? form;
     private bool isValid;
@@ -234,10 +222,10 @@
 
     protected override void OnInitialized()
     {
-        startDate = eventModel.StartDate.Date;
-        startTime = eventModel.StartDate.TimeOfDay;
-        endDate = eventModel.EndDate.Date;
-        endTime = eventModel.EndDate.TimeOfDay;
+        startDate = DateTime.Now.Date.AddDays(1).AddHours(12);
+        startTime = TimeSpan.FromHours(12); // Set default start time
+        endDate = DateTime.Now.Date.AddDays(1).AddHours(13);
+        endTime = TimeSpan.FromHours(13); // Set default end time
     }
 
     private async Task OnInputFileChanged(InputFileChangeEventArgs e)

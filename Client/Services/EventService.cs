@@ -7,6 +7,8 @@ using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.Logging;
+using MudBlazor;
 
 namespace VentyTime.Client.Services
 {
@@ -15,15 +17,26 @@ namespace VentyTime.Client.Services
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILocalStorageService _localStorage;
         private readonly AuthenticationStateProvider _authStateProvider;
+        private readonly ILogger<EventService> _logger;
+        private readonly Dictionary<string, CachedEventData> _eventCache = new();
+        private const int CacheExpirationMinutes = 5;
 
         public EventService(
-            IHttpClientFactory httpClientFactory, 
+            IHttpClientFactory httpClientFactory,
             ILocalStorageService localStorage,
-            AuthenticationStateProvider authStateProvider)
+            AuthenticationStateProvider authStateProvider,
+            ILogger<EventService> logger)
         {
             _httpClientFactory = httpClientFactory;
             _localStorage = localStorage;
             _authStateProvider = authStateProvider;
+            _logger = logger;
+        }
+
+        private class CachedEventData
+        {
+            public (IEnumerable<EventDto> Events, int TotalCount) Data { get; set; }
+            public DateTime ExpirationTime { get; set; }
         }
 
         private async Task<HttpClient> CreateClientAsync()
@@ -37,39 +50,75 @@ namespace VentyTime.Client.Services
             return client;
         }
 
-        public async Task<List<Event>> GetEventsAsync()
+        public async Task<(IEnumerable<EventDto> Events, int TotalCount)> GetEventsAsync(
+            int page = 1,
+            int? pageSize = null,
+            string? category = null,
+            string? searchQuery = null,
+            DateTime? startDate = null,
+            DateTime? endDate = null)
         {
             try
             {
                 var client = await CreateClientAsync();
-                var response = await client.GetAsync("api/events");
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+                var queryParams = new List<string>();
+
+                // Only add page and pageSize if pageSize is specified
+                if (pageSize.HasValue)
+                {
+                    queryParams.Add($"page={page}");
+                    queryParams.Add($"pageSize={pageSize.Value}");
+                }
+
+                if (!string.IsNullOrEmpty(category))
+                {
+                    queryParams.Add($"category={Uri.EscapeDataString(category)}");
+                }
+
+                if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    queryParams.Add($"searchQuery={Uri.EscapeDataString(searchQuery)}");
+                }
+
+                if (startDate.HasValue)
+                {
+                    queryParams.Add($"startDate={startDate.Value:yyyy-MM-dd}");
+                }
+
+                if (endDate.HasValue)
+                {
+                    queryParams.Add($"endDate={endDate.Value:yyyy-MM-dd}");
+                }
+
+                var url = $"api/events{(queryParams.Any() ? "?" + string.Join("&", queryParams) : "")}";
+                
+                var response = await client.GetFromJsonAsync<(IEnumerable<EventDto> Events, int TotalCount)>(url);
+                return response;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting events: {ex.Message}");
-                return new List<Event>();
+                _logger.LogError(ex, "Error getting events");
+                throw;
             }
         }
 
-        public async Task<Event?> GetEventByIdAsync(int id)
+        public async Task<EventDto?> GetEventByIdAsync(int id)
         {
             try
             {
                 var client = await CreateClientAsync();
                 var response = await client.GetAsync($"api/events/{id}");
                 response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<Event>();
+                return await response.Content.ReadFromJsonAsync<EventDto>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting event {id}: {ex.Message}");
-                return null;
+                _logger.LogError(ex, "Error getting event {EventId}", id);
+                throw;
             }
         }
 
-        public async Task<Event> CreateEventAsync(Event eventItem)
+        public async Task<EventDto> CreateEventAsync(EventDto eventItem)
         {
             try
             {
@@ -114,7 +163,7 @@ namespace VentyTime.Client.Services
                     throw new HttpRequestException($"Server error: {errorContent}", null, response.StatusCode);
                 }
 
-                var createdEvent = await response.Content.ReadFromJsonAsync<Event>();
+                var createdEvent = await response.Content.ReadFromJsonAsync<EventDto>();
                 return createdEvent ?? throw new Exception("Created event is null");
             }
             catch (HttpRequestException ex)
@@ -134,28 +183,81 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<Event> UpdateEventAsync(Event eventItem)
+        public async Task<EventDto> UpdateEventAsync(int id, EventDto eventItem)
         {
             try
             {
                 var client = await CreateClientAsync();
 
+                // Get the current user's ID
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User ID not found. Please make sure you are logged in.");
+                }
+
+                // Check if the user is the organizer of the event
+                var existingEvent = await GetEventAsync(id) 
+                    ?? throw new InvalidOperationException("Event not found.");
+
+                if (existingEvent.OrganizerId != userId)
+                {
+                    throw new InvalidOperationException("You don't have permission to update this event.");
+                }
+
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
 
-                using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{eventItem.Id}");
+                // Convert dates to UTC before sending
+                eventItem.StartDate = DateTime.SpecifyKind(eventItem.StartDate, DateTimeKind.Local).ToUniversalTime();
+                if (eventItem.EndDate != default)
+                {
+                    eventItem.EndDate = DateTime.SpecifyKind(eventItem.EndDate, DateTimeKind.Local).ToUniversalTime();
+                }
+                eventItem.StartTime = eventItem.StartDate.TimeOfDay;
+
+                using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{id}");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
                 var response = await client.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Server error: {errorContent}");
+                    throw new HttpRequestException($"Server error: {errorContent}", null, response.StatusCode);
+                }
+
+                var updatedEvent = await response.Content.ReadFromJsonAsync<EventDto>();
+                return updatedEvent ?? throw new Exception("Failed to update event");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error updating event: {ex.Message}");
                 throw;
+            }
+        }
+
+        public async Task<EventDto> UpdateEventAsync(EventDto eventToUpdate)
+        {
+            return await UpdateEventAsync(eventToUpdate.Id, eventToUpdate);
+        }
+
+        public async Task<EventDto?> GetEventAsync(int id)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                return await client.GetFromJsonAsync<EventDto>($"api/events/{id}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting event {id}: {ex.Message}");
+                return null;
             }
         }
 
@@ -169,7 +271,7 @@ namespace VentyTime.Client.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting event: {ex.Message}");
+                Console.WriteLine($"Error deleting event {id}: {ex.Message}");
                 return false;
             }
         }
@@ -179,9 +281,7 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
-                var response = await client.GetAsync("api/categories");
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
+                return await client.GetFromJsonAsync<List<string>>("api/events/categories") ?? new List<string>();
             }
             catch (Exception ex)
             {
@@ -190,19 +290,19 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId)
+        public async Task<List<EventDto>> GetEventsByOrganizerIdAsync(string organizerId)
         {
             try
             {
                 var client = await CreateClientAsync();
                 var response = await client.GetAsync($"api/events/organizer/{organizerId}");
                 response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+                return await response.Content.ReadFromJsonAsync<List<EventDto>>() ?? new List<EventDto>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting events for organizer {organizerId}: {ex.Message}");
-                return new List<Event>();
+                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}", organizerId);
+                throw;
             }
         }
 
@@ -212,35 +312,35 @@ namespace VentyTime.Client.Services
             {
                 var client = await CreateClientAsync();
                 var response = await client.PostAsync($"api/events/{eventId}/register", null);
-                if (!response.IsSuccessStatusCode)
+                
+                if (response.IsSuccessStatusCode)
                 {
-                    var errorContent = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-                    return (false, errorContent?.Message ?? "Failed to register for the event");
+                    return (true, null);
                 }
-                return (true, null);
+
+                var error = await response.Content.ReadFromJsonAsync<ApiResponse<string>>();
+                return (false, error?.Message ?? "Failed to register for the event");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error registering for event {eventId}: {ex.Message}");
-                return (false, "An unexpected error occurred");
+                _logger.LogError(ex, "Error registering for event");
+                return (false, "An error occurred while registering for the event");
             }
         }
 
-        private class ErrorResponse
-        {
-            public string? Message { get; set; }
-        }
-
-        public async Task<List<Event>> GetRegisteredEventsAsync()
+        public async Task<List<EventDto>> GetRegisteredEventsAsync()
         {
             try
             {
                 var client = await CreateClientAsync();
-                return await client.GetFromJsonAsync<List<Event>>("api/events/registered") ?? new List<Event>();
+                var response = await client.GetAsync("api/events/registered");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<EventDto>>() ?? new List<EventDto>();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return new List<Event>();
+                _logger.LogError(ex, "Error getting registered events");
+                throw;
             }
         }
 
@@ -263,7 +363,7 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
-                var response = await client.GetAsync($"api/events/{eventId}/registration-status");
+                var response = await client.GetAsync($"api/registrations/event/{eventId}/status");
                 return response.IsSuccessStatusCode;
             }
             catch (Exception)
@@ -272,35 +372,35 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<List<Event>> GetUpcomingEventsAsync()
+        public async Task<List<EventDto>> GetUpcomingEventsAsync()
         {
             try
             {
                 var client = await CreateClientAsync();
                 var response = await client.GetAsync("api/events/upcoming");
                 response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+                return await response.Content.ReadFromJsonAsync<List<EventDto>>() ?? new List<EventDto>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting upcoming events: {ex.Message}");
-                return new List<Event>();
+                _logger.LogError(ex, "Error getting upcoming events");
+                throw;
             }
         }
 
-        public async Task<List<Event>> GetPopularEventsAsync()
+        public async Task<List<EventDto>> GetPopularEventsAsync()
         {
             try
             {
                 var client = await CreateClientAsync();
                 var response = await client.GetAsync("api/events/popular");
                 response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+                return await response.Content.ReadFromJsonAsync<List<EventDto>>() ?? new List<EventDto>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting popular events: {ex.Message}");
-                return new List<Event>();
+                _logger.LogError(ex, "Error getting popular events");
+                throw;
             }
         }
 
@@ -325,21 +425,9 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
-                var response = await client.PostAsync("api/Upload", content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"Upload failed. Status: {response.StatusCode}, Error: {errorContent}");
-                    throw new HttpRequestException($"Upload failed with status {response.StatusCode}: {errorContent}");
-                }
-                
-                var result = await response.Content.ReadFromJsonAsync<ImageUploadResult>();
-                if (result == null || string.IsNullOrEmpty(result.ImageUrl))
-                {
-                    throw new Exception("Server returned invalid image upload result");
-                }
-                return result.ImageUrl;
+                var response = await client.PostAsync("api/events/upload-image", content);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
             }
             catch (Exception ex)
             {
@@ -348,22 +436,64 @@ namespace VentyTime.Client.Services
             }
         }
 
-        private class ImageUploadResult
-        {
-            public string ImageUrl { get; set; } = string.Empty;
-            public string ThumbnailUrl { get; set; } = string.Empty;
-        }
-
-        public async Task<List<Event>> SearchEventsAsync(string searchTerm)
+        public async Task<List<EventDto>> SearchEventsAsync(string searchQuery)
         {
             try
             {
                 var client = await CreateClientAsync();
-                return await client.GetFromJsonAsync<List<Event>>($"api/events/search?query={Uri.EscapeDataString(searchTerm)}") ?? new List<Event>();
+                var response = await client.GetAsync($"api/events/search?q={Uri.EscapeDataString(searchQuery)}");
+                response.EnsureSuccessStatusCode();
+
+                var wrapper = await response.Content.ReadFromJsonAsync<ApiResponse<List<EventDto>>>();
+                return wrapper?.Data ?? new List<EventDto>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error searching events: {ex.Message}");
+                _logger.LogError(ex, "Error searching events");
+                return new List<EventDto>();
+            }
+        }
+
+        public async Task<(IEnumerable<EventDto> Events, int TotalCount)> GetEventsAsync(int? pageSize = null, int? pageNumber = null)
+        {
+            var cacheKey = $"events_p{pageNumber}_s{pageSize}";
+
+            // Try to get from cache first
+            if (_eventCache.TryGetValue(cacheKey, out var cachedData) && 
+                cachedData.ExpirationTime > DateTime.UtcNow)
+            {
+                return cachedData.Data;
+            }
+
+            try
+            {
+                var client = await CreateClientAsync();
+                var query = new List<string>();
+                if (pageSize.HasValue) query.Add($"pageSize={pageSize}");
+                if (pageNumber.HasValue) query.Add($"pageNumber={pageNumber}");
+                
+                var url = $"api/events{(query.Any() ? "?" + string.Join("&", query) : "")}";
+                var response = await client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+                
+                var wrapper = await response.Content.ReadFromJsonAsync<ApiResponse<EventsResponse>>();
+                if (wrapper?.Data == null)
+                {
+                    _logger.LogError("Failed to deserialize events response");
+                    return (Array.Empty<EventDto>(), 0);
+                }
+
+                // Cache the response
+                _eventCache[cacheKey] = new CachedEventData
+                {
+                    Data = (wrapper.Data.Events, wrapper.Data.TotalCount),
+                    ExpirationTime = DateTime.UtcNow.AddMinutes(CacheExpirationMinutes)
+                };
+                return (wrapper.Data.Events, wrapper.Data.TotalCount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading events");
                 throw;
             }
         }
@@ -373,11 +503,13 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
-                var @event = await client.GetFromJsonAsync<Event>($"api/events/{eventId}");
-                return @event?.IsFull ?? false;
+                var response = await client.GetAsync($"api/events/{eventId}/is-full");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<bool>();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error checking if event is full: {ex.Message}");
                 return false;
             }
         }
@@ -390,8 +522,9 @@ namespace VentyTime.Client.Services
                 var response = await client.PostAsync($"api/events/{eventId}/cancel", null);
                 return response.IsSuccessStatusCode;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error cancelling event: {ex.Message}");
                 return false;
             }
         }

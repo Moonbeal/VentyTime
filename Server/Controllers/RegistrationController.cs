@@ -194,70 +194,72 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("event/{eventId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<UserEventRegistration>>> GetUserEventRegistrationsByEvent(int eventId)
         {
             try
             {
-                var registrations = await _context.Registrations
+                var userEventRegistrations = await _context.UserEventRegistrations
                     .Include(r => r.User)
                     .Where(r => r.EventId == eventId)
                     .ToListAsync();
 
-                return Ok(registrations);
+                return Ok(userEventRegistrations);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting registrations for event {EventId}", eventId);
-                return StatusCode(500, new { message = "An error occurred while retrieving registrations" });
+                _logger.LogError(ex, "Error getting user event registrations for event {EventId}", eventId);
+                return StatusCode(500, "Internal server error");
             }
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations(string userId)
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<UserEventRegistration>>> GetUserEventRegistrationsByUser(string userId)
         {
             try
             {
-                var registrations = await _context.Registrations
+                var userEventRegistrations = await _context.UserEventRegistrations
                     .Include(r => r.Event)
                     .Where(r => r.UserId == userId)
                     .ToListAsync();
 
-                return Ok(registrations);
+                return Ok(userEventRegistrations);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting registrations for user {UserId}", userId);
-                return StatusCode(500, new { message = "An error occurred while retrieving registrations" });
+                _logger.LogError(ex, "Error getting user event registrations for user {UserId}", userId);
+                return StatusCode(500, "Internal server error");
             }
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Registration>> GetRegistration(int id)
+        public async Task<ActionResult<UserEventRegistration>> GetUserEventRegistration(int id)
         {
             try
             {
-                var registration = await _context.Registrations
+                var userEventRegistration = await _context.UserEventRegistrations
                     .Include(r => r.Event)
                     .Include(r => r.User)
                     .FirstOrDefaultAsync(r => r.Id == id);
 
-                if (registration == null)
+                if (userEventRegistration == null)
                 {
                     return NotFound();
                 }
 
-                return Ok(registration);
+                return Ok(userEventRegistration);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting registration {RegistrationId}", id);
-                return StatusCode(500, new { message = "An error occurred while retrieving registration" });
+                _logger.LogError(ex, "Error getting user event registration {RegistrationId}", id);
+                return StatusCode(500, "Internal server error");
             }
         }
 
         [Authorize]
         [HttpPost("event/{eventId}")]
-        public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
+        public async Task<ActionResult<UserEventRegistration>> RegisterForEvent(int eventId)
         {
             try
             {
@@ -287,10 +289,10 @@ namespace VentyTime.Server.Controllers
                     return NotFound(new { message = "Event not found" });
                 }
 
-                if (!@event.IsActive)
+                // Check if the event is active
+                if (!@event.IsActive.GetValueOrDefault(false))
                 {
-                    _logger.LogWarning("Attempted to register for inactive event {EventId}", eventId);
-                    return BadRequest(new { message = "This event is not active" });
+                    return BadRequest("Cannot register for an inactive event");
                 }
 
                 if (@event.EndDate < DateTime.UtcNow)
@@ -305,16 +307,17 @@ namespace VentyTime.Server.Controllers
                     return BadRequest(new { message = "This event has already started" });
                 }
 
-                // Check current capacity
-                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
-                if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
+                // Check if event is at capacity
+                var confirmedRegistrations = @event.Registrations.Count(r => r.Status == RegistrationStatus.Confirmed);
+
+                if (confirmedRegistrations >= @event.MaxAttendees)
                 {
-                    _logger.LogWarning("Attempted to register for full event {EventId}", eventId);
-                    return BadRequest(new { message = "This event is full" });
+                    _logger.LogWarning("Event {EventId} is at capacity", eventId);
+                    return BadRequest("Event is at capacity");
                 }
 
                 // Check for existing registration using a direct query
-                var existingRegistration = await _context.Registrations
+                var existingRegistration = await _context.UserEventRegistrations
                     .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
 
                 if (existingRegistration != null)
@@ -325,40 +328,37 @@ namespace VentyTime.Server.Controllers
                         existingRegistration.UpdatedAt = DateTime.UtcNow;
                         await _context.SaveChangesAsync();
                         _logger.LogInformation("Reactivated cancelled registration for user {UserId} in event {EventId}", userId, eventId);
-                        
+
                         // Load and return the full registration details
-                        var reactivatedRegistration = await _context.Registrations
+                        var reactivatedRegistration = await _context.Set<UserEventRegistration>()
                             .Include(r => r.Event)
                             .Include(r => r.User)
                             .FirstOrDefaultAsync(r => r.Id == existingRegistration.Id);
-                            
+
                         return Ok(reactivatedRegistration);
                     }
-                    
+
                     _logger.LogWarning("User {UserId} attempted to register again for event {EventId}", userId, eventId);
                     return BadRequest(new { message = "You are already registered for this event" });
                 }
 
                 // Create new registration
-                var registration = new Registration
+                var registration = new UserEventRegistration
                 {
                     EventId = eventId,
                     UserId = userId,
                     Status = RegistrationStatus.Pending
                 };
 
-                _context.Registrations.Add(registration);
+                _context.Set<UserEventRegistration>().Add(registration);
 
-                // Update event capacity
-                @event.CurrentCapacity = confirmedRegistrations + 1;
-                _context.Events.Update(@event);
-
+                // No need to update CurrentCapacity as it's a computed property
                 await _context.SaveChangesAsync();
-                
+
                 _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
-                
+
                 // Load and return the full registration details
-                var savedRegistration = await _context.Registrations
+                var savedRegistration = await _context.Set<UserEventRegistration>()
                     .Include(r => r.Event)
                     .Include(r => r.User)
                     .FirstOrDefaultAsync(r => r.Id == registration.Id);
@@ -368,7 +368,7 @@ namespace VentyTime.Server.Controllers
                     _logger.LogError("Failed to load saved registration {RegistrationId} for event {EventId}", registration.Id, eventId);
                     return StatusCode(500, new { message = "Registration was created but could not be loaded" });
                 }
-                    
+
                 return Ok(savedRegistration);
             }
             catch (Exception ex)
@@ -380,7 +380,7 @@ namespace VentyTime.Server.Controllers
 
         [Authorize]
         [HttpPost("{id}/cancel")]
-        public async Task<IActionResult> CancelRegistration(int id)
+        public async Task<IActionResult> CancelUserEventRegistration(int id)
         {
             try
             {
@@ -390,7 +390,7 @@ namespace VentyTime.Server.Controllers
                     return Unauthorized();
                 }
 
-                var registration = await _context.Registrations
+                var registration = await _context.Set<UserEventRegistration>()
                     .FirstOrDefaultAsync(r => r.Id == id);
 
                 if (registration == null)
@@ -417,18 +417,18 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error cancelling registration {RegistrationId}", id);
-                return StatusCode(500, new { message = "An error occurred while cancelling registration" });
+                _logger.LogError(ex, "Error cancelling user event registration {RegistrationId}", id);
+                return StatusCode(500, "Internal server error");
             }
         }
 
         [Authorize(Roles = "Admin,Organizer")]
         [HttpPost("{id}/confirm")]
-        public async Task<IActionResult> ConfirmRegistration(int id)
+        public async Task<IActionResult> ConfirmUserEventRegistration(int id)
         {
             try
             {
-                var registration = await _context.Registrations
+                var registration = await _context.Set<UserEventRegistration>()
                     .Include(r => r.Event)
                     .FirstOrDefaultAsync(r => r.Id == id);
 
@@ -451,8 +451,10 @@ namespace VentyTime.Server.Controllers
                     return NotFound(new { message = "Event not found" });
                 }
 
-                var confirmedRegistrations = @event.Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
-                if (@event.MaxAttendees > 0 && confirmedRegistrations >= @event.MaxAttendees)
+                // Check if event is at capacity
+                var confirmedRegistrations = @event.Registrations.Count(r => r.Status == RegistrationStatus.Confirmed);
+
+                if (confirmedRegistrations >= @event.MaxAttendees)
                 {
                     return BadRequest(new { message = "Event is full" });
                 }
@@ -466,8 +468,8 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error confirming registration {RegistrationId}", id);
-                return StatusCode(500, new { message = "An error occurred while confirming registration" });
+                _logger.LogError(ex, "Error confirming user event registration {RegistrationId}", id);
+                return StatusCode(500, "Internal server error");
             }
         }
     }

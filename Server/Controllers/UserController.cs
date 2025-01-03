@@ -85,16 +85,6 @@ public class UserController : ControllerBase
             _ => UserRole.User
         };
 
-        var organizedEvents = await _context.Events
-            .Where(e => e.OrganizerId == userId)
-            .Select(e => e.Id.ToString())
-            .ToListAsync();
-
-        var registeredEvents = await _context.Registrations
-            .Where(r => r.UserId == userId)
-            .Select(r => r.EventId.ToString())
-            .ToListAsync();
-
         return Ok(new User
         {
             Id = user.Id,
@@ -109,8 +99,15 @@ public class UserController : ControllerBase
             IsEmailVerified = user.EmailConfirmed,
             Role = userRole,
             PhoneNumber = user.PhoneNumber ?? string.Empty,
-            OrganizedEventIds = organizedEvents,
-            RegisteredEventIds = registeredEvents
+            OrganizedEvents = await _context.Events
+                .Where(e => e.OrganizerId == userId)
+                .ToListAsync(),
+            RegisteredEvents = await _context.Events
+                .Where(e => _context.UserEventRegistrations
+                    .Where(r => r.UserId == userId)
+                    .Select(r => r.EventId)
+                    .Contains(e.Id))
+                .ToListAsync()
         });
     }
 

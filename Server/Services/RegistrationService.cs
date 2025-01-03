@@ -6,11 +6,11 @@ namespace VentyTime.Server.Services
 {
     public interface IRegistrationService
     {
-        Task<Registration> CreateRegistrationAsync(Registration registration, string userId);
-        Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId);
-        Task<Registration?> GetRegistrationByIdAsync(int id);
-        Task<IEnumerable<Registration>> GetRegistrationsByEventAsync(int eventId);
-        Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId);
+        Task<UserEventRegistration> CreateRegistrationAsync(UserEventRegistration registration, string userId);
+        Task<UserEventRegistration> UpdateRegistrationAsync(UserEventRegistration registration, RegistrationStatus newStatus, string userId);
+        Task<UserEventRegistration?> GetRegistrationByIdAsync(int id);
+        Task<IEnumerable<UserEventRegistration>> GetRegistrationsByEventAsync(int eventId);
+        Task<IEnumerable<UserEventRegistration>> GetRegistrationsByUserAsync(string userId);
         Task<bool> CancelRegistrationAsync(int id, string userId);
         Task<bool> ConfirmRegistrationAsync(int id, string userId);
         Task<bool> IsEventFullAsync(int eventId);
@@ -32,7 +32,7 @@ namespace VentyTime.Server.Services
             _eventService = eventService ?? throw new ArgumentNullException(nameof(eventService));
         }
 
-        public async Task<Registration> CreateRegistrationAsync(Registration registration, string userId)
+        public async Task<UserEventRegistration> CreateRegistrationAsync(UserEventRegistration registration, string userId)
         {
             try
             {
@@ -50,11 +50,12 @@ namespace VentyTime.Server.Services
                 registration.UserId = userId;
                 registration.Status = RegistrationStatus.Pending;
                 registration.CreatedAt = DateTime.UtcNow;
+                registration.UpdatedAt = null;
 
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    _context.Registrations.Add(registration);
+                    _context.UserEventRegistrations.Add(registration);
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
 
@@ -76,13 +77,13 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<Registration> UpdateRegistrationAsync(Registration registration, RegistrationStatus newStatus, string userId)
+        public async Task<UserEventRegistration> UpdateRegistrationAsync(UserEventRegistration registration, RegistrationStatus newStatus, string userId)
         {
             try
             {
-                var existingRegistration = await _context.Registrations
+                var existingRegistration = await _context.UserEventRegistrations
                     .Include(r => r.Event)
-                    .FirstOrDefaultAsync(r => r.Id == registration.Id)
+                    .FirstOrDefaultAsync(r => r.EventId == registration.EventId && r.UserId == userId)
                     ?? throw new KeyNotFoundException($"Registration with ID {registration.Id} not found");
 
                 if (existingRegistration.UserId != userId)
@@ -106,6 +107,8 @@ namespace VentyTime.Server.Services
 
                     _logger.LogInformation("Successfully updated registration {RegistrationId}", registration.Id);
 
+                    existingRegistration.Status = newStatus;
+                    existingRegistration.UpdatedAt = DateTime.UtcNow;
                     return existingRegistration;
                 }
                 catch (Exception ex)
@@ -122,26 +125,26 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<Registration?> GetRegistrationByIdAsync(int id)
+        public async Task<UserEventRegistration?> GetRegistrationByIdAsync(int id)
         {
-            return await _context.Registrations
+            return await _context.UserEventRegistrations
                 .Include(r => r.Event)
                 .Include(r => r.User)
                 .FirstOrDefaultAsync(r => r.Id == id);
         }
 
-        public async Task<IEnumerable<Registration>> GetRegistrationsByEventAsync(int eventId)
+        public async Task<IEnumerable<UserEventRegistration>> GetRegistrationsByEventAsync(int eventId)
         {
-            return await _context.Registrations
+            return await _context.UserEventRegistrations
                 .Include(r => r.User)
                 .Where(r => r.EventId == eventId)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
 
-        public async Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId)
+        public async Task<IEnumerable<UserEventRegistration>> GetRegistrationsByUserAsync(string userId)
         {
-            return await _context.Registrations
+            return await _context.UserEventRegistrations
                 .Include(r => r.Event)
                 .Where(r => r.UserId == userId)
                 .OrderByDescending(r => r.CreatedAt)
@@ -152,9 +155,8 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                var registration = await _context.Registrations
-                    .Include(r => r.Event)
-                    .FirstOrDefaultAsync(r => r.Id == id)
+                var registration = await _context.UserEventRegistrations
+                    .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId)
                     ?? throw new KeyNotFoundException($"Registration with ID {id} not found");
 
                 if (registration.UserId != userId)
@@ -193,8 +195,7 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                var registration = await _context.Registrations
-                    .Include(r => r.Event)
+                var registration = await _context.UserEventRegistrations
                     .FirstOrDefaultAsync(r => r.Id == id)
                     ?? throw new KeyNotFoundException($"Registration with ID {id} not found");
 
@@ -237,13 +238,10 @@ namespace VentyTime.Server.Services
                 .FirstOrDefaultAsync(e => e.Id == eventId)
                 ?? throw new KeyNotFoundException($"Event with ID {eventId} not found");
 
-            if (@event.Registrations == null)
-            {
-                return false;
-            }
+            var registrations = await _context.UserEventRegistrations
+                .CountAsync(r => r.EventId == eventId && r.Status == RegistrationStatus.Confirmed);
 
-            return @event.MaxAttendees > 0 && 
-                   @event.Registrations.Count(r => r.Status != RegistrationStatus.Cancelled) >= @event.MaxAttendees;
+            return registrations >= @event.MaxAttendees;
         }
     }
 }

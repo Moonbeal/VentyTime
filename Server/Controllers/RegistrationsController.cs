@@ -7,7 +7,7 @@ using VentyTime.Shared.Models;
 namespace VentyTime.Server.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/registrations")]
     [Authorize]
     public class RegistrationsController : ControllerBase
     {
@@ -22,16 +22,50 @@ namespace VentyTime.Server.Controllers
             _logger = logger;
         }
 
-        [HttpPost]
-        public async Task<ActionResult<Registration>> CreateRegistration(Registration registration)
+        [HttpGet("event/{eventId}/status")]
+        public async Task<ActionResult<object>> GetRegistrationStatus(int eventId)
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized();
                 }
+
+                var registrations = await _registrationService.GetRegistrationsByUserAsync(userId);
+                var registration = registrations.FirstOrDefault(r => r.EventId == eventId);
+
+                if (registration == null)
+                {
+                    return Ok(new { status = RegistrationStatus.None });
+                }
+
+                return Ok(new { status = registration.Status });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking registration status for event {EventId}", eventId);
+                return StatusCode(500, new { message = "An error occurred while checking registration status" });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CreateRegistration([FromBody] UserEventRegistration registration)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                // Set the current user ID and timestamps
+                registration.UserId = userId;
+                registration.RegisteredAt = DateTime.UtcNow;
+                registration.CreatedAt = DateTime.UtcNow;
+                registration.Status = RegistrationStatus.Pending;
 
                 var result = await _registrationService.CreateRegistrationAsync(registration, userId);
                 return CreatedAtAction(nameof(GetRegistration), new { id = result.Id }, result);
@@ -46,13 +80,13 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating registration");
-                return StatusCode(500, new { message = "An error occurred while creating the registration" });
+                _logger.LogError(ex, "An error occurred while creating the registration.");
+                return StatusCode(500, new { message = "An error occurred while creating the registration." });
             }
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Registration>> GetRegistration(int id)
+        public async Task<ActionResult<UserEventRegistration>> GetRegistration(int id)
         {
             try
             {
@@ -72,7 +106,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("event/{eventId}")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetRegistrationsByEvent(int eventId)
+        public async Task<ActionResult<IEnumerable<UserEventRegistration>>> GetRegistrationsByEvent(int eventId)
         {
             try
             {
@@ -87,11 +121,11 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("user")]
-        public async Task<ActionResult<IEnumerable<Registration>>> GetUserRegistrations()
+        public async Task<ActionResult<IEnumerable<UserEventRegistration>>> GetUserRegistrations()
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized();
@@ -107,60 +141,23 @@ namespace VentyTime.Server.Controllers
             }
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<Registration>> UpdateRegistration(int id, [FromBody] Registration registration)
-        {
-            try
-            {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
-                {
-                    return Unauthorized();
-                }
-
-                var existingRegistration = await _registrationService.GetRegistrationByIdAsync(id);
-                if (existingRegistration == null)
-                {
-                    return NotFound();
-                }
-
-                if (existingRegistration.UserId != userId)
-                {
-                    return Forbid();
-                }
-
-                registration.Id = id;
-                var updatedRegistration = await _registrationService.UpdateRegistrationAsync(registration, registration.Status, userId);
-                return Ok(updatedRegistration);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error updating registration");
-                return StatusCode(500, "An error occurred while updating the registration");
-            }
-        }
-
-        [HttpPost("{id}/cancel")]
+        [HttpPut("{id}/cancel")]
         public async Task<IActionResult> CancelRegistration(int id)
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.CancelRegistrationAsync(id, userId);
-                if (!result)
+                var success = await _registrationService.CancelRegistrationAsync(id, userId);
+                if (success)
                 {
-                    return BadRequest(new { message = "Registration is already cancelled" });
+                    return Ok();
                 }
 
-                return Ok();
-            }
-            catch (KeyNotFoundException)
-            {
                 return NotFound();
             }
             catch (UnauthorizedAccessException)
@@ -174,37 +171,29 @@ namespace VentyTime.Server.Controllers
             }
         }
 
-        [HttpPost("{id}/confirm")]
+        [HttpPut("{id}/confirm")]
         [Authorize(Roles = "Admin,Organizer")]
         public async Task<IActionResult> ConfirmRegistration(int id)
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
                     return Unauthorized();
                 }
 
-                var result = await _registrationService.ConfirmRegistrationAsync(id, userId);
-                if (!result)
+                var success = await _registrationService.ConfirmRegistrationAsync(id, userId);
+                if (success)
                 {
-                    return BadRequest(new { message = "Registration cannot be confirmed" });
+                    return Ok();
                 }
 
-                return Ok();
-            }
-            catch (KeyNotFoundException)
-            {
                 return NotFound();
             }
             catch (UnauthorizedAccessException)
             {
                 return Forbid();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {

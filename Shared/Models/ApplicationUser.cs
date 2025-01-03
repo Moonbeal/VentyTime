@@ -38,10 +38,13 @@ namespace VentyTime.Shared.Models
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
 
         [JsonIgnore]
-        public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();
+        public virtual ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
 
         [JsonIgnore]
-        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+        public virtual ICollection<UserEventRegistration> Registrations { get; set; } = new List<UserEventRegistration>();
+
+        [JsonIgnore]
+        public virtual ICollection<EventComment> EventComments { get; set; } = new List<EventComment>();
 
         public bool IsActive { get; set; } = true;
     }

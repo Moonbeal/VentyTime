@@ -262,7 +262,160 @@ namespace VentyTime.Server.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
-            modelBuilder.Entity("VentyTime.Shared.Models.Comment", b =>
+            modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Accessibility")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("AllowWaitlist")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatorId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("EarlyBirdDeadline")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("EarlyBirdPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("HasAgeRestriction")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("HasEarlyBirdPrice")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool?>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("MaxAttendees")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MinimumAge")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OnlineMeetingId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("OnlineMeetingPassword")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("OnlineMeetingUrl")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OnlineUrl")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OrganizerId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RefundPolicy")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Requirements")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("RequiresRegistration")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Schedule")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Tags")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VenueDetails")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("WaitlistCapacity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("OrganizerId");
+
+                    b.ToTable("Events");
+                });
+
+            modelBuilder.Entity("VentyTime.Shared.Models.EventComment", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -276,12 +429,14 @@ namespace VentyTime.Server.Migrations
                         .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<int>("EventId")
                         .HasColumnType("int");
 
-                    b.Property<bool>("IsEdited")
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -297,10 +452,10 @@ namespace VentyTime.Server.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Comments");
+                    b.ToTable("EventComments");
                 });
 
-            modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
+            modelBuilder.Entity("VentyTime.Shared.Models.UserEventRegistration", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -308,99 +463,10 @@ namespace VentyTime.Server.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatorId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("CurrentCapacity")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("IsFeatured")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Location")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("MaxAttendees")
-                        .HasColumnType("int");
-
-                    b.Property<string>("OrganizerId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<decimal>("Price")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatorId");
-
-                    b.HasIndex("OrganizerId");
-
-                    b.ToTable("Events");
-                });
-
-            modelBuilder.Entity("VentyTime.Shared.Models.Registration", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ApplicationUserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<int>("EventId")
                         .HasColumnType("int");
@@ -409,9 +475,13 @@ namespace VentyTime.Server.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -422,15 +492,11 @@ namespace VentyTime.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApplicationUserId");
+                    b.HasIndex("EventId");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("EventId", "UserId", "Status")
-                        .IsUnique()
-                        .HasFilter("[Status] != 'Cancelled'");
-
-                    b.ToTable("Registrations");
+                    b.ToTable("UserEventRegistrations");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -484,29 +550,10 @@ namespace VentyTime.Server.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("VentyTime.Shared.Models.Comment", b =>
-                {
-                    b.HasOne("VentyTime.Shared.Models.Event", "Event")
-                        .WithMany("Comments")
-                        .HasForeignKey("EventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("VentyTime.Shared.Models.ApplicationUser", "User")
-                        .WithMany("Comments")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Event");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
                 {
                     b.HasOne("VentyTime.Shared.Models.ApplicationUser", "Creator")
-                        .WithMany()
+                        .WithMany("CreatedEvents")
                         .HasForeignKey("CreatorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -522,12 +569,27 @@ namespace VentyTime.Server.Migrations
                     b.Navigation("Organizer");
                 });
 
-            modelBuilder.Entity("VentyTime.Shared.Models.Registration", b =>
+            modelBuilder.Entity("VentyTime.Shared.Models.EventComment", b =>
                 {
-                    b.HasOne("VentyTime.Shared.Models.ApplicationUser", null)
-                        .WithMany("Registrations")
-                        .HasForeignKey("ApplicationUserId");
+                    b.HasOne("VentyTime.Shared.Models.Event", "Event")
+                        .WithMany("EventComments")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
+                    b.HasOne("VentyTime.Shared.Models.ApplicationUser", "User")
+                        .WithMany("EventComments")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("VentyTime.Shared.Models.UserEventRegistration", b =>
+                {
                     b.HasOne("VentyTime.Shared.Models.Event", "Event")
                         .WithMany("Registrations")
                         .HasForeignKey("EventId")
@@ -535,7 +597,7 @@ namespace VentyTime.Server.Migrations
                         .IsRequired();
 
                     b.HasOne("VentyTime.Shared.Models.ApplicationUser", "User")
-                        .WithMany()
+                        .WithMany("Registrations")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -547,7 +609,9 @@ namespace VentyTime.Server.Migrations
 
             modelBuilder.Entity("VentyTime.Shared.Models.ApplicationUser", b =>
                 {
-                    b.Navigation("Comments");
+                    b.Navigation("CreatedEvents");
+
+                    b.Navigation("EventComments");
 
                     b.Navigation("OrganizedEvents");
 
@@ -556,7 +620,7 @@ namespace VentyTime.Server.Migrations
 
             modelBuilder.Entity("VentyTime.Shared.Models.Event", b =>
                 {
-                    b.Navigation("Comments");
+                    b.Navigation("EventComments");
 
                     b.Navigation("Registrations");
                 });

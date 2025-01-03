@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using VentyTime.Shared.Models;
 using MudBlazor;
 using Blazored.LocalStorage;
+using Microsoft.Extensions.Logging;
 
 namespace VentyTime.Client.Services
 {
@@ -12,18 +13,18 @@ namespace VentyTime.Client.Services
         private readonly HttpClient _httpClient;
         private readonly ISnackbar _snackbar;
         private readonly ILocalStorageService _localStorage;
-        private readonly IAuthService _authService;
+        private readonly ILogger<RegistrationService> _logger;
 
         public RegistrationService(
             HttpClient httpClient,
             ISnackbar snackbar,
             ILocalStorageService localStorage,
-            IAuthService authService)
+            ILogger<RegistrationService> logger)
         {
             _httpClient = httpClient;
             _snackbar = snackbar;
             _localStorage = localStorage;
-            _authService = authService;
+            _logger = logger;
         }
 
         public async Task<RegistrationResponse> RegisterForEventAsync(int eventId)
@@ -33,200 +34,32 @@ namespace VentyTime.Client.Services
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
                 {
-                    _snackbar.Add("You must be logged in to register for events", Severity.Warning);
-                    return new RegistrationResponse(false, "You must be logged in to register for events");
+                    return new RegistrationResponse { Success = false, Message = "You must be logged in to register for an event." };
                 }
 
-                // Ensure the auth token is set
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    RegistrationDate = DateTime.UtcNow
+                };
 
-                var response = await _httpClient.PostAsync($"api/registration/event/{eventId}", null);
-                var content = await response.Content.ReadAsStringAsync();
-                
+                var response = await _httpClient.PostAsJsonAsync($"api/registrations", registration);
                 if (response.IsSuccessStatusCode)
                 {
-                    _snackbar.Add("Successfully registered for the event!", Severity.Success);
-                    return new RegistrationResponse(true, "Successfully registered for the event!");
-                }
-                
-                // Try to parse the error message from the response
-                try
-                {
-                    var errorResponse = System.Text.Json.JsonSerializer.Deserialize<ErrorResponse>(content);
-                    var errorMessage = errorResponse?.Message ?? "Registration failed";
-                    _snackbar.Add(errorMessage, Severity.Error);
-                    return new RegistrationResponse(false, errorMessage);
-                }
-                catch
-                {
-                    // If we can't parse the error, just return the raw content
-                    _snackbar.Add(content, Severity.Error);
-                    return new RegistrationResponse(false, content);
-                }
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = $"An error occurred while registering for the event: {ex.Message}";
-                Console.WriteLine($"Registration error: {ex}");
-                _snackbar.Add(errorMessage, Severity.Error);
-                return new RegistrationResponse(false, errorMessage);
-            }
-        }
-
-        private class ErrorResponse
-        {
-            public string? Message { get; set; }
-        }
-
-        public async Task<RegistrationResponse> UnregisterFromEventAsync(int eventId)
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                    return new RegistrationResponse(false, "User not authenticated");
-
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var response = await _httpClient.PostAsync($"api/registrations/{eventId}/unregister", null);
-                if (response.IsSuccessStatusCode)
-                {
-                    _snackbar.Add("Successfully unregistered from the event!", Severity.Success);
-                    return new RegistrationResponse(true, "Successfully unregistered from the event!");
+                    var result = await response.Content.ReadFromJsonAsync<EventRegistration>();
+                    return new RegistrationResponse { Success = true, Registration = result };
                 }
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    _snackbar.Add(error, Severity.Error);
-                    return new RegistrationResponse(false, error);
+                    _logger.LogError("Failed to register for event. Status: {StatusCode}, Error: {Error}", response.StatusCode, error);
+                    return new RegistrationResponse { Success = false, Message = error };
                 }
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return new RegistrationResponse(false, ex.Message);
-            }
-        }
-
-        public async Task<bool> CancelRegistrationAsync(int eventId)
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                    return false;
-
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var response = await _httpClient.PostAsync($"api/registrations/{eventId}/cancel", null);
-                if (response.IsSuccessStatusCode)
-                {
-                    _snackbar.Add("Successfully cancelled registration!", Severity.Success);
-                    return true;
-                }
-                else
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    _snackbar.Add(error, Severity.Error);
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return false;
-            }
-        }
-
-        public async Task<List<Registration>> GetUserRegistrationsAsync()
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                    return new List<Registration>();
-
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>("api/registrations/user");
-                return registrations ?? new List<Registration>();
-            }
-            catch (Exception ex)
-            {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return new List<Registration>();
-            }
-        }
-
-        public async Task<List<Registration>> GetEventRegistrationsAsync(int eventId)
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                    return new List<Registration>();
-
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>($"api/registrations/event/{eventId}");
-                return registrations ?? new List<Registration>();
-            }
-            catch (Exception ex)
-            {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return new List<Registration>();
-            }
-        }
-
-        public async Task<Registration?> GetRegistrationAsync(int eventId, string userId)
-        {
-            try
-            {
-                var token = await _localStorage.GetItemAsync<string>("authToken");
-                if (string.IsNullOrEmpty(token))
-                    throw new UnauthorizedAccessException();
-
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                return await _httpClient.GetFromJsonAsync<Registration>($"api/registrations/{eventId}/user/{userId}");
-            }
-            catch (Exception ex)
-            {
-                _snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
-                return null;
-            }
-        }
-
-        public async Task<RegistrationResponse> IsUserRegisteredAsync(int eventId)
-        {
-            try
-            {
-                var userId = await _authService.GetUserId();
-                if (string.IsNullOrEmpty(userId))
-                {
-                    _snackbar.Add("User ID not found. Please log in again.", Severity.Error);
-                    return new RegistrationResponse(false, "User not authenticated");
-                }
-                var registration = await GetRegistrationAsync(eventId, userId);
-                if (registration != null)
-                {
-                    return new RegistrationResponse(true, "User is registered for the event!");
-                }
-                else
-                {
-                    return new RegistrationResponse(false, "User is not registered for the event!");
-                }
-            }
-            catch (Exception ex)
-            {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return new RegistrationResponse(false, ex.Message);
+                _logger.LogError(ex, "Error registering for event {EventId}", eventId);
+                return new RegistrationResponse { Success = false, Message = "An error occurred while registering for the event" };
             }
         }
 
@@ -236,39 +69,198 @@ namespace VentyTime.Client.Services
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
+                {
                     return false;
+                }
 
-                _httpClient.DefaultRequestHeaders.Authorization = 
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/isregistered");
+                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/status");
                 return response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<bool>();
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"Error checking registration status: {ex.Message}", Severity.Error);
+                _logger.LogError(ex, "Error checking registration status for event {EventId}", eventId);
                 return false;
             }
         }
 
-        public async Task<int> GetRegisteredUsersCountAsync(int eventId)
+        public async Task<bool> HasPendingRegistrationAsync(int eventId)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/count");
-                if (response.IsSuccessStatusCode)
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
                 {
-                    return await response.Content.ReadFromJsonAsync<int>();
+                    return false;
                 }
-                
-                _snackbar.Add("Error getting registered users count", Severity.Error);
-                return 0;
+
+                var response = await _httpClient.GetAsync($"api/registrations/{eventId}/pending");
+                return response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<bool>();
             }
             catch (Exception ex)
             {
-                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
-                return 0;
+                _logger.LogError(ex, "Error checking pending registration status for event {EventId}", eventId);
+                return false;
             }
+        }
+
+        public async Task<bool> CancelRegistrationAsync(int eventId)
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                {
+                    return false;
+                }
+
+                var response = await _httpClient.DeleteAsync($"api/registrations/{eventId}");
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error canceling registration for event {EventId}", eventId);
+                return false;
+            }
+        }
+
+        public async Task<RegistrationResponse> RegisterForEventAsync(int eventId, string userId)
+        {
+            try
+            {
+                var registration = new EventRegistration
+                {
+                    EventId = eventId,
+                    UserId = userId,
+                    RegistrationDate = DateTime.UtcNow
+                };
+
+                var response = await _httpClient.PostAsJsonAsync($"api/registrations", registration);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<EventRegistration>();
+                    return new RegistrationResponse { Success = true, Registration = result };
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to register for event. Status: {StatusCode}, Error: {Error}", response.StatusCode, error);
+                    return new RegistrationResponse { Success = false, Message = error };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering for event {EventId}", eventId);
+                return new RegistrationResponse { Success = false, Message = "An error occurred while registering for the event" };
+            }
+        }
+
+        public async Task<RegistrationResponse> UnregisterFromEventAsync(int eventId, string userId)
+        {
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"api/registrations/{eventId}/{userId}");
+                if (response.IsSuccessStatusCode)
+                {
+                    return new RegistrationResponse { Success = true };
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to unregister from event. Status: {StatusCode}, Error: {Error}", response.StatusCode, error);
+                    return new RegistrationResponse { Success = false, Message = error };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error unregistering from event {EventId}", eventId);
+                return new RegistrationResponse { Success = false, Message = "An error occurred while unregistering from the event" };
+            }
+        }
+
+        public async Task<EventRegistration?> GetRegistrationAsync(int eventId, string userId)
+        {
+            try
+            {
+                return await _httpClient.GetFromJsonAsync<EventRegistration>($"api/registrations/{eventId}/{userId}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registration for event {EventId} and user {UserId}", eventId, userId);
+                return null;
+            }
+        }
+
+        public async Task<bool> IsRegisteredForEventAsync(int eventId, string userId)
+        {
+            try
+            {
+                var registration = await GetRegistrationAsync(eventId, userId);
+                return registration != null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking registration status for event {EventId}", eventId);
+                return false;
+            }
+        }
+
+        public async Task<bool> HasPendingRegistrationAsync(int eventId, string userId)
+        {
+            try
+            {
+                var registration = await GetRegistrationAsync(eventId, userId);
+                return registration != null && !registration.IsConfirmed;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking pending registration status for event {EventId}", eventId);
+                return false;
+            }
+        }
+
+        public async Task<bool> CancelRegistrationAsync(int eventId, string userId)
+        {
+            try
+            {
+                var response = await UnregisterFromEventAsync(eventId, userId);
+                return response.Success;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error canceling registration for event {EventId}", eventId);
+                return false;
+            }
+        }
+
+        public async Task<List<UserEventRegistration>> GetUserRegistrationsAsync()
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                    return new List<UserEventRegistration>();
+
+                _httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                return await _httpClient.GetFromJsonAsync<List<UserEventRegistration>>("api/registrations/user") ?? new List<UserEventRegistration>();
+            }
+            catch (Exception ex)
+            {
+                _snackbar.Add("Error fetching user registrations", Severity.Error);
+                Console.WriteLine($"Error fetching user registrations: {ex}");
+                return new List<UserEventRegistration>();
+            }
+        }
+
+        private class ApiErrorResponse
+        {
+            public string? Message { get; set; }
+        }
+
+        private class StatusResponse
+        {
+            public RegistrationStatus Status { get; set; }
         }
     }
 }

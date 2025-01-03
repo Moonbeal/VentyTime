@@ -1,116 +1,95 @@
-@using VentyTime.Shared.Models
 @using VentyTime.Client.Services
+@using VentyTime.Shared.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Net.Http.Headers
+@using Blazored.LocalStorage
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
+@inject IJSRuntime JSRuntime
+@inject IHttpClientFactory _httpClientFactory
+@inject ILocalStorageService _localStorage
 
 <div class="event-list">
-    <div class="filters mb-4">
-        <div class="input-group">
-            <input type="text" class="form-control" placeholder="Search events..." @bind="searchTerm" @bind:event="oninput" @onkeyup="HandleSearch" />
-            <div class="input-group-append">
-                <button class="btn btn-primary" @onclick="HandleSearch">
-                    <i class="fas fa-search"></i> Search
-                </button>
-            </div>
-        </div>
-        <div class="filter-options mt-2">
-            <select class="form-select" @bind="selectedCategory">
-                <option value="">All Categories</option>
-                <option value="Technology">Technology</option>
-                <option value="Business">Business</option>
-                <option value="Arts & Culture">Arts & Culture</option>
-                <option value="Health & Wellness">Health & Wellness</option>
-                <option value="Education">Education</option>
-                <option value="Entertainment">Entertainment</option>
-                <option value="Sports">Sports</option>
-                <option value="Food & Drink">Food & Drink</option>
-            </select>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Events</h1>
+        <button class="btn btn-primary" @onclick="SeedEvents" disabled="@_isSeedingEvents">
+            @if (_isSeedingEvents)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span>Seeding Events...</span>
+            }
+            else
+            {
+                <span>Seed Sample Events</span>
+            }
+        </button>
     </div>
 
-    @if (events == null)
+    @if (IsLoading)
     {
-        <div class="text-center">
-            <div class="spinner-border" role="status">
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
         </div>
     }
+    else if (error != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            @error
+            <button type="button" class="btn-close" @onclick="() => error = null" aria-label="Close"></button>
+        </div>
+    }
     else if (!events.Any())
     {
-        <div class="alert alert-info">
-            No events found. Try adjusting your search criteria.
+        <div class="alert alert-info" role="alert">
+            No events found. @if (selectedCategory != null) { <span>Try selecting a different category.</span> }
         </div>
     }
     else
     {
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            @foreach (var evt in filteredEvents)
+            @foreach (var evt in events)
             {
                 <div class="col">
-                    <div class="card h-100 event-card">
+                    <div class="card h-100">
                         @if (!string.IsNullOrEmpty(evt.ImageUrl))
                         {
                             <img src="@evt.ImageUrl" class="card-img-top" alt="@evt.Title">
                         }
                         <div class="card-body">
                             <h5 class="card-title">@evt.Title</h5>
-                            <p class="card-text">@(evt.Description.Length > 100 ? evt.Description.Substring(0, 97) + "..." : evt.Description)</p>
-                            <div class="event-details">
-                                <p><i class="fas fa-calendar"></i> @evt.StartDate.ToLocalTime().ToString("f")</p>
-                                <p><i class="fas fa-map-marker-alt"></i> @evt.Location</p>
-                                <p><i class="fas fa-users"></i> @evt.CurrentParticipants/@(evt.MaxAttendees == 0 ? "∞" : evt.MaxAttendees.ToString())</p>
+                            <p class="card-text">@evt.Description</p>
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar"></i> @evt.StartDate.ToShortDateString()
+                                    <br />
+                                    <i class="bi bi-clock"></i> @evt.StartTime.ToString(@"hh\:mm")
+                                    <br />
+                                    <i class="bi bi-geo-alt"></i> @(evt.IsOnline ? "Online" : evt.Location)
+                                </small>
                             </div>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-primary" @onclick="() => NavigateToDetails(evt.Id)">
-                                View Details
-                            </button>
-                            @if (evt.IsRegistrationOpen)
-                            {
-                                <button class="btn btn-success ms-2" @onclick="() => RegisterForEvent(evt.Id)">
-                                    Register
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-primary">@evt.Category</span>
+                                <button class="btn btn-outline-primary btn-sm" @onclick="() => NavigateToDetails(evt.Id)">
+                                    View Details
                                 </button>
-                            }
+                            </div>
                         </div>
                     </div>
                 </div>
             }
         </div>
-
-        @if (totalPages > 1)
-        {
-            <div class="d-flex justify-content-center mt-4">
-                <nav>
-                    <ul class="pagination">
-                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                            <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
-                        </li>
-                        @for (int i = 1; i <= totalPages; i++)
-                        {
-                            var pageNumber = i;
-                            <li class="page-item @(currentPage == pageNumber ? "active" : "")">
-                                <button class="page-link" @onclick="() => ChangePage(pageNumber)">@pageNumber</button>
-                            </li>
-                        }
-                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
-                            <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-        }
     }
 </div>
 
 @code {
-    private List<Event>? events;
-    private string searchTerm = "";
-    private string selectedCategory = "";
-    private int currentPage = 1;
-    private const int PageSize = 9;
-    private int totalPages => events == null ? 0 : (int)Math.Ceiling(filteredEvents.Count() / (double)PageSize);
+    private List<EventDto> events = new();
+    private string? selectedCategory;
+    private string? error;
+    private bool IsLoading = false;
+    private bool _isSeedingEvents;
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,41 +98,32 @@
 
     private async Task LoadEvents()
     {
-        events = await EventService.GetEventsAsync();
-    }
-
-    private IEnumerable<Event> filteredEvents
-    {
-        get
+        try
         {
-            if (events == null) return Enumerable.Empty<Event>();
-
-            var filtered = events.AsEnumerable();
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                filtered = filtered.Where(e =>
-                    e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Location.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (!string.IsNullOrWhiteSpace(selectedCategory))
-            {
-                filtered = filtered.Where(e => e.Category == selectedCategory);
-            }
-
-            // Apply pagination
-            return filtered
-                .Skip((currentPage - 1) * PageSize)
-                .Take(PageSize);
+            IsLoading = true;
+            error = null;
+            var result = await EventService.GetEventsAsync(
+                page: 1,
+                pageSize: null,
+                selectedCategory);
+            events = result.Events.ToList();
+        }
+        catch (Exception ex)
+        {
+            error = "Failed to load events. Please try again later.";
+            Console.WriteLine($"Error loading events: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
         }
     }
 
-    private async Task HandleSearch()
+    private async Task OnSelectedCategoryChanged(string? newCategory)
     {
-        currentPage = 1;
-        await InvokeAsync(StateHasChanged);
+        selectedCategory = newCategory;
+        await LoadEvents();
     }
 
     private void NavigateToDetails(int eventId)
@@ -161,62 +131,61 @@
         NavigationManager.NavigateTo($"/event/{eventId}");
     }
 
-    private async Task RegisterForEvent(int eventId)
+    private async Task SeedEvents()
     {
-        if (await AuthService.IsAuthenticated())
+        try
         {
-            NavigationManager.NavigateTo($"/event/{eventId}/register");
+            _isSeedingEvents = true;
+            error = null;
+            var client = await CreateHttpClient();
+            var response = await client.PostAsync("api/events/seed", null);
+            response.EnsureSuccessStatusCode();
+            await LoadEvents();
+            await JSRuntime.InvokeVoidAsync("alert", "Successfully seeded 100 sample events!");
         }
-        else
+        catch (Exception ex)
         {
-            NavigationManager.NavigateTo($"/login?returnUrl=/event/{eventId}/register");
+            error = $"Error seeding events: {ex.Message}";
+            Console.WriteLine($"Error seeding events: {ex}");
+        }
+        finally
+        {
+            _isSeedingEvents = false;
+            StateHasChanged();
         }
     }
 
-    private void ChangePage(int page)
+    private async Task<HttpClient> CreateHttpClient()
     {
-        if (page >= 1 && page <= totalPages)
+        var client = _httpClientFactory.CreateClient("VentyTime.ServerAPI");
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        if (!string.IsNullOrEmpty(token))
         {
-            currentPage = page;
-            StateHasChanged();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
+        return client;
     }
 }
 
 <style>
-    .event-card {
+    .event-list {
+        padding: 20px;
+    }
+
+    .card {
         transition: transform 0.2s;
     }
 
-    .event-card:hover {
+    .card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
 
-    .event-card .card-img-top {
+    .card-img-top {
         height: 200px;
         object-fit: cover;
     }
 
-    .event-details {
-        font-size: 0.9rem;
-        color: #666;
-    }
-
-    .event-details i {
-        width: 20px;
-        text-align: center;
-        margin-right: 5px;
-    }
-
-    .filters {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-    }
-
-    .filter-options {
-        display: flex;
-        gap: 1rem;
+    .alert {
+        margin-top: 20px;
     }
 </style>

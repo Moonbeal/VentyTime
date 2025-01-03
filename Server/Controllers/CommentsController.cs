@@ -23,7 +23,7 @@ namespace VentyTime.Server.Controllers
 
         [HttpGet("event/{eventId}")]
         [AllowAnonymous]
-        public async Task<ActionResult<IEnumerable<Comment>>> GetCommentsByEvent(int eventId)
+        public async Task<ActionResult<IEnumerable<EventComment>>> GetCommentsByEvent(int eventId)
         {
             try
             {
@@ -38,7 +38,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<ActionResult<IEnumerable<Comment>>> GetCommentsByUser(string userId)
+        public async Task<ActionResult<IEnumerable<EventComment>>> GetCommentsByUser(string userId)
         {
             try
             {
@@ -53,7 +53,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Comment>> GetComment(int id)
+        public async Task<ActionResult<EventComment>> GetComment(int id)
         {
             try
             {
@@ -72,7 +72,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPost("event/{eventId}")]
-        public async Task<ActionResult<Comment>> CreateComment(int eventId, [FromBody] Comment comment)
+        public async Task<ActionResult<EventComment>> CreateComment(int eventId, [FromBody] EventComment comment)
         {
             try
             {
@@ -98,7 +98,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<Comment>> UpdateComment(int id, [FromBody] Comment comment)
+        public async Task<ActionResult<EventComment>> UpdateComment(int id, [FromBody] EventComment comment)
         {
             try
             {

@@ -84,8 +84,8 @@ builder.Services.AddScoped<IRegistrationService>(sp =>
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("VentyTime.ServerAPI");
     var snackbar = sp.GetRequiredService<ISnackbar>();
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    var authService = sp.GetRequiredService<IAuthService>();
-    return new RegistrationService(httpClient, snackbar, localStorage, authService);
+    var logger = sp.GetRequiredService<ILogger<RegistrationService>>();
+    return new RegistrationService(httpClient, snackbar, localStorage, logger);
 });
 
 builder.Services.AddScoped<ICommentService>(sp =>

@@ -144,11 +144,11 @@
                                             {
                                                 <MudChip Color="Color.Error">Full</MudChip>
                                             }
-                                            else if (context.IsFinished())
+                                            else if (context.IsFinished)
                                             {
                                                 <MudChip Color="Color.Default">Finished</MudChip>
                                             }
-                                            else if (context.HasStarted())
+                                            else if (context.HasStarted)
                                             {
                                                 <MudChip Color="Color.Warning">In Progress</MudChip>
                                             }
@@ -164,7 +164,7 @@
                                             </MudButton>
                                             <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
                                                      OnClick="@(() => CancelEvent(context))"
-                                                     Disabled="@(context.HasStarted() || context.IsFinished())">
+                                                     Disabled="@(context.HasStarted || context.IsFinished)">
                                                 Cancel
                                             </MudButton>
                                         </MudTd>
@@ -226,7 +226,7 @@
 
     private AdminTab activeTab = AdminTab.Users;
     private List<ApplicationUser> users = new();
-    private List<Event> events = new();
+    private List<EventDto> events = new();
     private string userSearchTerm = "";
     private string eventSearchTerm = "";
     private int selectedEventId;
@@ -257,7 +257,7 @@
         try
         {
             users = (await UserService.GetAllUsersAsync()).ToList();
-            events = (await EventService.GetEventsAsync()).ToList();
+            await LoadEvents();
 
             foreach (var user in users)
             {
@@ -268,7 +268,7 @@
             statistics = new SystemStatistics
             {
                 TotalUsers = users.Count,
-                ActiveEvents = events.Count(e => !e.IsFinished()),
+                ActiveEvents = events.Count(e => !e.IsFinished),
                 TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
             };
         }
@@ -278,16 +278,29 @@
         }
     }
 
+    private async Task LoadEvents()
+    {
+        try
+        {
+            var result = await EventService.GetEventsAsync();
+            events = result.Events.ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Failed to load events", Severity.Error);
+        }
+    }
+
     private IEnumerable<ApplicationUser> filteredUsers =>
         users?.Where(u =>
             string.IsNullOrEmpty(userSearchTerm) ||
             (u.UserName?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
             (u.Email?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<ApplicationUser>();
 
-    private IEnumerable<Event> filteredEvents =>
+    private IEnumerable<EventDto> filteredEvents =>
         events?.Where(e =>
             string.IsNullOrEmpty(eventSearchTerm) ||
-            (e.Title?.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<Event>();
+            (e.Title?.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<EventDto>();
 
     private async Task SearchUsers()
     {
@@ -299,7 +312,7 @@
         await LoadData();
     }
 
-    private async Task CancelEvent(Event evt)
+    private async Task CancelEvent(EventDto evt)
     {
         try 
         {

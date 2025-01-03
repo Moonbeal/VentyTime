@@ -1,70 +1,74 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using VentyTime.Server.Data;
 using VentyTime.Shared.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http;
 
 namespace VentyTime.Server.Services
 {
     public interface IEventService
     {
-        Task<(IEnumerable<Event> Events, int TotalCount)> GetEventsAsync(int page = 1, int pageSize = 10, string? category = null, DateTime? startDate = null, DateTime? endDate = null);
+        Task<EventsResponse> GetEventsAsync(int page = 1, int? pageSize = null, string? category = null, string? searchQuery = null, DateTime? startDate = null, DateTime? endDate = null);
         Task<Event?> GetEventByIdAsync(int id);
         Task<Event> CreateEventAsync(Event @event, string userIdOrEmail);
         Task<Event> UpdateEventAsync(Event @event, string userId);
         Task DeleteEventAsync(int id, string userId);
-        Task<IEnumerable<Event>> SearchEventsAsync(string query);
-        Task<IEnumerable<Event>> GetUpcomingEventsAsync(int count);
+        Task<SearchEventsResponse> SearchEventsAsync(string query);
+        Task<UpcomingEventsResponse> GetUpcomingEventsAsync(int count);
         Task<bool> IsUserAuthorizedForEvent(int eventId, string userId, string[] allowedRoles);
         Task<IEnumerable<Event>> GetEventsByOrganizerAsync(string organizerId);
         Task<IEnumerable<string>> GetCategoriesAsync();
-        Task<Registration> RegisterUserForEventAsync(int eventId, string userId);
-        Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
+        Task<UserEventRegistration> RegisterUserForEventAsync(int eventId, string userId);
+        Task<RegisteredEventsResponse> GetRegisteredEventsAsync(string userId);
     }
 
     public class EventService : IEventService
     {
         private readonly ApplicationDbContext _context;
-        private readonly IMemoryCache _cache;
         private readonly ILogger<EventService> _logger;
         private readonly UserManager<ApplicationUser> _userManager;
-        private const string EventsCacheKey = "AllEvents";
-        private const string CategoriesCacheKey = "AllCategories";
-        private const string EventCacheKeyPrefix = "Event_";
-        private const int CacheExpirationMinutes = 5;
 
         public EventService(
             ApplicationDbContext context,
-            IMemoryCache cache,
             ILogger<EventService> logger,
             UserManager<ApplicationUser> userManager)
         {
             _context = context;
-            _cache = cache;
             _logger = logger;
             _userManager = userManager;
         }
 
-        public async Task<(IEnumerable<Event> Events, int TotalCount)> GetEventsAsync(
-            int page = 1, 
-            int pageSize = 10, 
-            string? category = null, 
-            DateTime? startDate = null, 
+        public async Task<EventsResponse> GetEventsAsync(
+            int page = 1,
+            int? pageSize = null,
+            string? category = null,
+            string? searchQuery = null,
+            DateTime? startDate = null,
             DateTime? endDate = null)
         {
             try
             {
-                _logger.LogInformation("Getting events with pagination and filters");
+                _logger.LogInformation("Getting events with filters");
 
                 var query = _context.Events
                     .Include(e => e.Organizer)
+                    .Include(e => e.Creator)
                     .Include(e => e.Registrations)
+                    .AsNoTracking()
                     .AsQueryable();
 
                 // Apply filters
                 if (!string.IsNullOrEmpty(category))
                 {
                     query = query.Where(e => e.Category == category);
+                }
+
+                if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    query = query.Where(e => 
+                        e.Title.Contains(searchQuery) || 
+                        e.Description.Contains(searchQuery) ||
+                        e.Location.Contains(searchQuery));
                 }
 
                 if (startDate.HasValue)
@@ -77,19 +81,85 @@ namespace VentyTime.Server.Services
                     query = query.Where(e => e.StartDate <= endDate.Value);
                 }
 
-                // Get total count for pagination
+                // Get total count
                 var totalCount = await query.CountAsync();
 
-                // Apply pagination
+                // Apply pagination only if pageSize is specified
+                if (pageSize.HasValue && pageSize.Value > 0)
+                {
+                    query = query
+                        .Skip((page - 1) * pageSize.Value)
+                        .Take(pageSize.Value);
+                }
+
                 var events = await query
-                    .OrderByDescending(e => e.CreatedAt)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
+                    .OrderBy(e => e.StartDate)
+                    .Select(e => new EventDto
+                    {
+                        Id = e.Id,
+                        Title = e.Title,
+                        Description = e.Description,
+                        StartDate = e.StartDate,
+                        EndDate = e.EndDate,
+                        StartTime = e.StartTime,
+                        Location = e.Location,
+                        VenueDetails = e.VenueDetails,
+                        OnlineUrl = e.OnlineUrl,
+                        IsOnline = e.IsOnline,
+                        MaxAttendees = e.MaxAttendees,
+                        Category = e.Category,
+                        Type = e.Type,
+                        Accessibility = e.Accessibility,
+                        ImageUrl = e.ImageUrl,
+                        Price = e.Price,
+                        IsActive = e.IsActive ?? true,
+                        IsCancelled = e.IsCancelled,
+                        CreatedAt = e.CreatedAt,
+                        UpdatedAt = e.UpdatedAt,
+                        CreatorId = e.CreatorId,
+                        OrganizerId = e.OrganizerId,
+                        Creator = e.Creator != null ? new ApplicationUser
+                        {
+                            Id = e.Creator.Id,
+                            UserName = e.Creator.UserName,
+                            Email = e.Creator.Email,
+                            FirstName = e.Creator.FirstName,
+                            LastName = e.Creator.LastName,
+                            AvatarUrl = e.Creator.AvatarUrl
+                        } : null,
+                        Organizer = e.Organizer != null ? new ApplicationUser
+                        {
+                            Id = e.Organizer.Id,
+                            UserName = e.Organizer.UserName,
+                            Email = e.Organizer.Email,
+                            FirstName = e.Organizer.FirstName,
+                            LastName = e.Organizer.LastName,
+                            AvatarUrl = e.Organizer.AvatarUrl
+                        } : null,
+                        CurrentParticipants = e.Registrations.Count,
+                        IsFeatured = e.IsFeatured,
+                        RequiresRegistration = e.RequiresRegistration,
+                        HasAgeRestriction = e.HasAgeRestriction,
+                        MinimumAge = e.MinimumAge,
+                        HasEarlyBirdPrice = e.HasEarlyBirdPrice,
+                        EarlyBirdPrice = e.EarlyBirdPrice,
+                        EarlyBirdDeadline = e.EarlyBirdDeadline,
+                        RefundPolicy = e.RefundPolicy ?? "Standard refund policy applies",
+                        Requirements = e.Requirements ?? "No special requirements",
+                        Schedule = e.Schedule ?? "Detailed schedule will be provided closer to the event",
+                        Tags = e.Tags ?? new List<string>(),
+                        AllowWaitlist = e.AllowWaitlist,
+                        WaitlistCapacity = e.WaitlistCapacity
+                    })
                     .ToListAsync();
 
-                _logger.LogInformation("Retrieved {Count} events from page {Page}", events.Count, page);
+                _logger.LogInformation("Found {Count} events", events.Count);
 
-                return (events, totalCount);
+                return new EventsResponse
+                {
+                    Events = events,
+                    TotalCount = totalCount
+                };
             }
             catch (Exception ex)
             {
@@ -102,29 +172,14 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                var cacheKey = $"{EventCacheKeyPrefix}{id}";
-
-                if (_cache.TryGetValue(cacheKey, out Event? cachedEvent))
-                {
-                    _logger.LogInformation("Retrieved event {EventId} from cache", id);
-                    return cachedEvent;
-                }
-
                 var @event = await _context.Events
+                    .Include(e => e.Creator)
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.Id == id);
 
-                if (@event != null)
-                {
-                    var cacheOptions = new MemoryCacheEntryOptions()
-                        .SetAbsoluteExpiration(TimeSpan.FromMinutes(CacheExpirationMinutes));
-
-                    _cache.Set(cacheKey, @event, cacheOptions);
-                    _logger.LogInformation("Cached event {EventId}", id);
-                }
-
-                return @event;
+                return @event is null ? null : @event;
             }
             catch (Exception ex)
             {
@@ -133,156 +188,28 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<IEnumerable<string>> GetCategoriesAsync()
-        {
-            try
-            {
-                if (_cache.TryGetValue(CategoriesCacheKey, out List<string>? cachedCategories) && cachedCategories != null)
-                {
-                    return cachedCategories;
-                }
-
-                var categories = await _context.Events
-                    .Where(e => e.Category != null)
-                    .Select(e => e.Category!)
-                    .Distinct()
-                    .ToListAsync();
-
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromHours(1));
-
-                _cache.Set(CategoriesCacheKey, categories, cacheOptions);
-
-                return categories;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting categories");
-                throw;
-            }
-        }
-
         public async Task<Event> CreateEventAsync(Event @event, string userIdOrEmail)
         {
-            if (@event == null) throw new ArgumentNullException(nameof(@event));
-            if (string.IsNullOrEmpty(userIdOrEmail)) throw new ArgumentException("User ID/Email cannot be empty", nameof(userIdOrEmail));
-
             try
             {
-                _logger.LogInformation("Creating event by user {UserIdOrEmail} with date {StartDate}", userIdOrEmail, @event.StartDate);
-
-                // Validate required fields
-                if (string.IsNullOrEmpty(@event.Title))
-                    throw new ArgumentException("Event title is required");
-                if (string.IsNullOrEmpty(@event.Description))
-                    throw new ArgumentException("Event description is required");
-                if (string.IsNullOrEmpty(@event.Location))
-                    throw new ArgumentException("Event location is required");
-                if (string.IsNullOrEmpty(@event.Category))
-                    throw new ArgumentException("Event category is required");
-                if (@event.StartDate == default)
-                    throw new ArgumentException("Event start date is required");
-                if (@event.EndDate == default)
-                    throw new ArgumentException("Event end date is required");
-                if (@event.MaxAttendees <= 0)
-                    throw new ArgumentException("Event max attendees must be greater than 0");
-
-                // Convert dates to UTC
-                if (@event.StartDate.Kind != DateTimeKind.Utc)
-                {
-                    _logger.LogInformation("Converting StartDate from {Kind} to UTC", @event.StartDate.Kind);
-                    @event.StartDate = @event.StartDate.ToUniversalTime();
-                }
-
-                if (@event.EndDate.Kind != DateTimeKind.Utc)
-                {
-                    _logger.LogInformation("Converting EndDate from {Kind} to UTC", @event.EndDate.Kind);
-                    @event.EndDate = @event.EndDate.ToUniversalTime();
-                }
-
-                // Set StartTime from StartDate
-                @event.StartTime = @event.StartDate.TimeOfDay;
-
-                // Load and set the creator/organizer
-                var user = await _userManager.FindByIdAsync(userIdOrEmail) ?? 
-                    await _userManager.FindByEmailAsync(userIdOrEmail) ??
-                    throw new InvalidOperationException("User not found");
+                var user = await _context.Users.FindAsync(userIdOrEmail) 
+                    ?? await _userManager.FindByEmailAsync(userIdOrEmail)
+                    ?? throw new KeyNotFoundException($"User with ID/Email {userIdOrEmail} not found");
 
                 @event.CreatorId = user.Id;
                 @event.OrganizerId = user.Id;
-                @event.Creator = user;
-                @event.Organizer = user;
-
                 @event.CreatedAt = DateTime.UtcNow;
-                @event.UpdatedAt = null;
-                @event.IsActive = true;
-                @event.CurrentCapacity = 0;
 
-                // Ensure EndDate is at least StartDate plus one hour if not set
-                if (@event.EndDate <= @event.StartDate)
-                {
-                    @event.EndDate = @event.StartDate.Add(TimeSpan.FromHours(1));
-                }
+                _context.Events.Add(@event);
+                await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Saving event with UTC dates - Start: {StartDate}, End: {EndDate}, StartTime: {StartTime}", 
-                    @event.StartDate, @event.EndDate, @event.StartTime);
+                _logger.LogInformation("Created event {EventId} by user {UserId}", @event.Id, user.Id);
 
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    _context.Events.Add(@event);
-                    try
-                    {
-                        await _context.SaveChangesAsync();
-                    }
-                    catch (DbUpdateException dbEx)
-                    {
-                        _logger.LogError(dbEx, "Database error details: {Message}", dbEx.Message);
-                        if (dbEx.InnerException != null)
-                        {
-                            _logger.LogError("Inner exception details: {Message}", dbEx.InnerException.Message);
-                            _logger.LogError("Inner exception stack trace: {StackTrace}", dbEx.InnerException.StackTrace);
-                        }
-
-                        var entries = _context.ChangeTracker.Entries()
-                            .Where(e => e.State is EntityState.Added or EntityState.Modified)
-                            .Select(e => new 
-                            { 
-                                Entity = e.Entity.GetType().Name,
-                                e.State,
-                                Properties = e.CurrentValues.Properties
-                                    .Select(p => new { p.Name, Value = e.CurrentValues[p] })
-                            });
-
-                        _logger.LogError("Change tracker entries: {@Entries}", entries);
-                        throw;
-                    }
-                    await transaction.CommitAsync();
-
-                    InvalidateEventCache();
-                    _logger.LogInformation("Successfully created event {EventId}", @event.Id);
-
-                    return @event;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error saving event to database: {Error}", ex.Message);
-                    if (ex.InnerException != null)
-                    {
-                        _logger.LogError("Inner exception: {Error}", ex.InnerException.Message);
-                        _logger.LogError("Inner exception stack trace: {StackTrace}", ex.InnerException.StackTrace);
-                    }
-                    throw;
-                }
+                return @event;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating event: {Error}", ex.Message);
-                if (ex.InnerException != null)
-                {
-                    _logger.LogError("Inner exception: {Error}", ex.InnerException.Message);
-                }
+                _logger.LogError(ex, "Error creating event by user {UserId}", userIdOrEmail);
                 throw;
             }
         }
@@ -291,170 +218,259 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Updating event {EventId} for user {UserId}", @event.Id, userId);
-                
-                var existingEvent = await _context.Events.FindAsync(@event.Id) ?? 
-                    throw new KeyNotFoundException($"Event with ID {@event.Id} not found");
+                var existingEvent = await _context.Events
+                    .Include(e => e.Creator)
+                    .Include(e => e.Organizer)
+                    .FirstOrDefaultAsync(e => e.Id == @event.Id);
 
-                if (!await IsUserAuthorizedForEvent(@event.Id, userId, new[] { "Admin", "Organizer" }))
-                {
-                    throw new UnauthorizedAccessException("User is not authorized to update this event");
-                }
-
-                @event.OrganizerId = existingEvent.OrganizerId;
-                @event.CreatedAt = existingEvent.CreatedAt;
-                @event.UpdatedAt = DateTime.UtcNow;
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    _context.Entry(existingEvent).CurrentValues.SetValues(@event);
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    InvalidateEventCache(@event.Id);
-                    _logger.LogInformation("Successfully updated event {EventId}", @event.Id);
-
-                    return @event;
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error updating event {EventId}", @event.Id);
-                    throw;
-                }
+                return existingEvent is null 
+                    ? throw new KeyNotFoundException($"Event with ID {@event.Id} not found")
+                    : await UpdateEventAsync(existingEvent, @event, userId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating event");
+                _logger.LogError(ex, "Error updating event {EventId}", @event.Id);
                 throw;
             }
+        }
+
+        private async Task<Event> UpdateEventAsync(Event existingEvent, Event @event, string userId)
+        {
+            if (existingEvent.CreatorId != userId && existingEvent.OrganizerId != userId)
+            {
+                throw new UnauthorizedAccessException("User is not authorized to update this event");
+            }
+
+            // Update only allowed fields
+            existingEvent.Title = @event.Title;
+            existingEvent.Description = @event.Description;
+            existingEvent.StartDate = @event.StartDate;
+            existingEvent.EndDate = @event.EndDate;
+            existingEvent.StartTime = @event.StartTime;
+            existingEvent.Location = @event.Location;
+            existingEvent.VenueDetails = @event.VenueDetails;
+            existingEvent.OnlineUrl = @event.OnlineUrl;
+            existingEvent.MaxAttendees = @event.MaxAttendees;
+            existingEvent.Category = @event.Category;
+            existingEvent.Type = @event.Type;
+            existingEvent.Accessibility = @event.Accessibility;
+            existingEvent.ImageUrl = @event.ImageUrl;
+            existingEvent.Price = @event.Price;
+            existingEvent.IsActive = @event.IsActive;
+            existingEvent.IsCancelled = @event.IsCancelled;
+            existingEvent.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Updated event {EventId} by user {UserId}", @event.Id, userId);
+
+            return existingEvent;
         }
 
         public async Task DeleteEventAsync(int id, string userId)
         {
             try
             {
-                _logger.LogInformation("Deleting event {EventId} for user {UserId}", id, userId);
-                
-                var @event = await _context.Events
-                    .Include(e => e.Registrations)
-                    .FirstOrDefaultAsync(e => e.Id == id) ?? 
-                    throw new KeyNotFoundException($"Event with ID {id} not found");
+                var @event = await _context.Events.FindAsync(id)
+                    ?? throw new KeyNotFoundException($"Event with ID {id} not found");
 
-                if (!await IsUserAuthorizedForEvent(id, userId, new[] { "Admin", "Organizer" }))
-                {
-                    throw new UnauthorizedAccessException("User is not authorized to delete this event");
-                }
-
-                if (@event.Registrations?.Any(r => r.Status == RegistrationStatus.Confirmed) == true)
-                {
-                    throw new InvalidOperationException("Cannot delete event with confirmed registrations");
-                }
-
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    if (@event.Registrations != null)
-                    {
-                        _context.Registrations.RemoveRange(@event.Registrations);
-                    }
-
-                    _context.Events.Remove(@event);
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    InvalidateEventCache(id);
-                    _logger.LogInformation("Successfully deleted event {EventId}", id);
-                }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error deleting event {EventId}", id);
-                    throw;
-                }
+                await DeleteEventAsync(@event, userId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting event");
+                _logger.LogError(ex, "Error deleting event {EventId} by user {UserId}", id, userId);
                 throw;
             }
         }
 
-        public async Task<IEnumerable<Event>> SearchEventsAsync(string query)
+        private async Task DeleteEventAsync(Event @event, string userId)
+        {
+            if (@event.CreatorId != userId)
+            {
+                throw new UnauthorizedAccessException("User is not authorized to delete this event");
+            }
+
+            _context.Events.Remove(@event);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Deleted event {EventId} by user {UserId}", @event.Id, userId);
+        }
+
+        public async Task<SearchEventsResponse> SearchEventsAsync(string query)
         {
             try
             {
                 _logger.LogInformation("Searching events with query: {Query}", query);
-                
-                var cacheKey = $"Search_{query.ToLower()}";
-                if (_cache.TryGetValue(cacheKey, out List<Event>? cachedResults))
-                {
-                    _logger.LogInformation("Retrieved {Count} search results from cache", cachedResults?.Count ?? 0);
-                    return cachedResults ??= new List<Event>();
-                }
 
-                query = query.ToLower();
+                var searchQuery = query.ToLower();
                 var events = await _context.Events
                     .Include(e => e.Organizer)
+                    .Include(e => e.Creator)
                     .Include(e => e.Registrations)
-                    .Where(e => e.IsActive &&
-                           (e.Title.ToLower().Contains(query) ||
-                            e.Description.ToLower().Contains(query) ||
-                            e.Category.ToLower().Contains(query) ||
-                            e.Location.ToLower().Contains(query)))
-                    .AsNoTracking()
+                    .Where(e => e.Title.ToLower().Contains(searchQuery) ||
+                               e.Description.ToLower().Contains(searchQuery) ||
+                               e.Category.ToLower().Contains(searchQuery) ||
+                               e.Location.ToLower().Contains(searchQuery))
+                    .Select(e => new EventDto
+                    {
+                        Id = e.Id,
+                        Title = e.Title,
+                        Description = e.Description,
+                        StartDate = e.StartDate,
+                        EndDate = e.EndDate,
+                        StartTime = e.StartTime,
+                        Location = e.Location,
+                        VenueDetails = e.VenueDetails,
+                        OnlineUrl = e.OnlineUrl,
+                        IsOnline = e.IsOnline,
+                        MaxAttendees = e.MaxAttendees,
+                        Category = e.Category,
+                        Type = e.Type,
+                        Accessibility = e.Accessibility,
+                        ImageUrl = e.ImageUrl,
+                        Price = e.Price,
+                        IsActive = e.IsActive ?? true,
+                        IsCancelled = e.IsCancelled,
+                        CreatedAt = e.CreatedAt,
+                        UpdatedAt = e.UpdatedAt,
+                        CreatorId = e.CreatorId,
+                        OrganizerId = e.OrganizerId,
+                        Creator = e.Creator != null ? new ApplicationUser
+                        {
+                            Id = e.Creator.Id,
+                            UserName = e.Creator.UserName,
+                            Email = e.Creator.Email,
+                            FirstName = e.Creator.FirstName,
+                            LastName = e.Creator.LastName,
+                            AvatarUrl = e.Creator.AvatarUrl
+                        } : null,
+                        Organizer = e.Organizer != null ? new ApplicationUser
+                        {
+                            Id = e.Organizer.Id,
+                            UserName = e.Organizer.UserName,
+                            Email = e.Organizer.Email,
+                            FirstName = e.Organizer.FirstName,
+                            LastName = e.Organizer.LastName,
+                            AvatarUrl = e.Organizer.AvatarUrl
+                        } : null,
+                        CurrentParticipants = e.Registrations.Count,
+                        IsFeatured = e.IsFeatured,
+                        RequiresRegistration = e.RequiresRegistration,
+                        HasAgeRestriction = e.HasAgeRestriction,
+                        MinimumAge = e.MinimumAge,
+                        HasEarlyBirdPrice = e.HasEarlyBirdPrice,
+                        EarlyBirdPrice = e.EarlyBirdPrice,
+                        EarlyBirdDeadline = e.EarlyBirdDeadline,
+                        RefundPolicy = e.RefundPolicy ?? "Standard refund policy applies",
+                        Requirements = e.Requirements ?? "No special requirements",
+                        Schedule = e.Schedule ?? "Detailed schedule will be provided closer to the event",
+                        Tags = e.Tags ?? new List<string>(),
+                        AllowWaitlist = e.AllowWaitlist,
+                        WaitlistCapacity = e.WaitlistCapacity
+                    })
                     .ToListAsync();
 
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
-                
-                _cache.Set(cacheKey, events, cacheOptions);
-                _logger.LogInformation("Retrieved and cached {Count} search results from database", events.Count);
+                _logger.LogInformation("Found {Count} events matching query: {Query}", events.Count, query);
 
-                return events;
+                return new SearchEventsResponse
+                {
+                    Events = events,
+                    TotalResults = events.Count,
+                    SearchQuery = query
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error searching events");
+                _logger.LogError(ex, "Error searching events with query: {Query}", query);
                 throw;
             }
         }
 
-        public async Task<IEnumerable<Event>> GetUpcomingEventsAsync(int count)
+        public async Task<UpcomingEventsResponse> GetUpcomingEventsAsync(int count)
         {
             try
             {
-                _logger.LogInformation("Getting upcoming events with count: {Count}", count);
-                
-                if (count <= 0 || count > 50)
-                {
-                    throw new ArgumentException("Count must be between 1 and 50", nameof(count));
-                }
-
-                var cacheKey = $"UpcomingEvents_{count}";
-                if (_cache.TryGetValue(cacheKey, out List<Event>? cachedEvents))
-                {
-                    _logger.LogInformation("Retrieved {Count} upcoming events from cache", cachedEvents?.Count ?? 0);
-                    return cachedEvents ??= new List<Event>();
-                }
+                _logger.LogInformation("Getting {Count} upcoming events", count);
 
                 var now = DateTime.UtcNow;
-                var events = await _context.Events
+                var upcomingEvents = await _context.Events
+                    .Include(e => e.Organizer)
+                    .Include(e => e.Creator)
                     .Include(e => e.Registrations)
-                    .Where(e => e.IsActive && e.StartDate > now)
+                    .Where(e => e.StartDate > now && !e.IsCancelled && (e.IsActive ?? true))
                     .OrderBy(e => e.StartDate)
+                    .Select(e => new EventDto
+                    {
+                        Id = e.Id,
+                        Title = e.Title,
+                        Description = e.Description,
+                        StartDate = e.StartDate,
+                        EndDate = e.EndDate,
+                        StartTime = e.StartTime,
+                        Location = e.Location,
+                        VenueDetails = e.VenueDetails,
+                        OnlineUrl = e.OnlineUrl,
+                        IsOnline = e.IsOnline,
+                        MaxAttendees = e.MaxAttendees,
+                        Category = e.Category,
+                        Type = e.Type,
+                        Accessibility = e.Accessibility,
+                        ImageUrl = e.ImageUrl,
+                        Price = e.Price,
+                        IsActive = e.IsActive ?? true,
+                        IsCancelled = e.IsCancelled,
+                        CreatedAt = e.CreatedAt,
+                        UpdatedAt = e.UpdatedAt,
+                        CreatorId = e.CreatorId,
+                        OrganizerId = e.OrganizerId,
+                        Creator = e.Creator != null ? new ApplicationUser
+                        {
+                            Id = e.Creator.Id,
+                            UserName = e.Creator.UserName,
+                            Email = e.Creator.Email,
+                            FirstName = e.Creator.FirstName,
+                            LastName = e.Creator.LastName,
+                            AvatarUrl = e.Creator.AvatarUrl
+                        } : null,
+                        Organizer = e.Organizer != null ? new ApplicationUser
+                        {
+                            Id = e.Organizer.Id,
+                            UserName = e.Organizer.UserName,
+                            Email = e.Organizer.Email,
+                            FirstName = e.Organizer.FirstName,
+                            LastName = e.Organizer.LastName,
+                            AvatarUrl = e.Organizer.AvatarUrl
+                        } : null,
+                        CurrentParticipants = e.Registrations.Count,
+                        IsFeatured = e.IsFeatured,
+                        RequiresRegistration = e.RequiresRegistration,
+                        HasAgeRestriction = e.HasAgeRestriction,
+                        MinimumAge = e.MinimumAge,
+                        HasEarlyBirdPrice = e.HasEarlyBirdPrice,
+                        EarlyBirdPrice = e.EarlyBirdPrice,
+                        EarlyBirdDeadline = e.EarlyBirdDeadline,
+                        RefundPolicy = e.RefundPolicy ?? "Standard refund policy applies",
+                        Requirements = e.Requirements ?? "No special requirements",
+                        Schedule = e.Schedule ?? "Detailed schedule will be provided closer to the event",
+                        Tags = e.Tags ?? new List<string>(),
+                        AllowWaitlist = e.AllowWaitlist,
+                        WaitlistCapacity = e.WaitlistCapacity
+                    })
                     .Take(count)
-                    .AsNoTracking()
                     .ToListAsync();
 
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
-                
-                _cache.Set(cacheKey, events, cacheOptions);
-                _logger.LogInformation("Retrieved and cached {Count} upcoming events from database", events.Count);
+                var totalUpcoming = await _context.Events
+                    .CountAsync(e => e.StartDate > now && !e.IsCancelled && (e.IsActive ?? true));
 
-                return events;
+                _logger.LogInformation("Found {Count} upcoming events out of {Total} total upcoming events",
+                    upcomingEvents.Count, totalUpcoming);
+
+                return new UpcomingEventsResponse
+                {
+                    Events = upcomingEvents,
+                    Count = upcomingEvents.Count,
+                    TotalUpcoming = totalUpcoming
+                };
             }
             catch (Exception ex)
             {
@@ -467,26 +483,19 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Checking user authorization for event {EventId} and user {UserId}", eventId, userId);
-                
-                var @event = await _context.Events
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(e => e.Id == eventId);
-
-                if (@event == null)
+                var @event = await _context.Events.FindAsync(eventId);
+                if (@event is null)
                 {
                     return false;
                 }
 
-                // Власник події завжди має доступ
-                if (@event.OrganizerId == userId)
+                if (@event.CreatorId == userId || @event.OrganizerId == userId)
                 {
                     return true;
                 }
 
-                // Перевіряємо ролі
                 var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
+                if (user is null)
                 {
                     return false;
                 }
@@ -496,7 +505,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking user authorization for event");
+                _logger.LogError(ex, "Error checking user authorization for event {EventId}", eventId);
                 throw;
             }
         }
@@ -505,76 +514,37 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Getting events for organizer {OrganizerId}", organizerId);
-                
                 return await _context.Events
+                    .Include(e => e.Creator)
                     .Include(e => e.Organizer)
-                    .Include(e => e.Registrations)
                     .Where(e => e.OrganizerId == organizerId)
-                    .OrderByDescending(e => e.StartDate)
+                    .OrderByDescending(e => e.CreatedAt)
+                    .AsNoTracking()
                     .ToListAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}", organizerId);
+                _logger.LogError(ex, "Error getting events by organizer {OrganizerId}", organizerId);
                 throw;
             }
         }
 
-        public async Task<Registration> RegisterUserForEventAsync(int eventId, string userId)
+        public async Task<IEnumerable<string>> GetCategoriesAsync()
         {
-            // Load event with active registrations
-            var @event = await _context.Events
-                .Include(e => e.Registrations)
-                .FirstOrDefaultAsync(e => e.Id == eventId);
+            return await Task.FromResult(EventCategories.All);
+        }
 
-            if (@event == null)
-            {
-                _logger.LogError("Event {EventId} not found during registration", eventId);
-                throw new InvalidOperationException("Event not found");
-            }
-
-            // Check if event is full
-            var activeRegistrations = @event.Registrations?
-                .Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
-
-            if (activeRegistrations >= @event.MaxAttendees)
-            {
-                _logger.LogWarning("Event {EventId} is full. Cannot register user {UserId}", eventId, userId);
-                throw new InvalidOperationException("Event is full");
-            }
-
-            // Check if user is already registered
-            var existingRegistration = @event.Registrations?
-                .FirstOrDefault(r => r.UserId == userId && r.Status != RegistrationStatus.Cancelled);
-
-            if (existingRegistration != null)
-            {
-                _logger.LogWarning("User {UserId} is already registered for event {EventId}", userId, eventId);
-                throw new InvalidOperationException("You are already registered for this event");
-            }
-
+        public async Task<UserEventRegistration> RegisterUserForEventAsync(int eventId, string userId)
+        {
             try
             {
-                var registration = new Registration
-                {
-                    EventId = eventId,
-                    UserId = userId,
-                    Status = RegistrationStatus.Confirmed,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
+                var @event = await _context.Events
+                    .Include(e => e.Registrations)
+                    .FirstOrDefaultAsync(e => e.Id == eventId);
 
-                _context.Registrations.Add(registration);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("User {UserId} successfully registered for event {EventId}", userId, eventId);
-                return registration;
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "Database error registering user {UserId} for event {EventId}", userId, eventId);
-                throw new InvalidOperationException("You are already registered for this event.");
+                return @event is null 
+                    ? throw new KeyNotFoundException($"Event with ID {eventId} not found")
+                    : await RegisterUserForEventAsync(@event, userId);
             }
             catch (Exception ex)
             {
@@ -583,41 +553,128 @@ namespace VentyTime.Server.Services
             }
         }
 
-        public async Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId)
+        private async Task<UserEventRegistration> RegisterUserForEventAsync(Event @event, string userId)
         {
-            return await _context.Events
-                .Include(e => e.Organizer)
-                .Include(e => e.Registrations)
-                .Where(e => e.Registrations != null && e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
-                .OrderBy(e => e.StartDate)
-                .ToListAsync();
+            if (@event.IsCancelled)
+            {
+                throw new InvalidOperationException("Cannot register for a cancelled event");
+            }
+
+            if (@event.CurrentParticipants >= @event.MaxAttendees)
+            {
+                throw new InvalidOperationException("Event is already full");
+            }
+
+            var existingRegistration = await _context.UserEventRegistrations
+                .FirstOrDefaultAsync(r => r.EventId == @event.Id && r.UserId == userId);
+
+            if (existingRegistration is not null)
+            {
+                throw new InvalidOperationException("User is already registered for this event");
+            }
+
+            var registration = new UserEventRegistration
+            {
+                EventId = @event.Id,
+                UserId = userId,
+                Status = RegistrationStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.UserEventRegistrations.Add(registration);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Created registration for event {EventId} by user {UserId}", @event.Id, userId);
+
+            return registration;
         }
 
-        public async Task<bool> HasAvailableSpacesAsync(int eventId)
+        public async Task<RegisteredEventsResponse> GetRegisteredEventsAsync(string userId)
         {
-            var eventItem = await _context.Events
-                .Include(e => e.Registrations)
-                .FirstOrDefaultAsync(e => e.Id == eventId);
+            try
+            {
+                _logger.LogInformation("Getting registered events for user {UserId}", userId);
 
-            if (eventItem == null || eventItem.Registrations == null)
-                return false;
+                var registeredEvents = await _context.Events
+                    .Include(e => e.Organizer)
+                    .Include(e => e.Creator)
+                    .Include(e => e.Registrations)
+                    .Where(e => e.Registrations.Any(r => r.UserId == userId))
+                    .Select(e => new EventDto
+                    {
+                        Id = e.Id,
+                        Title = e.Title,
+                        Description = e.Description,
+                        StartDate = e.StartDate,
+                        EndDate = e.EndDate,
+                        StartTime = e.StartTime,
+                        Location = e.Location,
+                        VenueDetails = e.VenueDetails,
+                        OnlineUrl = e.OnlineUrl,
+                        IsOnline = e.IsOnline,
+                        MaxAttendees = e.MaxAttendees,
+                        Category = e.Category,
+                        Type = e.Type,
+                        Accessibility = e.Accessibility,
+                        ImageUrl = e.ImageUrl,
+                        Price = e.Price,
+                        IsActive = e.IsActive ?? true,
+                        IsCancelled = e.IsCancelled,
+                        CreatedAt = e.CreatedAt,
+                        UpdatedAt = e.UpdatedAt,
+                        CreatorId = e.CreatorId,
+                        OrganizerId = e.OrganizerId,
+                        Creator = e.Creator != null ? new ApplicationUser
+                        {
+                            Id = e.Creator.Id,
+                            UserName = e.Creator.UserName,
+                            Email = e.Creator.Email,
+                            FirstName = e.Creator.FirstName,
+                            LastName = e.Creator.LastName,
+                            AvatarUrl = e.Creator.AvatarUrl
+                        } : null,
+                        Organizer = e.Organizer != null ? new ApplicationUser
+                        {
+                            Id = e.Organizer.Id,
+                            UserName = e.Organizer.UserName,
+                            Email = e.Organizer.Email,
+                            FirstName = e.Organizer.FirstName,
+                            LastName = e.Organizer.LastName,
+                            AvatarUrl = e.Organizer.AvatarUrl
+                        } : null,
+                        CurrentParticipants = e.Registrations.Count,
+                        IsFeatured = e.IsFeatured,
+                        RequiresRegistration = e.RequiresRegistration,
+                        HasAgeRestriction = e.HasAgeRestriction,
+                        MinimumAge = e.MinimumAge,
+                        HasEarlyBirdPrice = e.HasEarlyBirdPrice,
+                        EarlyBirdPrice = e.EarlyBirdPrice,
+                        EarlyBirdDeadline = e.EarlyBirdDeadline,
+                        RefundPolicy = e.RefundPolicy ?? "Standard refund policy applies",
+                        Requirements = e.Requirements ?? "No special requirements",
+                        Schedule = e.Schedule ?? "Detailed schedule will be provided closer to the event",
+                        Tags = e.Tags ?? new List<string>(),
+                        AllowWaitlist = e.AllowWaitlist,
+                        WaitlistCapacity = e.WaitlistCapacity
+                    })
+                    .OrderBy(e => e.StartDate)
+                    .ToListAsync();
 
-            var activeRegistrations = eventItem.Registrations
-                .Count(r => r.Status == RegistrationStatus.Confirmed);
+                _logger.LogInformation("Found {Count} registered events for user {UserId}", 
+                    registeredEvents.Count, userId);
 
-            return activeRegistrations < eventItem.MaxAttendees;
-        }
-
-        private void InvalidateEventCache()
-        {
-            _cache.Remove(EventsCacheKey);
-            _cache.Remove(CategoriesCacheKey);
-        }
-
-        private void InvalidateEventCache(int eventId)
-        {
-            _cache.Remove($"{EventCacheKeyPrefix}{eventId}");
-            InvalidateEventCache();
+                return new RegisteredEventsResponse
+                {
+                    Events = registeredEvents,
+                    TotalCount = registeredEvents.Count,
+                    UserId = userId
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registered events for user {UserId}", userId);
+                throw;
+            }
         }
     }
 }

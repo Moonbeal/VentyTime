@@ -1,9 +1,12 @@
 @page "/events-dashboard"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
+@using MudBlazor
 @inject IEventService EventService
 @inject IAuthService AuthService
 @inject NavigationManager NavigationManager
+@inject ILogger<EventDashboard> _logger
+@inject ISnackbar Snackbar
 @attribute [Authorize]
 
 <div class="container-fluid mt-4">
@@ -118,9 +121,11 @@
                                                             <button class="btn btn-sm btn-outline-secondary" @onclick="() => NavigateToEventEdit(evt.Id)">
                                                                 <i class="fas fa-edit"></i>
                                                             </button>
-                                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ShowDeleteConfirmation(evt)">
-                                                                <i class="fas fa-trash"></i>
-                                                            </button>
+                                                            <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                                                                      OnClick="@(() => CancelEvent(evt))"
+                                                                      Disabled="@(evt.HasStarted || evt.IsFinished)">
+                                                                Cancel
+                                                            </MudButton>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -232,40 +237,35 @@
     }
 
     private DashboardTab activeTab = DashboardTab.UpcomingEvents;
-    private List<Event> upcomingEvents = new();
-    private List<Event> pastEvents = new();
     private bool showDeleteConfirmation = false;
-    private Event? selectedEvent;
+    private EventDto? selectedEvent;
     private DashboardStatistics statistics = new();
+    private EventDto eventModel = new EventDto();
+    private List<EventDto> upcomingEvents = new();
+    private List<EventDto> pastEvents = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadEvents();
-        LoadStatistics();
-    }
-
-    private async Task LoadEvents()
-    {
-        var currentUser = await AuthService.GetCurrentUserAsync();
-        if (currentUser != null)
+        try
         {
-            var allEvents = await EventService.GetEventsByOrganizerIdAsync(currentUser.Id);
-            upcomingEvents = allEvents.Where(e => !e.HasStarted()).OrderBy(e => e.StartDate).ToList();
-            pastEvents = allEvents.Where(e => e.HasStarted()).OrderByDescending(e => e.StartDate).ToList();
+            upcomingEvents = await EventService.GetUpcomingEventsAsync();
+            pastEvents = await EventService.GetPopularEventsAsync();
+            
+            // Calculate statistics
+            statistics = new DashboardStatistics
+            {
+                TotalEvents = upcomingEvents.Count + pastEvents.Count,
+                ActiveEvents = upcomingEvents.Count,
+                TotalRegistrations = upcomingEvents.Sum(e => e.CurrentParticipants) + pastEvents.Sum(e => e.CurrentParticipants),
+                TotalRevenue = upcomingEvents.Sum(e => e.Price * e.CurrentParticipants) + pastEvents.Sum(e => e.Price * e.CurrentParticipants),
+                CompletedEvents = pastEvents.Count
+            };
         }
-    }
-
-    private void LoadStatistics()
-    {
-        // In a real application, you would call a service to get these statistics
-        statistics = new DashboardStatistics
+        catch (Exception ex)
         {
-            TotalEvents = upcomingEvents.Count + pastEvents.Count,
-            ActiveEvents = upcomingEvents.Count,
-            TotalRegistrations = upcomingEvents.Sum(e => e.CurrentParticipants) + pastEvents.Sum(e => e.CurrentParticipants),
-            TotalRevenue = upcomingEvents.Sum(e => e.Price * e.CurrentParticipants) + pastEvents.Sum(e => e.Price * e.CurrentParticipants),
-            CompletedEvents = pastEvents.Count
-        };
+            _logger.LogError(ex, "Error loading dashboard data");
+            Snackbar.Add("Error loading dashboard data", Severity.Error);
+        }
     }
 
     private void CreateNewEvent()
@@ -283,7 +283,7 @@
         NavigationManager.NavigateTo($"/event/{eventId}/edit");
     }
 
-    private void ShowDeleteConfirmation(Event evt)
+    private void ShowDeleteConfirmation(EventDto evt)
     {
         selectedEvent = evt;
         showDeleteConfirmation = true;
@@ -300,8 +300,16 @@
         if (selectedEvent != null)
         {
             await EventService.DeleteEventAsync(selectedEvent.Id);
-            await LoadEvents();
-            LoadStatistics();
+            upcomingEvents = await EventService.GetUpcomingEventsAsync();
+            pastEvents = await EventService.GetPopularEventsAsync();
+            statistics = new DashboardStatistics
+            {
+                TotalEvents = upcomingEvents.Count + pastEvents.Count,
+                ActiveEvents = upcomingEvents.Count,
+                TotalRegistrations = upcomingEvents.Sum(e => e.CurrentParticipants) + pastEvents.Sum(e => e.CurrentParticipants),
+                TotalRevenue = upcomingEvents.Sum(e => e.Price * e.CurrentParticipants) + pastEvents.Sum(e => e.Price * e.CurrentParticipants),
+                CompletedEvents = pastEvents.Count
+            };
         }
         showDeleteConfirmation = false;
         selectedEvent = null;
@@ -310,6 +318,11 @@
     private void ExportEventData(int eventId)
     {
         // Implement export functionality
+    }
+
+    private void CancelEvent(EventDto evt)
+    {
+        // Implement cancel event functionality
     }
 
     private class DashboardStatistics

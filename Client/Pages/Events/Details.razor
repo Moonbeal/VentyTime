@@ -1,0 +1,327 @@
+@page "/events/{Id:int}"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject IRegistrationService RegistrationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IAuthService AuthService
+@inject ILogger<Details> _logger
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (Event == null)
+    {
+        <MudAlert Severity="Severity.Error">Event not found.</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                @if (!string.IsNullOrEmpty(Event.ImageUrl))
+                {
+                    <MudImage Src="@Event.ImageUrl" Alt="@Event.Title" Class="rounded-lg" Height="400" ObjectFit="ObjectFit.Cover" />
+                }
+                
+                <MudText Typo="Typo.h3" Class="mt-4">@Event.Title</MudText>
+                
+                <MudPaper Class="pa-4 mt-4" Elevation="0">
+                    <MudText Typo="Typo.body1">@Event.Description</MudText>
+                </MudPaper>
+
+                <MudDivider Class="my-6" />
+
+                <MudText Typo="Typo.h5" Class="mb-4">Event Details</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.EventNote" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Event Type</MudText>
+                                    <MudText Typo="Typo.body2">@Event.Type.ToString()</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.Category" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Category</MudText>
+                                    <MudText Typo="Typo.body2">@Event.Category</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Location</MudText>
+                                    <MudText Typo="Typo.body2">@Event.Location</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.Event" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Start Date & Time</MudText>
+                                    <MudText Typo="Typo.body2">@Event.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">End Date & Time</MudText>
+                                    <MudText Typo="Typo.body2">@Event.EndDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.Group" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Capacity</MudText>
+                                    <MudText Typo="Typo.body2">@Event.MaxAttendees spots</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Price</MudText>
+                                    <MudText Typo="Typo.body2">@($"${Event.Price:F2}")</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Organizer</MudText>
+                                    <MudText Typo="Typo.body2">@Event.OrganizerId</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="pa-4" Elevation="0">
+                            <div class="d-flex">
+                                <MudIcon Icon="@Icons.Material.Filled.Public" Class="mr-2" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">Status</MudText>
+                                    <MudText Typo="Typo.body2">@(_isRegistered == true ? "Active" : "Inactive")</MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+
+                    @if (Event.IsOnline)
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudPaper Class="pa-4" Elevation="0">
+                                <div class="d-flex">
+                                    <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-2" />
+                                    <div>
+                                        <MudText Typo="Typo.subtitle1">Online Url</MudText>
+                                        <MudLink Href="@Event.OnlineUrl" Target="_blank" Typo="Typo.body2">Visit Online Url</MudLink>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Event.Description))
+                    {
+                        <MudItem xs="12">
+                            <MudPaper Class="pa-4" Elevation="0">
+                                <div class="d-flex">
+                                    <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                                    <div>
+                                        <MudText Typo="Typo.subtitle1">Description</MudText>
+                                        <MudText Typo="Typo.body2">@Event.Description</MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Elevation="3">
+                    <MudText Typo="Typo.h4" Class="mb-4">@($"${Event.Price:F2}")</MudText>
+                    
+                    @if (_registering || _unregistering)
+                    {
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    }
+                    else if (_isRegistered)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mb-4">You are registered for this event!</MudAlert>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Error" 
+                                  FullWidth="true"
+                                  OnClick="UnregisterFromEventAsync">
+                            UNREGISTER
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  FullWidth="true"
+                                  OnClick="RegisterForEventAsync">
+                            REGISTER NOW
+                        </MudButton>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private EventDto? Event { get; set; }
+    private bool _loading = true;
+    private bool _registering = false;
+    private bool _unregistering = false;
+    private string? _errorMessage;
+    private bool _isRegistered = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Event = await EventService.GetEventByIdAsync(Id);
+            if (Event == null)
+            {
+                NavigationManager.NavigateTo("/events");
+                return;
+            }
+
+            var user = await AuthService.GetCurrentUserAsync();
+            if (user != null)
+            {
+                var registration = await RegistrationService.GetRegistrationAsync(Id, user.Id);
+                _isRegistered = registration != null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading event details");
+            _errorMessage = "Error loading event details";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RegisterForEventAsync()
+    {
+        try
+        {
+            _registering = true;
+            _errorMessage = null;
+
+            var user = await AuthService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                NavigationManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString($"/event/{Id}")}");
+                return;
+            }
+
+            if (Event == null) return;
+
+            var result = await RegistrationService.RegisterForEventAsync(Id, user.Id);
+            if (result.Success)
+            {
+                _isRegistered = true;
+                Event = await EventService.GetEventByIdAsync(Id);
+                Snackbar.Add("Successfully registered for the event", Severity.Success);
+            }
+            else
+            {
+                _errorMessage = result.Message;
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error registering for event");
+            _errorMessage = "Error registering for event";
+            Snackbar.Add("Error registering for event", Severity.Error);
+        }
+        finally
+        {
+            _registering = false;
+        }
+    }
+
+    private async Task UnregisterFromEventAsync()
+    {
+        try
+        {
+            _unregistering = true;
+            _errorMessage = null;
+
+            var user = await AuthService.GetCurrentUserAsync();
+            if (user == null || Event == null) return;
+
+            var result = await RegistrationService.UnregisterFromEventAsync(Id, user.Id);
+            if (result.Success)
+            {
+                _isRegistered = false;
+                Event = await EventService.GetEventByIdAsync(Id);
+                Snackbar.Add("Successfully unregistered from the event", Severity.Success);
+            }
+            else
+            {
+                _errorMessage = result.Message;
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error unregistering from event");
+            _errorMessage = "Error unregistering from event";
+            Snackbar.Add("Error unregistering from event", Severity.Error);
+        }
+        finally
+        {
+            _unregistering = false;
+        }
+    }
+}

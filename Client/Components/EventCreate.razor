@@ -104,12 +104,7 @@
 </MudContainer>
 
 @code {
-    private Event eventModel = new Event
-    {
-        StartDate = DateTime.Now,
-        MaxAttendees = 0,
-        Price = 0
-    };
+    private EventDto eventModel = new EventDto();
 
     private MudForm? form;
     private bool success;

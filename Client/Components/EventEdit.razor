@@ -149,7 +149,7 @@
     [Parameter]
     public int Id { get; set; }
 
-    private Event? eventModel;
+    private EventDto eventModel = new EventDto();
     private bool loading = true;
     private bool showDeleteConfirmation = false;
 
@@ -174,16 +174,17 @@
     {
         try
         {
-            eventModel = await EventService.GetEventByIdAsync(Id);
-            if (eventModel != null)
+            var eventModelFromService = await EventService.GetEventByIdAsync(Id);
+            if (eventModelFromService != null)
             {
                 var currentUserId = await AuthService.GetCurrentUserAsync();
-                if (eventModel.OrganizerId != currentUserId?.Id)
+                if (eventModelFromService.OrganizerId != currentUserId?.Id)
                 {
                     // User is not the organizer
-                    eventModel = null;
+                    eventModelFromService = null;
                 }
             }
+            eventModel = eventModelFromService;
         }
         finally
         {

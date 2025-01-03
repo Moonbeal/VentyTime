@@ -20,6 +20,7 @@ namespace VentyTime.Client.Services
         private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
         private readonly ILogger<AuthService> _logger;
         private readonly NavigationManager _navigationManager;
+        private readonly AuthenticationStateProvider _authenticationStateProvider;
 
         public AuthService(
             IHttpClientFactory httpClientFactory,
@@ -35,6 +36,7 @@ namespace VentyTime.Client.Services
             _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
+            _authenticationStateProvider = authStateProvider ?? throw new ArgumentNullException(nameof(authStateProvider));
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -115,6 +117,19 @@ namespace VentyTime.Client.Services
                 _logger.LogError(ex, "Error occurred during logout");
                 return false;
             }
+        }
+
+        public async Task<bool> IsAuthenticatedAsync()
+        {
+            var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+            return authState.User.Identity?.IsAuthenticated ?? false;
+        }
+
+        public async Task<string> GetUserIdAsync()
+        {
+            var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return userId ?? throw new UnauthorizedAccessException("User is not authenticated");
         }
 
         public async Task<bool> IsAuthenticated()

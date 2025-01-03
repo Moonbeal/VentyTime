@@ -9,14 +9,15 @@ namespace VentyTime.Client.Services
         Task<AuthResponse> RegisterAsync(RegisterRequest request);
         Task<bool> LogoutAsync();
         Task<User?> GetCurrentUserAsync();
-        Task<bool> IsAuthenticated();
+        Task<bool> IsAuthenticatedAsync();
+        Task<string> GetUserIdAsync();
+        Task<string?> GetUserId();
+        Task<string?> GetUsername();
         Task<UserRole> GetUserRole();
         Task<bool> UpdateProfileAsync(UpdateProfileRequest request);
         Task<bool> ChangePasswordAsync(ChangePasswordRequest request);
         Task<bool> RequestPasswordResetAsync(string email);
         Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
-        Task<string?> GetUserId();
-        Task<string?> GetUsername();
         Task<string?> GetToken();
     }
 }

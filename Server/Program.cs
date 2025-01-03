@@ -33,8 +33,21 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
     });
 
+// Configure Identity
+builder.Services.AddIdentity<VentyTime.Shared.Models.ApplicationUser, IdentityRole>(options => {
+    options.SignIn.RequireConfirmedAccount = false;
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequiredLength = 6;
+})
+.AddEntityFrameworkStores<ApplicationDbContext>()
+.AddDefaultTokenProviders();
+
 // Register ImageService
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IEventService, EventService>();
 
 // Configure file upload limits
 builder.Services.Configure<FormOptions>(options =>
@@ -52,19 +65,6 @@ builder.Services.AddRazorPages();
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Add Identity services
-builder.Services.AddIdentity<VentyTime.Shared.Models.ApplicationUser, IdentityRole>(options =>
-{
-    options.SignIn.RequireConfirmedAccount = false;
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 8;
-})
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
 
 // Configure JWT authentication
 builder.Services.AddAuthentication(options =>
@@ -158,7 +158,6 @@ builder.Services.AddCors(options =>
 // Add services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
@@ -226,7 +225,7 @@ if (app.Environment.IsDevelopment())
         if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
         {
             context.Response.ContentType = "application/javascript";
-            await context.Response.WriteAsync(@"
+            await context.Response.WriteAsync(@"// <![CDATA[
                 (function() {
                     const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
                     eventSource.onmessage = function(event) {
@@ -235,7 +234,7 @@ if (app.Environment.IsDevelopment())
                         }
                     };
                 })();
-            ");
+            // ]]>");
             return;
         }
         await next();

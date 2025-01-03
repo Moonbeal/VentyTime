@@ -1,0 +1,411 @@
+@page "/events/create"
+@using VentyTime.Shared.Models
+@using System.Text.Json
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IAuthService AuthService
+@inject ILogger _logger
+@attribute [Authorize]
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <EditForm Model="@eventModel" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <MudCard>
+            <MudCardContent>
+                <MudText Typo="Typo.h4" Class="mb-4">Create New Event</MudText>
+
+                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                    <MudTabPanel Text="Basic Information">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Title"
+                                            Label="Event Title"
+                                            For="@(() => eventModel.Title)"
+                                            Required="true"
+                                            RequiredError="Title is required"
+                                            Counter="100"
+                                            MaxLength="100"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Description"
+                                            Label="Description"
+                                            For="@(() => eventModel.Description)"
+                                            Required="true"
+                                            RequiredError="Description is required"
+                                            Lines="4"
+                                            Counter="2000"
+                                            MaxLength="2000"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="string"
+                                          Label="Category"
+                                          For="@(() => eventModel.Category)"
+                                          @bind-Value="eventModel.Category"
+                                          Required="true"
+                                          RequiredError="Category is required"
+                                          AnchorOrigin="Origin.BottomCenter"
+                                          Variant="Variant.Outlined">
+                                    @foreach (var category in EventCategories.All)
+                                    {
+                                        <MudSelectItem Value="@category">@category</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="EventType"
+                                          Label="Event Type"
+                                          For="@(() => eventModel.Type)"
+                                          @bind-Value="eventModel.Type"
+                                          Required="true"
+                                          RequiredError="Event type is required"
+                                          AnchorOrigin="Origin.BottomCenter"
+                                          Variant="Variant.Outlined">
+                                    @foreach (var type in Enum.GetValues<EventType>())
+                                    {
+                                        <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                        </MudGrid>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Date & Time">
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudDatePicker Label="Start Date"
+                                             @bind-Date="startDate"
+                                             Required="true"
+                                             RequiredError="Start date is required"
+                                             Variant="Variant.Outlined"
+                                             MinDate="@DateTime.Today" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTimePicker Label="Start Time"
+                                             @bind-Time="startTime"
+                                             Required="true"
+                                             RequiredError="Start time is required"
+                                             Variant="Variant.Outlined"
+                                             AmPm="true" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudDatePicker Label="End Date"
+                                             @bind-Date="endDate"
+                                             Required="true"
+                                             RequiredError="End date is required"
+                                             Variant="Variant.Outlined"
+                                             MinDate="@startDate" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Location">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Location"
+                                            Label="Location"
+                                            For="@(() => eventModel.Location)"
+                                            Required="true"
+                                            RequiredError="Location is required"
+                                            Counter="200"
+                                            MaxLength="200"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.VenueDetails"
+                                            Label="Venue Details"
+                                            For="@(() => eventModel.VenueDetails)"
+                                            HelperText="Additional details about the venue (e.g., parking, entrance, etc.)"
+                                            Counter="200"
+                                            MaxLength="200"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField T="string" 
+                                            Label="Online Event URL"
+                                            @bind-Value="eventModel.OnlineUrl"
+                                            For="@(() => eventModel.OnlineUrl)"
+                                            Variant="Variant.Outlined"
+                                            Class="mt-3" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Capacity & Registration">
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField @bind-Value="eventModel.MaxAttendees"
+                                               Label="Maximum Attendees"
+                                               For="@(() => eventModel.MaxAttendees)"
+                                               Required="true"
+                                               RequiredError="Maximum attendees is required"
+                                               Min="1"
+                                               Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSelect T="EventAccessibility"
+                                          Label="Event Accessibility"
+                                          For="@(() => eventModel.Accessibility)"
+                                          @bind-Value="eventModel.Accessibility"
+                                          Required="true"
+                                          RequiredError="Accessibility is required"
+                                          AnchorOrigin="Origin.BottomCenter"
+                                          Variant="Variant.Outlined">
+                                    @foreach (var accessibility in Enum.GetValues<EventAccessibility>())
+                                    {
+                                        <MudSelectItem Value="@accessibility">@accessibility.ToString()</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@eventModel.RequiresRegistration"
+                                          Label="Requires Registration"
+                                          Color="Color.Primary" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@eventModel.AllowWaitlist"
+                                          Label="Allow Waitlist"
+                                          Color="Color.Primary" />
+                            </MudItem>
+
+                            @if (eventModel.AllowWaitlist)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="eventModel.WaitlistCapacity"
+                                                   Label="Waitlist Capacity"
+                                                   For="@(() => eventModel.WaitlistCapacity)"
+                                                   Min="1"
+                                                   Variant="Variant.Outlined" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Pricing">
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField @bind-Value="eventModel.Price"
+                                               Label="Regular Price"
+                                               For="@(() => eventModel.Price)"
+                                               Required="true"
+                                               RequiredError="Price is required"
+                                               Min="0"
+                                               Format="N2"
+                                               AdornmentText="$"
+                                               Adornment="Adornment.Start"
+                                               Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@eventModel.HasEarlyBirdPrice"
+                                          Label="Enable Early Bird Pricing"
+                                          Color="Color.Primary" />
+                            </MudItem>
+
+                            @if (eventModel.HasEarlyBirdPrice)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="eventModel.EarlyBirdPrice"
+                                                   Label="Early Bird Price"
+                                                   For="@(() => eventModel.EarlyBirdPrice)"
+                                                   Min="0"
+                                                   Format="N2"
+                                                   AdornmentText="$"
+                                                   Adornment="Adornment.Start"
+                                                   Variant="Variant.Outlined" />
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudDatePicker Label="Early Bird Deadline"
+                                                 @bind-Date="eventModel.EarlyBirdDeadline"
+                                                 Variant="Variant.Outlined"
+                                                 MinDate="@DateTime.Today"
+                                                 MaxDate="@startDate" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Additional Details">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.ImageUrl"
+                                            Label="Image URL"
+                                            For="@(() => eventModel.ImageUrl)"
+                                            HelperText="URL of the event banner or promotional image"
+                                            Counter="2000"
+                                            MaxLength="2000"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Tags"
+                                            Label="Tags"
+                                            For="@(() => eventModel.Tags)"
+                                            HelperText="Comma-separated tags to help with event discovery"
+                                            Counter="500"
+                                            MaxLength="500"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Schedule"
+                                            Label="Schedule"
+                                            For="@(() => eventModel.Schedule)"
+                                            HelperText="Brief outline of the event schedule"
+                                            Lines="3"
+                                            Counter="500"
+                                            MaxLength="500"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.Requirements"
+                                            Label="Requirements"
+                                            For="@(() => eventModel.Requirements)"
+                                            HelperText="Any special requirements for attendees"
+                                            Lines="3"
+                                            Counter="500"
+                                            MaxLength="500"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="eventModel.RefundPolicy"
+                                            Label="Refund Policy"
+                                            For="@(() => eventModel.RefundPolicy)"
+                                            HelperText="Refund and cancellation policy"
+                                            Lines="3"
+                                            Counter="500"
+                                            MaxLength="500"
+                                            Variant="Variant.Outlined" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudSwitch @bind-Checked="@eventModel.HasAgeRestriction"
+                                          Label="Has Age Restriction"
+                                          Color="Color.Primary" />
+                            </MudItem>
+
+                            @if (eventModel.HasAgeRestriction)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="eventModel.MinimumAge"
+                                                   Label="Minimum Age"
+                                                   For="@(() => eventModel.MinimumAge)"
+                                                   Min="0"
+                                                   Max="100"
+                                                   Variant="Variant.Outlined" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudCardContent>
+
+            <MudCardActions Class="pa-4 mt-4">
+                <MudButton ButtonType="ButtonType.Submit"
+                          Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          Size="Size.Large"
+                          Class="ml-auto"
+                          Disabled="@(_loading)">
+                    Create Event
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </EditForm>
+
+    @if (_loading)
+    {
+        <MudOverlay Visible="true" DarkBackground="true" Absolute="true">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </MudOverlay>
+    }
+
+    @if (_errorMessage != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private EventDto eventModel = new();
+    private bool _loading = false;
+    private string? _errorMessage;
+    private DateTime? startDate;
+    private TimeSpan? startTime;
+    private DateTime? endDate;
+
+    protected override void OnInitialized()
+    {
+        // Set default values
+        eventModel.RequiresRegistration = true;
+        eventModel.IsActive = true;
+        eventModel.Type = EventType.Other;
+        eventModel.Accessibility = EventAccessibility.Public;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (!startDate.HasValue || !startTime.HasValue || !endDate.HasValue)
+        {
+            Snackbar.Add("Please fill in all required date and time fields", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _loading = true;
+            _errorMessage = null;
+
+            var user = await AuthService.GetCurrentUserAsync();
+            if (user == null)
+            {
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            // Combine date and time
+            eventModel.StartDate = startDate.Value.Add(startTime.Value);
+            eventModel.EndDate = endDate.Value.Add(startTime.Value);
+            eventModel.StartTime = startTime.Value;
+            eventModel.CreatorId = user.Id;
+            eventModel.OrganizerId = user.Id;
+
+            var result = await EventService.CreateEventAsync(eventModel);
+            if (result != null)
+            {
+                NavigationManager.NavigateTo($"/event/{result.Id}");
+                Snackbar.Add("Event created successfully!", Severity.Success);
+            }
+            else
+            {
+                _errorMessage = "Failed to create event";
+                Snackbar.Add("Failed to create event", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating event");
+            _errorMessage = "Error creating event";
+            Snackbar.Add("Error creating event", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
