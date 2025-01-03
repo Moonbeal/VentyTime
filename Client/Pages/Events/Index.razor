@@ -1,101 +1,77 @@
-@page "/home"
+@page "/events/discover"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
-@using VentyTime.Client.Components
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-0 px-0">
-    <!-- Hero Section with Mood Matcher -->
-    <MudPaper Class="hero-section position-relative overflow-hidden" Style="min-height: 60vh;">
-        <MudContainer>
-            <div class="hero-content d-flex flex-column justify-center" style="min-height: 60vh;">
-                <MudText Typo="Typo.h2" Class="mb-4">Find Your Perfect Event</MudText>
-                <MudText Typo="Typo.h5" Class="mb-8">Select your mood and discover events that match your vibe</MudText>
-                
-                <!-- Mood Matcher -->
-                <MudText Typo="Typo.h5" Class="mb-4">How are you feeling today?</MudText>
-                <div class="mood-matcher d-flex gap-4 flex-wrap">
-                    @foreach (var mood in moods)
-                    {
-                        var moodClass = $"mood-item pa-4 d-flex flex-column align-center {(selectedMood == mood.Name ? "selected" : "")}";
-                        <MudPaper @onclick="() => SelectMood(mood)" 
-                                 Elevation="@(selectedMood == mood.Name ? 8 : 2)"
-                                 Class="@moodClass">
-                            <MudText Typo="Typo.h3" Class="mb-2">@mood.Emoji</MudText>
-                            <MudText>@mood.Name</MudText>
-                        </MudPaper>
-                    }
-                </div>
-                
-                <!-- View All Events Button -->
-                <button @onclick="NavigateToHome" class="view-all-events-button">
-                    VIEW ALL EVENTS →
-                </button>
-            </div>
-        </MudContainer>
-        
-        <!-- Animated Background -->
-        <div class="hero-background"></div>
-    </MudPaper>
+<div class="hero-section">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+        <MudText Typo="Typo.h2" Align="Align.Center" Class="mb-4 white-text">Find Your Perfect Event</MudText>
+        <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-6 white-text">Select your mood and discover events that match your vibe</MudText>
 
-    <!-- Trending Section -->
-    <MudPaper Class="mt-4 pa-6">
-        <MudText Typo="Typo.h5" Class="mb-4">Trending Now</MudText>
-        <div class="trending-bubbles position-relative" style="height: 500px;">
-            @foreach (var trend in trendingEvents)
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6 white-text">How are you feeling today?</MudText>
+
+        <div class="mood-grid">
+            @foreach (var mood in moods)
             {
-                var categoryClass = string.IsNullOrEmpty(trend.Category) ? "other" : trend.Category.ToLower();
-                <div class="trending-bubble @categoryClass" 
-                     style="--size:@(trend.Popularity)px;--x:@(trend.X)%;--y:@(trend.Y)%"
-                     @onclick="() => ViewEvent(trend.Id)">
-                    <span>@trend.Title</span>
-                </div>
+                <MudPaper @onclick="() => SelectMood(mood)" 
+                         Elevation="@(selectedMood == mood.Name ? 3 : 1)"
+                         Class="@($"mood-item {(selectedMood == mood.Name ? "selected" : "")}")">
+                    <div class="mood-emoji">@mood.Emoji</div>
+                    <MudText Class="mood-text">@mood.Name</MudText>
+                </MudPaper>
             }
         </div>
-    </MudPaper>
 
-    <!-- Weekend Timeline and Roulette -->
-    <MudGrid Class="mt-4">
-        <MudItem xs="12" md="8">
-            <MudPaper Class="pa-4">
-                <MudText Typo="Typo.h5" Class="mb-4">This Weekend</MudText>
-                <div class="weekend-timeline">
-                    @foreach (var day in weekendEvents)
-                    {
-                        <div class="timeline-day">
-                            <MudText Typo="Typo.h6">@day.Date.ToString("dddd")</MudText>
-                            @foreach (var evt in day.Events)
-                            {
-                                <MudPaper Class="timeline-event pa-2 mb-2" @onclick="() => ViewEvent(evt.Id)">
-                                    <MudText Typo="Typo.body1">@evt.Title</MudText>
-                                    <MudText Typo="Typo.body2">@evt.Time</MudText>
-                                </MudPaper>
-                            }
-                        </div>
-                    }
-                </div>
-            </MudPaper>
-        </MudItem>
+        <div class="text-center mt-8">
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Secondary"
+                      Size="Size.Large"
+                      OnClick="ViewAllEvents"
+                      Class="view-all-button">
+                VIEW ALL EVENTS →
+            </MudButton>
+        </div>
+    </MudContainer>
+</div>
 
-        <MudItem xs="12" md="4">
-            <MudPaper Class="pa-4 d-flex flex-column align-center">
-                <MudText Typo="Typo.h5" Class="mb-4">Feeling Lucky?</MudText>
-                <div class="roulette-wheel" @onclick="SpinRoulette">
+<!-- Trending Events Section -->
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <MudText Typo="Typo.h4" Class="mb-4">Trending Events</MudText>
+    <div class="trending-events-container">
+        @foreach (var evt in trendingEvents)
+        {
+            <div class="trending-bubble @evt.Category.ToLower()"
+                 style="--size: @(evt.Popularity)px; --x: @(evt.X)%; --y: @(evt.Y)%;"
+                 @onclick="() => ViewEvent(evt.Id)">
+                <span class="bubble-content">@evt.Title</span>
+            </div>
+        }
+    </div>
+</MudContainer>
+
+<!-- Event Roulette Section -->
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-6 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4" Class="mb-4">Event Roulette</MudText>
+                <MudText Class="mb-4">Feeling lucky? Spin the wheel to discover a random event!</MudText>
+                
+                <div class="roulette-wheel @(isSpinning ? "spinning" : "")" @onclick="SpinRoulette">
                     <div class="wheel-inner">
-                        <div class="wheel-content">
-                            <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" />
-                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" />
                     </div>
                 </div>
+
                 @if (selectedRandomEvent != null)
                 {
                     <MudPaper Class="mt-4 pa-4 width-100">
                         <MudText Typo="Typo.h6">@selectedRandomEvent.Title</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-2">@selectedRandomEvent.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
                         <MudButton Color="Color.Primary" 
-                                  Variant="Variant.Filled" 
-                                  Class="mt-2"
+                                  Variant="Variant.Filled"
                                   OnClick="@(() => ViewEvent(selectedRandomEvent.Id))">
                             View Event
                         </MudButton>
@@ -108,75 +84,37 @@
 
 <style>
     .hero-section {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        color: white;
-        position: relative;
-        overflow: hidden;
+        background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+        min-height: 100vh;
+        padding: 4rem 1rem;
+        margin-top: -2rem;
+        display: flex;
+        align-items: center;
     }
 
-    .hero-content {
-        position: relative;
-        z-index: 1;
+    .white-text {
+        color: white !important;
     }
 
-    .hero-background {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 70%);
-        opacity: 0.5;
-    }
-
-    .view-all-events-button {
-        display: block;
-        width: 100%;
-        max-width: 400px;
-        margin: 2rem auto 0;
-        padding: 1rem;
-        background-color: #9155fd;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        font-size: 1rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .view-all-events-button:hover {
-        background-color: #804bdf;
-    }
-
-    .mood-matcher {
+    .mood-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         gap: 1rem;
-        margin-bottom: 2rem;
-        width: 100%;
         max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
+        margin: 0 auto;
     }
 
     .mood-item {
-        cursor: pointer;
-        transition: all 0.3s ease;
-        border-radius: 8px;
-        background-color: rgba(255, 255, 255, 0.1);
-        padding: 1rem;
-        text-align: center;
+        aspect-ratio: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-    }
-
-    .mood-item .mud-typography {
-        color: white;
+        cursor: pointer;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        padding: 1rem;
     }
 
     .mood-item:hover {
@@ -187,18 +125,115 @@
     .mood-item.selected {
         background-color: rgba(255, 255, 255, 0.3);
         transform: translateY(-5px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
-    .mood-item .emoji {
+    .mood-emoji {
         font-size: 2rem;
         margin-bottom: 0.5rem;
+    }
+
+    .mood-text {
+        color: white;
+        text-align: center;
+    }
+
+    .view-all-button {
+        min-width: 200px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Trending Events Styles */
+    .trending-events-container {
+        position: relative;
+        height: 500px;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .trending-bubble {
+        position: absolute;
+        width: var(--size);
+        height: var(--size);
+        left: var(--x);
+        top: var(--y);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 1rem;
+        text-align: center;
+        color: white;
+        font-weight: 500;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .trending-bubble:hover {
+        transform: translate(-50%, -50%) scale(1.1);
+        z-index: 10;
+    }
+
+    .bubble-content {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .trending-bubble:hover .bubble-content {
+        opacity: 1;
+    }
+
+    /* Category Colors */
+    .trending-bubble.music { background: linear-gradient(135deg, #9c27b0, #673ab7); }
+    .trending-bubble.sports { background: linear-gradient(135deg, #4caf50, #8bc34a); }
+    .trending-bubble.art { background: linear-gradient(135deg, #e91e63, #f44336); }
+    .trending-bubble.technology { background: linear-gradient(135deg, #2196f3, #03a9f4); }
+    .trending-bubble.food { background: linear-gradient(135deg, #ff9800, #ff5722); }
+    .trending-bubble.business { background: linear-gradient(135deg, #607d8b, #455a64); }
+
+    /* Roulette Styles */
+    .roulette-wheel {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #9c27b0, #673ab7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .wheel-inner {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .roulette-wheel.spinning {
+        animation: spin-wheel 3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @@keyframes spin-wheel {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(1440deg); }
     }
 </style>
 
 @code {
-    private List<EventDto> events = new();
     private string selectedMood = "";
+    private bool isSpinning = false;
+    private EventDto? selectedRandomEvent;
+    private List<TrendingEvent> trendingEvents = new();
+    private List<EventDto> events = new();
+
     private readonly List<MoodOption> moods = new()
     {
         new MoodOption { Name = "Energetic", Emoji = "⚡" },
@@ -215,19 +250,10 @@
         new MoodOption { Name = "Sporty", Emoji = "⚽" }
     };
 
-    private EventDto? selectedRandomEvent;
-    private bool isRouletteSpinning = false;
-
-    private List<EventStory> eventStories = new();
-    private List<TrendingEvent> trendingEvents = new();
-    private List<WeekendDay> weekendEvents = new();
-
     protected override async Task OnInitializedAsync()
     {
         await LoadEvents();
-        InitializeStories();
         InitializeTrendingEvents();
-        InitializeWeekendEvents();
     }
 
     private async Task LoadEvents()
@@ -239,59 +265,39 @@
         }
         catch (Exception ex)
         {
-            // Log the error or show a notification
             Console.WriteLine($"Error loading events: {ex.Message}");
             events = new List<EventDto>();
         }
     }
 
-    private void InitializeStories()
-    {
-        eventStories = events.Where(e => !string.IsNullOrEmpty(e.Title))
-            .Take(5)
-            .Select(e => new EventStory
-            {
-                Id = e.Id,
-                Title = e.Title!,
-                ImageUrl = e.ImageUrl ?? "images/default-event.jpg",
-                StartDate = e.StartDate
-            }).ToList();
-    }
-
     private void InitializeTrendingEvents()
     {
-        Random rnd = new Random();
-        trendingEvents = events.Where(e => !string.IsNullOrEmpty(e.Title))
-            .Take(8)
-            .Select(e => new TrendingEvent
-            {
-                Id = e.Id,
-                Title = e.Title!,
-                Category = e.Category ?? "Other",
-                Popularity = rnd.Next(60, 120),
-                X = rnd.Next(10, 90),
-                Y = rnd.Next(10, 90)
-            }).ToList();
+        var rnd = new Random();
+        trendingEvents = events.Take(8).Select(e => new TrendingEvent
+        {
+            Id = e.Id,
+            Title = e.Title ?? "",
+            Category = e.Category ?? "Other",
+            Popularity = rnd.Next(60, 120),
+            X = rnd.Next(10, 90),
+            Y = rnd.Next(10, 90)
+        }).ToList();
     }
 
-    private void InitializeWeekendEvents()
+    private async Task SpinRoulette()
     {
-        var weekend = events
-            .Where(e => e.StartDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday && !string.IsNullOrEmpty(e.Title))
-            .OrderBy(e => e.StartDate)
-            .GroupBy(e => e.StartDate.Date)
-            .Select(g => new WeekendDay
-            {
-                Date = g.Key,
-                Events = g.Select(e => new WeekendEvent
-                {
-                    Id = e.Id,
-                    Title = e.Title!,
-                    Time = e.StartDate.ToString("HH:mm")
-                }).ToList()
-            }).ToList();
+        if (isSpinning || !events.Any()) return;
 
-        weekendEvents = weekend;
+        isSpinning = true;
+        StateHasChanged();
+
+        await Task.Delay(3000); // Wait for animation
+
+        var rnd = new Random();
+        selectedRandomEvent = events[rnd.Next(events.Count)];
+        
+        isSpinning = false;
+        StateHasChanged();
     }
 
     private void SelectMood(MoodOption mood)
@@ -299,52 +305,20 @@
         selectedMood = selectedMood == mood.Name ? "" : mood.Name;
     }
 
-    private void NavigateToHome()
-    {
-        NavigationManager.NavigateTo("/events");
-    }
-
-    private void ViewStory(EventStory story)
-    {
-        NavigationManager.NavigateTo($"/events/{story.Id}");
-    }
-
     private void ViewEvent(int eventId)
     {
         NavigationManager.NavigateTo($"/events/{eventId}");
     }
 
-    private async Task SpinRoulette()
+    private void ViewAllEvents()
     {
-        if (isRouletteSpinning) return;
-        
-        isRouletteSpinning = true;
-        StateHasChanged();
-        
-        await Task.Delay(1000); // Simulating spin animation
-        
-        Random rnd = new Random();
-        if (events.Any())
-        {
-            selectedRandomEvent = events[rnd.Next(events.Count)];
-        }
-        
-        isRouletteSpinning = false;
-        StateHasChanged();
+        NavigationManager.NavigateTo("/events");
     }
 
     private class MoodOption
     {
-        public string Name { get; set; } = "";
-        public string Emoji { get; set; } = "";
-    }
-
-    private class EventStory
-    {
-        public int Id { get; set; }
-        public required string Title { get; set; }
-        public required string ImageUrl { get; set; }
-        public DateTime StartDate { get; set; }
+        public required string Name { get; set; }
+        public required string Emoji { get; set; }
     }
 
     private class TrendingEvent
@@ -355,18 +329,5 @@
         public int Popularity { get; set; }
         public int X { get; set; }
         public int Y { get; set; }
-    }
-
-    private class WeekendDay
-    {
-        public DateTime Date { get; set; }
-        public required List<WeekendEvent> Events { get; set; }
-    }
-
-    private class WeekendEvent
-    {
-        public int Id { get; set; }
-        public required string Title { get; set; }
-        public required string Time { get; set; }
     }
 }

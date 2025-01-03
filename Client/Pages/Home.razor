@@ -1,306 +1,333 @@
-@page "/events"
+@page "/home"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
-@using VentyTime.Client.Components
-@using Microsoft.AspNetCore.Components.Authorization
-@using System.Timers
-
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
-@inject IDialogService DialogService
-@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
 
-<PageTitle>VentyTime - Discover Amazing Events</PageTitle>
+<div class="hero-section">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+        <MudText Typo="Typo.h2" Align="Align.Center" Class="mb-4 white-text">Find Your Perfect Event</MudText>
+        <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-6 white-text">Select your mood and discover events that match your vibe</MudText>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    @if (isLoading)
-    {
-        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
-    }
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-6 white-text">How are you feeling today?</MudText>
 
-    <MudGrid>
-        <!-- Hero Section -->
-        <MudItem xs="12">
-            <div class="hero-section">
-                <MudText Typo="Typo.h2">Discover Amazing Events</MudText>
-                <MudText Typo="Typo.h6">Find and join exciting events in your area</MudText>
-                
-                <MudTextField T="string" 
-                             @bind-Value="searchQuery"
-                             Placeholder="Search events..."
-                             Variant="Variant.Outlined"
-                             Class="search-field"
-                             Adornment="Adornment.Start"
-                             AdornmentIcon="@Icons.Material.Filled.Search"
-                             AdornmentColor="Color.Default"
-                             OnKeyUp="@(async (e) => { if (e.Key == "Enter") await HandleSearch(); })" />
-                
-                <MudButton Class="explore-button" 
-                          StartIcon="@Icons.Material.Filled.Explore" 
-                          OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-                    EXPLORE EVENTS
-                </MudButton>
+        <div class="mood-grid">
+            @foreach (var mood in moods)
+            {
+                <MudPaper @onclick="() => SelectMood(mood)" 
+                         Elevation="@(selectedMood == mood.Name ? 3 : 1)"
+                         Class="@($"mood-item {(selectedMood == mood.Name ? "selected" : "")}")">
+                    <div class="mood-emoji">@mood.Emoji</div>
+                    <MudText Class="mood-text">@mood.Name</MudText>
+                </MudPaper>
+            }
+        </div>
+
+        <div class="text-center mt-8">
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Secondary"
+                      Size="Size.Large"
+                      OnClick="ViewAllEvents"
+                      Class="view-all-button">
+                VIEW ALL EVENTS →
+            </MudButton>
+        </div>
+    </MudContainer>
+</div>
+
+<!-- Trending Events Section -->
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <MudText Typo="Typo.h4" Class="mb-4">Trending Events</MudText>
+    <div class="trending-events-container">
+        @foreach (var evt in trendingEvents)
+        {
+            <div class="trending-bubble @evt.Category.ToLower()"
+                 style="--size: @(evt.Popularity)px; --x: @(evt.X)%; --y: @(evt.Y)%;"
+                 @onclick="() => ViewEvent(evt.Id)">
+                <span class="bubble-content">@evt.Title</span>
             </div>
-        </MudItem>
+        }
+    </div>
+</MudContainer>
 
-        <!-- Quick Stats -->
-        <MudItem xs="12">
-            <MudGrid>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="stats-card" Elevation="0">
-                        <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Primary" Size="Size.Large" Class="stats-icon" />
-                        <MudText Class="stats-number">@events.Count</MudText>
-                        <MudText Class="stats-label">Total Events</MudText>
-                    </MudPaper>
-                </MudItem>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="stats-card" Elevation="0">
-                        <MudIcon Icon="@Icons.Material.Filled.Today" Color="Color.Secondary" Size="Size.Large" Class="stats-icon" />
-                        <MudText Class="stats-number">@events.Count(e => e.StartDate.Date == DateTime.Today)</MudText>
-                        <MudText Class="stats-label">Today's Events</MudText>
-                    </MudPaper>
-                </MudItem>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="stats-card" Elevation="0">
-                        <MudIcon Icon="@Icons.Material.Filled.Upcoming" Color="Color.Info" Size="Size.Large" Class="stats-icon" />
-                        <MudText Class="stats-number">@events.Count(e => e.StartDate > DateTime.Today)</MudText>
-                        <MudText Class="stats-label">Upcoming Events</MudText>
-                    </MudPaper>
-                </MudItem>
-                <MudItem xs="12" sm="6" md="3">
-                    <MudPaper Class="stats-card" Elevation="0">
-                        <MudIcon Icon="@Icons.Material.Filled.Favorite" Color="Color.Error" Size="Size.Large" Class="stats-icon" />
-                        <MudText Class="stats-number">@events.Count(e => e.IsFeatured)</MudText>
-                        <MudText Class="stats-label">Featured Events</MudText>
-                    </MudPaper>
-                </MudItem>
-            </MudGrid>
-        </MudItem>
-
-        <!-- Quick Filters -->
-        <MudItem xs="12" Class="mt-4">
-            <MudPaper Class="pa-4" Elevation="0">
-                <MudText Typo="Typo.h6" Class="mb-4">Quick Filters</MudText>
-                <div class="d-flex gap-2 flex-wrap">
-                    <MudChip Color="Color.Default"
-                            Variant="@(selectedCategories.Count == 0 ? Variant.Filled : Variant.Outlined)"
-                            OnClick="@(() => FilterByCategory(null))">
-                        All Events
-                    </MudChip>
-                    @foreach (var category in EventCategories.All)
-                    {
-                        <MudChip Color="Color.Primary"
-                                Variant="@(selectedCategories.Contains(category) ? Variant.Filled : Variant.Outlined)"
-                                OnClick="@(() => FilterByCategory(category))">
-                            @category
-                        </MudChip>
-                    }
+<!-- Event Roulette Section -->
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-6 d-flex flex-column align-center">
+                <MudText Typo="Typo.h4" Class="mb-4">Event Roulette</MudText>
+                <MudText Class="mb-4">Feeling lucky? Spin the wheel to discover a random event!</MudText>
+                
+                <div class="roulette-wheel @(isSpinning ? "spinning" : "")" @onclick="SpinRoulette">
+                    <div class="wheel-inner">
+                        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" />
+                    </div>
                 </div>
-            </MudPaper>
-        </MudItem>
 
-        <!-- Featured Events Section -->
-        <MudItem xs="12" Class="mt-4">
-            <MudGrid>
-                <MudItem xs="12" Class="d-flex justify-space-between align-center mb-4">
-                    <MudText Typo="Typo.h5">Featured Events</MudText>
-                    <MudButton Variant="Variant.Text" 
-                              Color="Color.Primary" 
-                              EndIcon="@Icons.Material.Filled.ArrowForward"
-                              OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-                        View All
-                    </MudButton>
-                </MudItem>
-                @foreach (var eventItem in events.Where(e => e.IsFeatured).Take(3))
+                @if (selectedRandomEvent != null)
                 {
-                    <MudItem xs="12" sm="6" md="4">
-                        <MudCard Class="event-card">
-                            <MudCardMedia Image="@(string.IsNullOrEmpty(eventItem.ImageUrl) ? "/images/default-event.jpg" : eventItem.ImageUrl)"
-                                         Height="200" />
-                            <div class="event-content">
-                                <div class="event-category">@eventItem.Category</div>
-                                <div class="event-title">@eventItem.Title</div>
-                                <div class="event-description">@eventItem.Description</div>
-                                <div class="event-info">
-                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
-                                    <span>@eventItem.Location</span>
-                                </div>
-                            </div>
-                            <div class="event-footer">
-                                <div class="event-price">
-                                    @(eventItem.Price > 0 ? $"${eventItem.Price:F2}" : "Free")
-                                </div>
-                                <div>
-                                    <MudButton Color="Color.Primary" 
-                                              Variant="Variant.Text"
-                                              OnClick="@(() => ShowEventDetails(eventItem))">
-                                        Learn More
-                                    </MudButton>
-                                    <MudButton Color="Color.Primary" 
-                                              Variant="Variant.Filled"
-                                              OnClick="@(() => HandleRegisterClick(eventItem))">
-                                        Register
-                                    </MudButton>
-                                </div>
-                            </div>
-                        </MudCard>
-                    </MudItem>
+                    <MudPaper Class="mt-4 pa-4 width-100">
+                        <MudText Typo="Typo.h6">@selectedRandomEvent.Title</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-2">@selectedRandomEvent.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                        <MudButton Color="Color.Primary" 
+                                  Variant="Variant.Filled"
+                                  OnClick="@(() => ViewEvent(selectedRandomEvent.Id))">
+                            View Event
+                        </MudButton>
+                    </MudPaper>
                 }
-            </MudGrid>
-        </MudItem>
-
-        <!-- Calendar Section -->
-        <MudItem xs="12" Class="mt-6">
-            <MudPaper Class="pa-4" Elevation="0">
-                <MudGrid>
-                    <MudItem xs="12" md="4">
-                        <MudText Typo="Typo.h5" Class="calendar-title">Events Calendar</MudText>
-                        <MudDatePicker @bind-Date="selectedDate" 
-                                     Label="Select Date" 
-                                     DateFormat="MM/dd/yyyy"
-                                     DisableToolbar="true"
-                                     PickerVariant="PickerVariant.Dialog" />
-                    </MudItem>
-                    <MudItem xs="12" md="8">
-                        <MudList Clickable="true" Class="pa-0">
-                            @{
-                                var eventsForDate = events.Where(e => e.StartDate.Date == selectedDate?.Date).ToList();
-                            }
-                            @if (!eventsForDate.Any())
-                            {
-                                <MudText Typo="Typo.subtitle1" Class="pa-4 text-center">No events scheduled for this date</MudText>
-                            }
-                            else
-                            {
-                                @foreach (var eventItem in eventsForDate)
-                                {
-                                    <MudListItem @onclick="@(() => NavigationManager.NavigateTo($"/event/{eventItem.Id}"))" Class="calendar-event">
-                                        <div class="calendar-event-content">
-                                            <MudText Class="calendar-event-title">@eventItem.Title</MudText>
-                                            <MudText Class="calendar-event-description">@eventItem.Description</MudText>
-                                            <div class="calendar-event-details">
-                                                <div class="calendar-event-location">
-                                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
-                                                    <span>@eventItem.Location</span>
-                                                </div>
-                                                <div class="calendar-event-capacity">
-                                                    <MudIcon Icon="@Icons.Material.Filled.Group" Size="Size.Small" />
-                                                    <span>@eventItem.MaxAttendees spots available</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            }
-                        </MudList>
-                    </MudItem>
-                </MudGrid>
             </MudPaper>
         </MudItem>
     </MudGrid>
 </MudContainer>
 
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+        min-height: 100vh;
+        padding: 4rem 1rem;
+        margin-top: -2rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .white-text {
+        color: white !important;
+    }
+
+    .mood-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 1rem;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .mood-item {
+        aspect-ratio: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        padding: 1rem;
+    }
+
+    .mood-item:hover {
+        transform: translateY(-5px);
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .mood-item.selected {
+        background-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-5px);
+    }
+
+    .mood-emoji {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .mood-text {
+        color: white;
+        text-align: center;
+    }
+
+    .view-all-button {
+        min-width: 200px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Trending Events Styles */
+    .trending-events-container {
+        position: relative;
+        height: 500px;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .trending-bubble {
+        position: absolute;
+        width: var(--size);
+        height: var(--size);
+        left: var(--x);
+        top: var(--y);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: 1rem;
+        text-align: center;
+        color: white;
+        font-weight: 500;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .trending-bubble:hover {
+        transform: translate(-50%, -50%) scale(1.1);
+        z-index: 10;
+    }
+
+    .bubble-content {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .trending-bubble:hover .bubble-content {
+        opacity: 1;
+    }
+
+    /* Category Colors */
+    .trending-bubble.music { background: linear-gradient(135deg, #9c27b0, #673ab7); }
+    .trending-bubble.sports { background: linear-gradient(135deg, #4caf50, #8bc34a); }
+    .trending-bubble.art { background: linear-gradient(135deg, #e91e63, #f44336); }
+    .trending-bubble.technology { background: linear-gradient(135deg, #2196f3, #03a9f4); }
+    .trending-bubble.food { background: linear-gradient(135deg, #ff9800, #ff5722); }
+    .trending-bubble.business { background: linear-gradient(135deg, #607d8b, #455a64); }
+
+    /* Roulette Styles */
+    .roulette-wheel {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #9c27b0, #673ab7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .wheel-inner {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .roulette-wheel.spinning {
+        animation: spin-wheel 3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @@keyframes spin-wheel {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(1440deg); }
+    }
+</style>
+
 @code {
+    private string selectedMood = "";
+    private bool isSpinning = false;
+    private EventDto? selectedRandomEvent;
+    private List<TrendingEvent> trendingEvents = new();
     private List<EventDto> events = new();
-    private string searchQuery = "";
-    private bool isLoading;
-    private DateTime? selectedDate = DateTime.Today;
-    private HashSet<string> selectedCategories = new();
+
+    private readonly List<MoodOption> moods = new()
+    {
+        new MoodOption { Name = "Energetic", Emoji = "⚡" },
+        new MoodOption { Name = "Creative", Emoji = "🎨" },
+        new MoodOption { Name = "Relaxed", Emoji = "🌿" },
+        new MoodOption { Name = "Social", Emoji = "🎉" },
+        new MoodOption { Name = "Focused", Emoji = "🎯" },
+        new MoodOption { Name = "Adventurous", Emoji = "🌎" },
+        new MoodOption { Name = "Romantic", Emoji = "💝" },
+        new MoodOption { Name = "Intellectual", Emoji = "🧠" },
+        new MoodOption { Name = "Mindful", Emoji = "🧘" },
+        new MoodOption { Name = "Foodie", Emoji = "🍽️" },
+        new MoodOption { Name = "Musical", Emoji = "🎵" },
+        new MoodOption { Name = "Sporty", Emoji = "⚽" }
+    };
 
     protected override async Task OnInitializedAsync()
     {
         await LoadEvents();
+        InitializeTrendingEvents();
     }
 
     private async Task LoadEvents()
     {
         try
         {
-            isLoading = true;
-            StateHasChanged();
             var result = await EventService.GetEventsAsync();
-            events = result.Events.ToList();
+            events = result.Events?.ToList() ?? new List<EventDto>();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error loading events: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
+            Console.WriteLine($"Error loading events: {ex.Message}");
+            events = new List<EventDto>();
         }
     }
 
-    private async Task HandleSearch()
+    private void InitializeTrendingEvents()
     {
-        if (string.IsNullOrWhiteSpace(searchQuery))
+        var rnd = new Random();
+        trendingEvents = events.Take(8).Select(e => new TrendingEvent
         {
-            await LoadEvents();
-            return;
-        }
-
-        try
-        {
-            isLoading = true;
-            StateHasChanged();
-            events = (await EventService.SearchEventsAsync(searchQuery)).ToList();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error searching events: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+            Id = e.Id,
+            Title = e.Title ?? "",
+            Category = e.Category ?? "Other",
+            Popularity = rnd.Next(60, 120),
+            X = rnd.Next(10, 90),
+            Y = rnd.Next(10, 90)
+        }).ToList();
     }
 
-    private void FilterByCategory(string? category)
+    private async Task SpinRoulette()
     {
-        if (category == null)
-        {
-            selectedCategories.Clear();
-        }
-        else
-        {
-            if (selectedCategories.Contains(category))
-                selectedCategories.Remove(category);
-            else
-                selectedCategories.Add(category);
-        }
+        if (isSpinning || !events.Any()) return;
+
+        isSpinning = true;
+        StateHasChanged();
+
+        await Task.Delay(3000); // Wait for animation
+
+        var rnd = new Random();
+        selectedRandomEvent = events[rnd.Next(events.Count)];
+        
+        isSpinning = false;
+        StateHasChanged();
     }
 
-    private async Task ShowEventDetails(EventDto eventItem)
+    private void SelectMood(MoodOption mood)
     {
-        var parameters = new DialogParameters
-        {
-            { "Event", eventItem }
-        };
-
-        var dialog = await DialogService.ShowAsync<EventDetailsDialog>("Event Details", parameters);
-        var result = await dialog.Result;
+        selectedMood = selectedMood == mood.Name ? "" : mood.Name;
     }
 
-    private async Task HandleRegisterClick(EventDto eventItem)
+    private void ViewEvent(int eventId)
     {
-        try
-        {
-            var (success, errorMessage) = await EventService.RegisterForEventAsync(eventItem.Id);
-            if (success)
-            {
-                Snackbar.Add("Successfully registered for the event!", Severity.Success);
-                await LoadEvents();
-            }
-            else
-            {
-                Snackbar.Add(errorMessage ?? "Failed to register for the event.", Severity.Warning);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
-        }
+        NavigationManager.NavigateTo($"/events/{eventId}");
+    }
+
+    private void ViewAllEvents()
+    {
+        NavigationManager.NavigateTo("/events");
+    }
+
+    private class MoodOption
+    {
+        public required string Name { get; set; }
+        public required string Emoji { get; set; }
+    }
+
+    private class TrendingEvent
+    {
+        public int Id { get; set; }
+        public required string Title { get; set; }
+        public required string Category { get; set; }
+        public int Popularity { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
     }
 }

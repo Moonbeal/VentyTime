@@ -1,14 +1,47 @@
-@page "/all-events"
+@page "/events"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudText Typo="Typo.h3" Class="mb-4">All Events</MudText>
+    <MudText Typo="Typo.h2" Class="mb-4">Discover Amazing Events</MudText>
+    <MudText Typo="Typo.h6" Class="mb-6">Find and join exciting events in your area</MudText>
+
+    <!-- Quick Stats -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="stats-card pa-4" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Primary" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.h4" Class="mb-1">@events.Count</MudText>
+                <MudText>Total Events</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="stats-card pa-4" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Today" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.h4" Class="mb-1">@events.Count(e => e.StartDate.Date == DateTime.Today)</MudText>
+                <MudText>Today's Events</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="stats-card pa-4" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Upcoming" Color="Color.Info" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.h4" Class="mb-1">@events.Count(e => e.StartDate > DateTime.Today)</MudText>
+                <MudText>Upcoming Events</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="stats-card pa-4" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Favorite" Color="Color.Error" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.h4" Class="mb-1">@events.Count(e => e.IsFeatured)</MudText>
+                <MudText>Featured Events</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
     <!-- Search and Filter Section -->
-    <MudPaper Class="pa-4 mb-4">
+    <MudPaper Class="pa-4 mb-6">
         <MudGrid>
             <MudItem xs="12" sm="6" md="4">
                 <MudTextField @bind-Value="searchTerm" 
@@ -31,6 +64,26 @@
                 <MudDatePicker Label="Date" @bind-Date="selectedDate" Variant="Variant.Outlined" />
             </MudItem>
         </MudGrid>
+    </MudPaper>
+
+    <!-- Quick Filters -->
+    <MudPaper Class="pa-4 mb-6" Elevation="0">
+        <MudText Typo="Typo.h6" Class="mb-4">Quick Filters</MudText>
+        <div class="d-flex gap-2 flex-wrap">
+            <MudChip Color="Color.Default"
+                     Variant="@(string.IsNullOrEmpty(selectedCategory) ? Variant.Filled : Variant.Outlined)"
+                     OnClick="@(() => selectedCategory = "")">
+                All Events
+            </MudChip>
+            @foreach (var category in categories)
+            {
+                <MudChip Color="@GetChipColor(category)"
+                         Variant="@(selectedCategory == category ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => selectedCategory = selectedCategory == category ? "" : category)">
+                    @category
+                </MudChip>
+            }
+        </div>
     </MudPaper>
 
     <!-- Events Grid -->
@@ -61,12 +114,40 @@
     }
 </MudContainer>
 
+<style>
+    .stats-card {
+        text-align: center;
+        border-radius: 8px;
+        background-color: var(--mud-palette-background-grey);
+        transition: all 0.3s ease;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--mud-elevation-5);
+    }
+</style>
+
 @code {
     private List<EventDto> events = new();
     private string searchTerm = "";
     private string selectedCategory = "";
     private DateTime? selectedDate;
-    private List<string> categories = new() { "Music", "Sports", "Art", "Technology", "Food", "Business" };
+    private List<string> categories = new() 
+    { 
+        "Technology", 
+        "Music", 
+        "Sports", 
+        "Food & Drink", 
+        "Arts & Culture", 
+        "Business", 
+        "Education", 
+        "Entertainment", 
+        "Health & Wellness", 
+        "Charity",
+        "Fashion",
+        "Lifestyle"
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -82,7 +163,6 @@
         }
         catch (Exception ex)
         {
-            // Log the error or show a notification
             Console.WriteLine($"Error loading events: {ex.Message}");
             events = new List<EventDto>();
         }
@@ -100,4 +180,21 @@
     {
         NavigationManager.NavigateTo($"/events/{eventId}");
     }
+
+    private Color GetChipColor(string category) => category switch
+    {
+        "Technology" => Color.Info,
+        "Music" => Color.Secondary,
+        "Sports" => Color.Success,
+        "Food & Drink" => Color.Warning,
+        "Arts & Culture" => Color.Primary,
+        "Business" => Color.Default,
+        "Education" => Color.Info,
+        "Entertainment" => Color.Secondary,
+        "Health & Wellness" => Color.Success,
+        "Charity" => Color.Error,
+        "Fashion" => Color.Secondary,
+        "Lifestyle" => Color.Warning,
+        _ => Color.Default
+    };
 }
