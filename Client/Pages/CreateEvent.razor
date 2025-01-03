@@ -44,6 +44,24 @@
                                         HelperText="Describe your event in detail"
                                         Class="mb-4" />
 
+                            <div class="mb-4">
+                                <MudText Typo="Typo.subtitle1" Class="mb-2">Event Mood</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">Select up to 3 moods that best describe your event</MudText>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var mood in moods)
+                                    {
+                                        var isSelected = selectedMoods.Contains(mood.Name);
+                                        <MudChip Color="@(isSelected ? Color.Primary : Color.Default)"
+                                                OnClick="@(() => ToggleMood(mood.Name))"
+                                                Label="true"
+                                                Style="cursor: pointer;">
+                                            <MudText Class="mr-2">@mood.Emoji</MudText>
+                                            @mood.Name
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+
                             <MudGrid>
                                 <MudItem xs="12" md="6">
                                     <MudSelect @bind-Value="eventModel.Category"
@@ -52,51 +70,53 @@
                                              RequiredError="Category is required"
                                              Variant="Variant.Outlined"
                                              Class="mb-4">
-                                        @foreach (var category in EventCategories.All)
-                                        {
-                                            <MudSelectItem Value="@category">@category</MudSelectItem>
-                                        }
+                                        <MudSelectItem Value="@("Conference")">Conference</MudSelectItem>
+                                        <MudSelectItem Value="@("Workshop")">Workshop</MudSelectItem>
+                                        <MudSelectItem Value="@("Meetup")">Meetup</MudSelectItem>
+                                        <MudSelectItem Value="@("Party")">Party</MudSelectItem>
                                     </MudSelect>
                                 </MudItem>
                                 <MudItem xs="12" md="6">
                                     <MudSelect @bind-Value="eventModel.Type"
                                              Label="Event Type"
                                              Required="true"
-                                             RequiredError="Event type is required"
+                                             RequiredError="Event Type is required"
                                              Variant="Variant.Outlined"
                                              Class="mb-4">
-                                        @foreach (var type in Enum.GetValues(typeof(EventType)))
-                                        {
-                                            <MudSelectItem Value="@((EventType)type)">@type.ToString()</MudSelectItem>
-                                        }
+                                        <MudSelectItem Value="@(EventType.Conference)">Conference</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Workshop)">Workshop</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Meetup)">Meetup</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Webinar)">Webinar</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Social)">Social</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Concert)">Concert</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Exhibition)">Exhibition</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.SportEvent)">Sport Event</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Networking)">Networking</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Charity)">Charity</MudSelectItem>
+                                        <MudSelectItem Value="@(EventType.Other)">Other</MudSelectItem>
                                     </MudSelect>
                                 </MudItem>
                             </MudGrid>
 
-                            <MudGrid>
-                                <MudItem xs="12" md="6">
-                                    <MudNumericField @bind-Value="eventModel.Price"
-                                                   Label="Price"
-                                                   Required="true"
-                                                   RequiredError="Price is required"
-                                                   Min="0"
-                                                   Format="N2"
-                                                   AdornmentIcon="@Icons.Material.Filled.AttachMoney"
-                                                   Adornment="Adornment.Start"
-                                                   Variant="Variant.Outlined"
-                                                   Class="mb-4" />
-                                </MudItem>
-                                <MudItem xs="12" md="6">
-                                    <MudNumericField @bind-Value="eventModel.MaxAttendees"
-                                                   Label="Maximum Attendees"
-                                                   Required="true"
-                                                   RequiredError="Capacity is required"
-                                                   Min="1"
-                                                   Variant="Variant.Outlined"
-                                                   HelperText="Set to 0 for unlimited"
-                                                   Class="mb-4" />
-                                </MudItem>
-                            </MudGrid>
+                            <MudNumericField @bind-Value="eventModel.Price"
+                                           Label="Price"
+                                           Required="true"
+                                           RequiredError="Price is required"
+                                           Min="0"
+                                           Format="N2"
+                                           AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                           Adornment="Adornment.Start"
+                                           Variant="Variant.Outlined"
+                                           Class="mb-4" />
+
+                            <MudNumericField @bind-Value="eventModel.MaxAttendees"
+                                           Label="Maximum Attendees"
+                                           Required="true"
+                                           RequiredError="Capacity is required"
+                                           Min="1"
+                                           Variant="Variant.Outlined"
+                                           HelperText="Set to 0 for unlimited"
+                                           Class="mb-4" />
 
                             <MudTextField @bind-Value="eventModel.Location"
                                         Label="Location"
@@ -212,13 +232,44 @@
 
     private MudForm? form;
     private bool isValid;
-    private bool isLoading;
+    private bool isUploading;
     private IBrowserFile? selectedFile;
-
+    private string? imageUrl;
     private DateTime? startDate;
     private TimeSpan? startTime;
     private DateTime? endDate;
     private TimeSpan? endTime;
+
+    private HashSet<string> selectedMoods = new();
+    private readonly List<MoodOption> moods = new()
+    {
+        new MoodOption { Name = "Energetic", Emoji = "⚡" },
+        new MoodOption { Name = "Creative", Emoji = "🎨" },
+        new MoodOption { Name = "Relaxed", Emoji = "🌿" },
+        new MoodOption { Name = "Social", Emoji = "🎉" },
+        new MoodOption { Name = "Focused", Emoji = "🎯" },
+        new MoodOption { Name = "Adventurous", Emoji = "🌎" },
+        new MoodOption { Name = "Romantic", Emoji = "💝" },
+        new MoodOption { Name = "Intellectual", Emoji = "🧠" },
+        new MoodOption { Name = "Mindful", Emoji = "🧘" },
+        new MoodOption { Name = "Foodie", Emoji = "🍽️" },
+        new MoodOption { Name = "Musical", Emoji = "🎵" },
+        new MoodOption { Name = "Sporty", Emoji = "⚽" }
+    };
+
+    private class MoodOption
+    {
+        public string Name { get; set; } = "";
+        public string Emoji { get; set; } = "";
+    }
+
+    private void ToggleMood(string mood)
+    {
+        if (selectedMoods.Contains(mood))
+            selectedMoods.Remove(mood);
+        else if (selectedMoods.Count < 3) // Limit to 3 moods per event
+            selectedMoods.Add(mood);
+    }
 
     protected override void OnInitialized()
     {
@@ -226,6 +277,7 @@
         startTime = TimeSpan.FromHours(12); // Set default start time
         endDate = DateTime.Now.Date.AddDays(1).AddHours(13);
         endTime = TimeSpan.FromHours(13); // Set default end time
+        eventModel.Moods = new List<string>(); // Initialize moods list
     }
 
     private async Task OnInputFileChanged(InputFileChangeEventArgs e)
@@ -251,7 +303,7 @@
             }
 
             selectedFile = file;
-            isLoading = true;
+            isUploading = true;
             StateHasChanged();
 
             try
@@ -270,13 +322,13 @@
             }
             finally
             {
-                isLoading = false;
+                isUploading = false;
                 StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            isLoading = false;
+            isUploading = false;
             Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
             StateHasChanged();
         }
@@ -329,23 +381,21 @@
 
         try
         {
-            isLoading = true;
-            await form.Validate();
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
 
-            if (form.IsValid)
+            if (user.Identity?.IsAuthenticated == true)
             {
-                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-                var user = authState.User;
                 var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
                 if (string.IsNullOrEmpty(userId))
                 {
-                    Snackbar.Add("User not authenticated", Severity.Error);
+                    Snackbar.Add("User ID not found.", Severity.Error);
                     return;
                 }
 
                 eventModel.CreatorId = userId;
                 eventModel.OrganizerId = userId;
+                eventModel.Moods = selectedMoods.ToList(); // Add selected moods to the event
 
                 try 
                 {
@@ -367,10 +417,6 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
         }
     }
 

@@ -19,6 +19,7 @@ namespace VentyTime.Shared.Models
         public int MaxAttendees { get; set; }
         public string Category { get; set; } = string.Empty;
         public EventType Type { get; set; }
+        public List<string> Moods { get; set; } = new List<string>();
         public EventAccessibility Accessibility { get; set; }
         public string? ImageUrl { get; set; }
         public decimal Price { get; set; }

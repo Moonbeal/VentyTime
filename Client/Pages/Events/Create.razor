@@ -31,46 +31,62 @@
 
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="eventModel.Description"
-                                            Label="Description"
+                                            Label="Event Description"
                                             For="@(() => eventModel.Description)"
                                             Required="true"
                                             RequiredError="Description is required"
                                             Lines="4"
-                                            Counter="2000"
-                                            MaxLength="2000"
+                                            Counter="1000"
+                                            MaxLength="1000"
                                             Variant="Variant.Outlined" />
-                            </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudSelect T="string"
-                                          Label="Category"
-                                          For="@(() => eventModel.Category)"
-                                          @bind-Value="eventModel.Category"
-                                          Required="true"
-                                          RequiredError="Category is required"
-                                          AnchorOrigin="Origin.BottomCenter"
-                                          Variant="Variant.Outlined">
-                                    @foreach (var category in EventCategories.All)
-                                    {
-                                        <MudSelectItem Value="@category">@category</MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudItem>
+                                <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2">Event Mood</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-4">Select up to 3 moods that best describe your event</MudText>
+                                <MudPaper Class="pa-4 mb-4" Style="background-color: var(--mud-palette-background-grey);">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @foreach (var mood in moods)
+                                        {
+                                            var isSelected = selectedMoods.Contains(mood.Name);
+                                            <MudChip Color="@(isSelected ? Color.Primary : Color.Default)"
+                                                    OnClick="@(() => ToggleMood(mood.Name))"
+                                                    Label="true"
+                                                    Style="cursor: pointer;">
+                                                <MudText Class="mr-2">@mood.Emoji</MudText>
+                                                @mood.Name
+                                            </MudChip>
+                                        }
+                                    </div>
+                                </MudPaper>
 
-                            <MudItem xs="12" sm="6">
-                                <MudSelect T="EventType"
-                                          Label="Event Type"
-                                          For="@(() => eventModel.Type)"
-                                          @bind-Value="eventModel.Type"
-                                          Required="true"
-                                          RequiredError="Event type is required"
-                                          AnchorOrigin="Origin.BottomCenter"
-                                          Variant="Variant.Outlined">
-                                    @foreach (var type in Enum.GetValues<EventType>())
-                                    {
-                                        <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
-                                    }
-                                </MudSelect>
+                                <MudItem xs="12">
+                                    <MudSelect T="string" Label="Category"
+                                              @bind-Value="eventModel.Category"
+                                              Required="true"
+                                              RequiredError="Category is required"
+                                              AnchorOrigin="Origin.BottomCenter"
+                                              Variant="Variant.Outlined">
+                                        @foreach (var category in EventCategories.All)
+                                        {
+                                            <MudSelectItem Value="@category">@category</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect T="EventType"
+                                              Label="Event Type"
+                                              For="@(() => eventModel.Type)"
+                                              @bind-Value="eventModel.Type"
+                                              Required="true"
+                                              RequiredError="Event type is required"
+                                              AnchorOrigin="Origin.BottomCenter"
+                                              Variant="Variant.Outlined">
+                                        @foreach (var type in Enum.GetValues<EventType>())
+                                        {
+                                            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
                             </MudItem>
                         </MudGrid>
                     </MudTabPanel>
@@ -114,9 +130,9 @@
                                             For="@(() => eventModel.Location)"
                                             Required="true"
                                             RequiredError="Location is required"
-                                            Counter="200"
-                                            MaxLength="200"
-                                            Variant="Variant.Outlined" />
+                                            Variant="Variant.Outlined"
+                                            HelperText="Enter the full address or online meeting link"
+                                            Class="mb-4" />
                             </MudItem>
 
                             <MudItem xs="12">
@@ -348,6 +364,36 @@
     private DateTime? startDate;
     private TimeSpan? startTime;
     private DateTime? endDate;
+    private HashSet<string> selectedMoods = new();
+    private readonly List<MoodOption> moods = new()
+    {
+        new MoodOption { Name = "Energetic", Emoji = "⚡" },
+        new MoodOption { Name = "Creative", Emoji = "🎨" },
+        new MoodOption { Name = "Relaxed", Emoji = "🌿" },
+        new MoodOption { Name = "Social", Emoji = "🎉" },
+        new MoodOption { Name = "Focused", Emoji = "🎯" },
+        new MoodOption { Name = "Adventurous", Emoji = "🌎" },
+        new MoodOption { Name = "Romantic", Emoji = "💝" },
+        new MoodOption { Name = "Intellectual", Emoji = "🧠" },
+        new MoodOption { Name = "Mindful", Emoji = "🧘" },
+        new MoodOption { Name = "Foodie", Emoji = "🍽️" },
+        new MoodOption { Name = "Musical", Emoji = "🎵" },
+        new MoodOption { Name = "Sporty", Emoji = "⚽" }
+    };
+
+    private class MoodOption
+    {
+        public string Name { get; set; } = "";
+        public string Emoji { get; set; } = "";
+    }
+
+    private void ToggleMood(string mood)
+    {
+        if (selectedMoods.Contains(mood))
+            selectedMoods.Remove(mood);
+        else if (selectedMoods.Count < 3) // Limit to 3 moods per event
+            selectedMoods.Add(mood);
+    }
 
     protected override void OnInitialized()
     {
@@ -356,6 +402,7 @@
         eventModel.IsActive = true;
         eventModel.Type = EventType.Other;
         eventModel.Accessibility = EventAccessibility.Public;
+        eventModel.Moods = new List<string>();
     }
 
     private async Task HandleValidSubmit()
@@ -384,6 +431,7 @@
             eventModel.StartTime = startTime.Value;
             eventModel.CreatorId = user.Id;
             eventModel.OrganizerId = user.Id;
+            eventModel.Moods = selectedMoods.ToList(); // Add selected moods to the event
 
             var result = await EventService.CreateEventAsync(eventModel);
             if (result != null)

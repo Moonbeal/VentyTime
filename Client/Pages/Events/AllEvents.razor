@@ -1,0 +1,103 @@
+@page "/all-events"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject NavigationManager NavigationManager
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h3" Class="mb-4">All Events</MudText>
+
+    <!-- Search and Filter Section -->
+    <MudPaper Class="pa-4 mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="searchTerm" 
+                             Label="Search events" 
+                             Variant="Variant.Outlined"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             Class="mt-0"/>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect T="string" Label="Category" @bind-Value="selectedCategory" Variant="Variant.Outlined">
+                    <MudSelectItem Value="@string.Empty">All Categories</MudSelectItem>
+                    @foreach (var category in categories)
+                    {
+                        <MudSelectItem Value="@category">@category</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudDatePicker Label="Date" @bind-Date="selectedDate" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Events Grid -->
+    <MudGrid>
+        @foreach (var evt in filteredEvents)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard @onclick="() => ViewEvent(evt.Id)" Style="cursor: pointer;">
+                    <MudCardMedia Image="@evt.ImageUrl" Height="200" />
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-2">@evt.Title</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@evt.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                        <MudText Typo="Typo.body2" Class="mt-2">@(evt.Description?.Length > 100 ? evt.Description[..100] + "..." : evt.Description)</MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton EndIcon="@Icons.Material.Filled.ArrowForward" Color="Color.Primary">View Details</MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @if (!filteredEvents.Any())
+    {
+        <MudPaper Class="d-flex align-center justify-center pa-8" Elevation="0">
+            <MudText>No events found matching your criteria.</MudText>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<EventDto> events = new();
+    private string searchTerm = "";
+    private string selectedCategory = "";
+    private DateTime? selectedDate;
+    private List<string> categories = new() { "Music", "Sports", "Art", "Technology", "Food", "Business" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEvents();
+    }
+
+    private async Task LoadEvents()
+    {
+        try
+        {
+            var result = await EventService.GetEventsAsync();
+            events = result.Events?.ToList() ?? new List<EventDto>();
+        }
+        catch (Exception ex)
+        {
+            // Log the error or show a notification
+            Console.WriteLine($"Error loading events: {ex.Message}");
+            events = new List<EventDto>();
+        }
+    }
+
+    private IEnumerable<EventDto> filteredEvents => events
+        .Where(e => string.IsNullOrEmpty(searchTerm) || 
+                    e.Title?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true ||
+                    e.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+        .Where(e => string.IsNullOrEmpty(selectedCategory) || e.Category == selectedCategory)
+        .Where(e => !selectedDate.HasValue || e.StartDate.Date == selectedDate.Value.Date)
+        .OrderBy(e => e.StartDate);
+
+    private void ViewEvent(int eventId)
+    {
+        NavigationManager.NavigateTo($"/events/{eventId}");
+    }
+}

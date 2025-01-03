@@ -1,4 +1,4 @@
-@page "/events"
+@page "/home"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
 @using VentyTime.Client.Components
@@ -11,21 +11,28 @@
     <MudPaper Class="hero-section position-relative overflow-hidden" Style="min-height: 60vh;">
         <MudContainer>
             <div class="hero-content d-flex flex-column justify-center" style="min-height: 60vh;">
-                <MudText Typo="Typo.h1" Class="mood-title mb-4">Discover Your Next Experience</MudText>
-                <MudText Typo="Typo.h5" Class="mb-8">How do you feel today?</MudText>
+                <MudText Typo="Typo.h2" Class="mb-4">Find Your Perfect Event</MudText>
+                <MudText Typo="Typo.h5" Class="mb-8">Select your mood and discover events that match your vibe</MudText>
                 
                 <!-- Mood Matcher -->
+                <MudText Typo="Typo.h5" Class="mb-4">How are you feeling today?</MudText>
                 <div class="mood-matcher d-flex gap-4 flex-wrap">
                     @foreach (var mood in moods)
                     {
+                        var moodClass = $"mood-item pa-4 d-flex flex-column align-center {(selectedMood == mood.Name ? "selected" : "")}";
                         <MudPaper @onclick="() => SelectMood(mood)" 
                                  Elevation="@(selectedMood == mood.Name ? 8 : 2)"
-                                 Class="@($"mood-item pa-4 d-flex flex-column align-center {(selectedMood == mood.Name ? "selected" : "")}")">
+                                 Class="@moodClass">
                             <MudText Typo="Typo.h3" Class="mb-2">@mood.Emoji</MudText>
                             <MudText>@mood.Name</MudText>
                         </MudPaper>
                     }
                 </div>
+                
+                <!-- View All Events Button -->
+                <button @onclick="NavigateToHome" class="view-all-events-button">
+                    VIEW ALL EVENTS →
+                </button>
             </div>
         </MudContainer>
         
@@ -33,41 +40,15 @@
         <div class="hero-background"></div>
     </MudPaper>
 
-    <!-- Map and Stories Section -->
-    <MudGrid Class="mt-4">
-        <MudItem xs="12" md="8">
-            <MudPaper Class="pa-4" Style="height: 500px;">
-                <EventMap Events="@events" />
-            </MudPaper>
-        </MudItem>
-        
-        <MudItem xs="12" md="4">
-            <MudPaper Class="pa-4" Style="height: 500px; overflow-y: auto;">
-                <MudText Typo="Typo.h5" Class="mb-4">Event Stories</MudText>
-                <div class="stories-container">
-                    @foreach (var story in eventStories)
-                    {
-                        <MudPaper @onclick="() => ViewStory(story)" Class="story-item mb-4 position-relative">
-                            <MudImage Src="@story.ImageUrl" Height="200" Width="100%" ObjectFit="ObjectFit.Cover" />
-                            <div class="story-overlay d-flex flex-column justify-end pa-4">
-                                <MudText Typo="Typo.h6" Class="text-white">@story.Title</MudText>
-                                <MudText Typo="Typo.body2" Class="text-white">@story.StartDate.ToString("MMM dd")</MudText>
-                            </div>
-                        </MudPaper>
-                    }
-                </div>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
-
     <!-- Trending Section -->
     <MudPaper Class="mt-4 pa-6">
         <MudText Typo="Typo.h5" Class="mb-4">Trending Now</MudText>
-        <div class="trending-bubbles position-relative" style="height: 200px;">
+        <div class="trending-bubbles position-relative" style="height: 500px;">
             @foreach (var trend in trendingEvents)
             {
-                <div class="trending-bubble @trend.Category?.ToLower()"
-                     style="@($"--size: {trend.Popularity}px; --x: {trend.X}%; --y: {trend.Y}%;")"
+                var categoryClass = string.IsNullOrEmpty(trend.Category) ? "other" : trend.Category.ToLower();
+                <div class="trending-bubble @categoryClass" 
+                     style="--size:@(trend.Popularity)px;--x:@(trend.X)%;--y:@(trend.Y)%"
                      @onclick="() => ViewEvent(trend.Id)">
                     <span>@trend.Title</span>
                 </div>
@@ -112,7 +93,6 @@
                 {
                     <MudPaper Class="mt-4 pa-4 width-100">
                         <MudText Typo="Typo.h6">@selectedRandomEvent.Title</MudText>
-                        <MudText Typo="Typo.body2">@selectedRandomEvent.Description</MudText>
                         <MudButton Color="Color.Primary" 
                                   Variant="Variant.Filled" 
                                   Class="mt-2"
@@ -126,21 +106,117 @@
     </MudGrid>
 </MudContainer>
 
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .hero-background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 70%);
+        opacity: 0.5;
+    }
+
+    .view-all-events-button {
+        display: block;
+        width: 100%;
+        max-width: 400px;
+        margin: 2rem auto 0;
+        padding: 1rem;
+        background-color: #9155fd;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .view-all-events-button:hover {
+        background-color: #804bdf;
+    }
+
+    .mood-matcher {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+        width: 100%;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .mood-item {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 1rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mood-item .mud-typography {
+        color: white;
+    }
+
+    .mood-item:hover {
+        transform: translateY(-5px);
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .mood-item.selected {
+        background-color: rgba(255, 255, 255, 0.3);
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .mood-item .emoji {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+</style>
+
 @code {
     private List<EventDto> events = new();
     private string selectedMood = "";
+    private readonly List<MoodOption> moods = new()
+    {
+        new MoodOption { Name = "Energetic", Emoji = "⚡" },
+        new MoodOption { Name = "Creative", Emoji = "🎨" },
+        new MoodOption { Name = "Relaxed", Emoji = "🌿" },
+        new MoodOption { Name = "Social", Emoji = "🎉" },
+        new MoodOption { Name = "Focused", Emoji = "🎯" },
+        new MoodOption { Name = "Adventurous", Emoji = "🌎" },
+        new MoodOption { Name = "Romantic", Emoji = "💝" },
+        new MoodOption { Name = "Intellectual", Emoji = "🧠" },
+        new MoodOption { Name = "Mindful", Emoji = "🧘" },
+        new MoodOption { Name = "Foodie", Emoji = "🍽️" },
+        new MoodOption { Name = "Musical", Emoji = "🎵" },
+        new MoodOption { Name = "Sporty", Emoji = "⚽" }
+    };
+
     private EventDto? selectedRandomEvent;
     private bool isRouletteSpinning = false;
-
-    private List<MoodOption> moods = new()
-    {
-        new() { Name = "Energetic", Emoji = "⚡" },
-        new() { Name = "Creative", Emoji = "🎨" },
-        new() { Name = "Relaxed", Emoji = "🌿" },
-        new() { Name = "Social", Emoji = "🎉" },
-        new() { Name = "Focused", Emoji = "🎯" },
-        new() { Name = "Adventurous", Emoji = "🌎" }
-    };
 
     private List<EventStory> eventStories = new();
     private List<TrendingEvent> trendingEvents = new();
@@ -156,39 +232,52 @@
 
     private async Task LoadEvents()
     {
-        var result = await EventService.GetEventsAsync(page: 1, pageSize: null, category: null, searchQuery: null, startDate: null, endDate: null);
-        events = result.Events.ToList();
+        try
+        {
+            var result = await EventService.GetEventsAsync();
+            events = result.Events?.ToList() ?? new List<EventDto>();
+        }
+        catch (Exception ex)
+        {
+            // Log the error or show a notification
+            Console.WriteLine($"Error loading events: {ex.Message}");
+            events = new List<EventDto>();
+        }
     }
 
     private void InitializeStories()
     {
-        eventStories = events.Take(5).Select(e => new EventStory
-        {
-            Id = e.Id,
-            Title = e.Title ?? "",
-            ImageUrl = e.ImageUrl ?? "images/default-event.jpg",
-            StartDate = e.StartDate
-        }).ToList();
+        eventStories = events.Where(e => !string.IsNullOrEmpty(e.Title))
+            .Take(5)
+            .Select(e => new EventStory
+            {
+                Id = e.Id,
+                Title = e.Title!,
+                ImageUrl = e.ImageUrl ?? "images/default-event.jpg",
+                StartDate = e.StartDate
+            }).ToList();
     }
 
     private void InitializeTrendingEvents()
     {
         Random rnd = new Random();
-        trendingEvents = events.Take(8).Select(e => new TrendingEvent
-        {
-            Id = e.Id,
-            Title = e.Title ?? "",
-            Category = e.Category ?? "Other",
-            Popularity = rnd.Next(60, 120),
-            X = rnd.Next(10, 90),
-            Y = rnd.Next(10, 90)
-        }).ToList();
+        trendingEvents = events.Where(e => !string.IsNullOrEmpty(e.Title))
+            .Take(8)
+            .Select(e => new TrendingEvent
+            {
+                Id = e.Id,
+                Title = e.Title!,
+                Category = e.Category ?? "Other",
+                Popularity = rnd.Next(60, 120),
+                X = rnd.Next(10, 90),
+                Y = rnd.Next(10, 90)
+            }).ToList();
     }
 
     private void InitializeWeekendEvents()
     {
         var weekend = events
-            .Where(e => e.StartDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            .Where(e => e.StartDate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday && !string.IsNullOrEmpty(e.Title))
             .OrderBy(e => e.StartDate)
             .GroupBy(e => e.StartDate.Date)
             .Select(g => new WeekendDay
@@ -197,7 +286,7 @@
                 Events = g.Select(e => new WeekendEvent
                 {
                     Id = e.Id,
-                    Title = e.Title ?? "",
+                    Title = e.Title!,
                     Time = e.StartDate.ToString("HH:mm")
                 }).ToList()
             }).ToList();
@@ -205,11 +294,14 @@
         weekendEvents = weekend;
     }
 
-    private async Task SelectMood(MoodOption mood)
+    private void SelectMood(MoodOption mood)
     {
-        selectedMood = mood.Name;
-        // Implement mood-based filtering logic
-        await Task.CompletedTask;
+        selectedMood = selectedMood == mood.Name ? "" : mood.Name;
+    }
+
+    private void NavigateToHome()
+    {
+        NavigationManager.NavigateTo("/events");
     }
 
     private void ViewStory(EventStory story)
@@ -243,8 +335,8 @@
 
     private class MoodOption
     {
-        public required string Name { get; set; }
-        public required string Emoji { get; set; }
+        public string Name { get; set; } = "";
+        public string Emoji { get; set; } = "";
     }
 
     private class EventStory
