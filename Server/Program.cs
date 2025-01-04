@@ -279,7 +279,23 @@ else
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
+
+// Configure static files
+app.UseStaticFiles(); // Serve files from wwwroot
+
+// Create and configure images directory
+var imagesPath = Path.Combine(builder.Environment.WebRootPath, "images", "events");
+if (!Directory.Exists(imagesPath))
+{
+    Directory.CreateDirectory(imagesPath);
+}
+
+// Serve files from the images directory
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.WebRootPath, "images")),
+    RequestPath = "/images"
+});
 
 // Configure CORS
 app.UseCors(policy =>

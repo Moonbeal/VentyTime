@@ -266,9 +266,23 @@ namespace VentyTime.Server.Services
                 var existingEvent = await _context.Events.FindAsync(@event.Id) ?? 
                     throw new KeyNotFoundException($"Event with ID {@event.Id} not found");
 
-                if (!await IsUserAuthorizedForEvent(@event.Id, userId, new[] { "Admin", "Organizer" }))
+                // Check if user is admin
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
                 {
-                    throw new UnauthorizedAccessException("User is not authorized to update this event");
+                    throw new UnauthorizedAccessException("User not found");
+                }
+
+                var userRoles = await _userManager.GetRolesAsync(user);
+                bool isAdmin = userRoles.Contains("Admin");
+
+                // Check if user is the organizer of this event
+                bool isOrganizer = existingEvent.OrganizerId == userId;
+
+                if (!isAdmin && !isOrganizer)
+                {
+                    _logger.LogWarning("User {UserId} attempted to update event {EventId} without permission", userId, @event.Id);
+                    throw new UnauthorizedAccessException("Only administrators and event organizers can update this event");
                 }
 
                 @event.OrganizerId = existingEvent.OrganizerId;
@@ -438,35 +452,45 @@ namespace VentyTime.Server.Services
             try
             {
                 _logger.LogInformation("Checking user authorization for event {EventId} and user {UserId}", eventId, userId);
-                
+
+                // First check if user is admin
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found", userId);
+                    return false;
+                }
+
+                var userRoles = await _userManager.GetRolesAsync(user);
+                if (userRoles.Contains("Admin"))
+                {
+                    _logger.LogInformation("User {UserId} is admin, granting access", userId);
+                    return true;
+                }
+
                 var @event = await _context.Events
                     .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.Id == eventId);
 
                 if (@event == null)
                 {
+                    _logger.LogWarning("Event {EventId} not found", eventId);
                     return false;
                 }
 
-                // Власник події завжди має доступ
+                // Check if user is the organizer
                 if (@event.OrganizerId == userId)
                 {
+                    _logger.LogInformation("User {UserId} is the organizer of event {EventId}", userId, eventId);
                     return true;
                 }
 
-                // Перевіряємо ролі
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                {
-                    return false;
-                }
-
-                var userRoles = await _userManager.GetRolesAsync(user);
+                // Check other roles
                 return userRoles.Any(role => allowedRoles.Contains(role));
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking user authorization for event");
+                _logger.LogError(ex, "Error checking user authorization for event {EventId} and user {UserId}", eventId, userId);
                 throw;
             }
         }
