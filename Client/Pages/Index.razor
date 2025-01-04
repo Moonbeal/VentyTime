@@ -67,6 +67,37 @@
     </div>
 
     <EventCalendar Events="@searchResults" OnEventClick="@((evt) => NavigateToEventDetails(evt.Id))" />
+
+    <MudPaper Class="pa-4 mt-6" Elevation="0">
+        <MudText Typo="Typo.h5" Class="mb-4">Upcoming Events</MudText>
+        <div class="upcoming-events-container">
+            <MudList Clickable="true" Class="upcoming-events-list">
+                @foreach (var evt in searchResults.Where(e => e.StartDate > DateTime.Now).OrderBy(e => e.StartDate))
+                {
+                    <MudListItem OnClick="@(() => NavigateToEventDetails(evt.Id))">
+                        <div class="d-flex align-center">
+                            <MudAvatar Class="mr-3" Style="@($"background-image: url({evt.ImageUrl}); background-size: cover;")">
+                                @if(string.IsNullOrEmpty(evt.ImageUrl))
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Event" />
+                                }
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.subtitle1">@evt.Title</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
+                                    @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="ml-2 mr-1" />
+                                    @evt.Location
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudListItem>
+                    <MudDivider Class="my-2" />
+                }
+            </MudList>
+        </div>
+    </MudPaper>
 </MudContainer>
 
 <style>
@@ -425,6 +456,36 @@
         .mosaic-text-content .mud-typography-body2 { font-size: 0.75rem !important; }
         .mosaic-button-content .mud-typography-subtitle2 { font-size: 0.85rem !important; }
         .mosaic-button-content .mud-typography-caption { font-size: 0.65rem !important; }
+    }
+
+    .upcoming-events-container {
+        position: relative;
+        height: 400px;
+        overflow: hidden;
+    }
+
+    .upcoming-events-list {
+        height: 100%;
+        overflow-y: auto;
+        padding-right: 16px;
+    }
+
+    .upcoming-events-list::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .upcoming-events-list::-webkit-scrollbar-track {
+        background: #f0f0f0;
+        border-radius: 4px;
+    }
+
+    .upcoming-events-list::-webkit-scrollbar-thumb {
+        background: #bdbdbd;
+        border-radius: 4px;
+    }
+
+    .upcoming-events-list::-webkit-scrollbar-thumb:hover {
+        background: #9e9e9e;
     }
 </style>
 
