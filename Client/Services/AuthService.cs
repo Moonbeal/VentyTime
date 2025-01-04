@@ -157,6 +157,40 @@ namespace VentyTime.Client.Services
             }
         }
 
+        public async Task<ApplicationUser?> GetUserAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("api/auth/user");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<ApplicationUser>();
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current user");
+                return null;
+            }
+        }
+
+        public async Task<bool> IsInRoleAsync(ApplicationUser user, string role)
+        {
+            if (user == null) return false;
+            
+            try
+            {
+                var response = await _httpClient.GetAsync($"api/auth/is-in-role/{user.Id}/{role}");
+                return response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<bool>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking user role");
+                return false;
+            }
+        }
+
         public async Task<bool> UpdateProfileAsync(UpdateProfileRequest request)
         {
             try

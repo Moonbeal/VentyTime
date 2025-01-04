@@ -134,7 +134,7 @@ namespace VentyTime.Server.Controllers
                     return BadRequest("Event data is required");
                 }
 
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains("-"))?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
@@ -225,7 +225,7 @@ namespace VentyTime.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains("-"))?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
@@ -260,7 +260,7 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains("-"))?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
@@ -297,7 +297,7 @@ namespace VentyTime.Server.Controllers
         [Authorize]
         public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
         {
-            var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains("-"))?.Value;
+            var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized(new { message = "User not authenticated" });
@@ -318,14 +318,60 @@ namespace VentyTime.Server.Controllers
         [Authorize]
         public async Task<ActionResult<IEnumerable<Event>>> GetRegisteredEvents()
         {
-            var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains("-"))?.Value;
-            if (string.IsNullOrEmpty(userId))
+            try
             {
-                return Unauthorized(new { message = "User not authenticated" });
-            }
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
 
-            var events = await _eventService.GetRegisteredEventsAsync(userId);
-            return Ok(events);
+                var events = await _eventService.GetRegisteredEventsAsync(userId);
+                return Ok(events);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving registered events");
+                return StatusCode(500, new { message = "An error occurred while retrieving registered events" });
+            }
+        }
+
+        [HttpGet("organized")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<Event>>> GetOrganizedEvents()
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                var events = await _eventService.GetEventsByOrganizerAsync(userId);
+                return Ok(events);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving organized events");
+                return StatusCode(500, new { message = "An error occurred while retrieving organized events" });
+            }
+        }
+
+        [HttpGet("popular")]
+        [AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<Event>>> GetPopularEvents()
+        {
+            try
+            {
+                var events = await _eventService.GetPopularEventsAsync();
+                return Ok(events);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving popular events");
+                return StatusCode(500, new { message = "An error occurred while retrieving popular events" });
+            }
         }
     }
 }

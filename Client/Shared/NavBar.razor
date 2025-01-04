@@ -38,7 +38,7 @@
                                 </MudAvatar>
                             </ActivatorContent>
                             <ChildContent>
-                                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/profile"))">Profile</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/dashboard"))">Profile</MudMenuItem>
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/my-events"))">My Events</MudMenuItem>
                                 <AuthorizeView Roles="Admin, Organizer">
                                     <Authorized Context="innerAuth">

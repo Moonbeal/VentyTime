@@ -244,6 +244,19 @@ namespace VentyTime.Client.Services
             }
         }
 
+        public async Task<List<Event>> GetOrganizedEventsAsync()
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                return await client.GetFromJsonAsync<List<Event>>("api/events/organized") ?? new List<Event>();
+            }
+            catch (Exception)
+            {
+                return new List<Event>();
+            }
+        }
+
         public async Task<bool> UnregisterFromEventAsync(int eventId)
         {
             try

@@ -146,7 +146,7 @@
         try
         {
             eventModel = await EventService.GetEventByIdAsync(EventId);
-            var currentUser = await AuthService.GetCurrentUserAsync();
+            var currentUser = await AuthService.GetUserAsync();
             if (currentUser != null)
             {
                 registrationModel.UserId = currentUser.Id;

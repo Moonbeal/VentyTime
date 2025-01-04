@@ -515,10 +515,9 @@
 </style>
 
 @code {
-    private List<Event> events = new();
     private List<Event> searchResults = new();
-    private string searchQuery = "";
-    private bool isLoading = false;
+    private string searchQuery = string.Empty;
+    private bool dialogVisible;
 
     protected override async Task OnInitializedAsync()
     {
@@ -529,17 +528,16 @@
     {
         try
         {
-            isLoading = true;
-            events = await EventService.GetEventsAsync();
+            var events = await EventService.GetEventsAsync();
             searchResults = events;
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Failed to load events: {ex.Message}");
             Snackbar.Add("Failed to load events", Severity.Error);
         }
         finally
         {
-            isLoading = false;
             StateHasChanged();
         }
     }

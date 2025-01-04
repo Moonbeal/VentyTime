@@ -1,311 +1,174 @@
 @page "/profile"
 @using VentyTime.Shared.Models
-@using Microsoft.AspNetCore.Components.Authorization
-@using MudBlazor
-@using VentyTime.Shared.Models.Auth
-@inject IUserService UserService
-@inject ISnackbar Snackbar
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-@attribute [Authorize]
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-    @if (isLoading)
-    {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-    }
-    else if (currentUser == null)
-    {
-        <MudAlert Severity="Severity.Error">Failed to load user profile</MudAlert>
-    }
-    else
-    {
-        <MudGrid>
-            <MudItem xs="12">
-                <MudCard Elevation="3">
-                    <MudCardHeader>
-                        <CardHeaderAvatar>
-                            <MudAvatar Color="Color.Primary" Size="Size.Large">
-                                @{
-                                    var initials = "U";
-                                    if (!string.IsNullOrEmpty(currentUser.FirstName))
-                                    {
-                                        initials = currentUser.FirstName[0].ToString().ToUpper();
-                                        if (!string.IsNullOrEmpty(currentUser.LastName))
-                                        {
-                                            initials += currentUser.LastName[0].ToString().ToUpper();
-                                        }
-                                    }
-                                    else if (!string.IsNullOrEmpty(currentUser.Username))
-                                    {
-                                        initials = currentUser.Username[0].ToString().ToUpper();
-                                    }
-                                    @initials
-                                }
-                            </MudAvatar>
-                        </CardHeaderAvatar>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">@currentUser.Username</MudText>
-                            <MudText Typo="Typo.body2">@currentUser.Role.ToString()</MudText>
-                        </CardHeaderContent>
-                        <CardHeaderActions>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                         Color="Color.Default"
-                                         OnClick="@(() => isEditing = true)" />
-                        </CardHeaderActions>
-                    </MudCardHeader>
-                    
-                    @if (!isEditing)
-                    {
-                        <MudCardContent>
-                            <MudList>
-                                <MudListItem Icon="@Icons.Material.Filled.Person">
-                                    <MudText>@($"{currentUser.FirstName} {currentUser.LastName}")</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.Email">
-                                    <MudText>@currentUser.Email</MudText>
-                                </MudListItem>
-                                <MudListItem Icon="@Icons.Material.Filled.Phone">
-                                    <MudText>@(string.IsNullOrEmpty(currentUser.PhoneNumber) ? "No phone number" : currentUser.PhoneNumber)</MudText>
-                                </MudListItem>
-                                @if (!string.IsNullOrEmpty(currentUser.Location))
-                                {
-                                    <MudListItem Icon="@Icons.Material.Filled.LocationOn">
-                                        <MudText>@currentUser.Location</MudText>
-                                    </MudListItem>
-                                }
-                                @if (!string.IsNullOrEmpty(currentUser.Website))
-                                {
-                                    <MudListItem Icon="@Icons.Material.Filled.Language">
-                                        <MudText>@currentUser.Website</MudText>
-                                    </MudListItem>
-                                }
-                                @if (!string.IsNullOrEmpty(currentUser.Bio))
-                                {
-                                    <MudListItem Icon="@Icons.Material.Filled.Info">
-                                        <MudText>@currentUser.Bio</MudText>
-                                    </MudListItem>
-                                }
-                            </MudList>
-                        </MudCardContent>
-                    }
-                    else
-                    {
-                        <MudCardContent>
-                            <MudForm @ref="form" @bind-IsValid="@success">
-                                <MudTextField @bind-Value="editModel.FirstName"
-                                            Label="First Name"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                                            
-                                <MudTextField @bind-Value="editModel.LastName"
-                                            Label="Last Name"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                                            
-                                <MudTextField @bind-Value="editModel.PhoneNumber"
-                                            Label="Phone Number"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                                            
-                                <MudTextField @bind-Value="editModel.Location"
-                                            Label="Location"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                                            
-                                <MudTextField @bind-Value="editModel.Website"
-                                            Label="Website"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                                            
-                                <MudTextField @bind-Value="editModel.Bio"
-                                            Label="Bio"
-                                            Lines="3"
-                                            Variant="Variant.Outlined"
-                                            Class="mt-3"/>
-                            </MudForm>
-                        </MudCardContent>
-                        
-                        <MudCardActions Class="d-flex justify-space-between mx-4">
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Error"
-                                      OnClick="@(() => CancelEdit())">
-                                Cancel
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Primary"
-                                      Disabled="@(!success)"
-                                      OnClick="@(async () => await SaveChanges())">
-                                Save Changes
-                            </MudButton>
-                        </MudCardActions>
-                    }
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <!-- Profile Header -->
+    <div class="profile-header mb-6">
+        <MudPaper Class="pa-8 rounded-lg" Style="background: linear-gradient(135deg, var(--mud-palette-primary) 0%, var(--mud-palette-primary-darken) 100%);">
+            <div class="d-flex flex-column flex-md-row align-center justify-space-between">
+                <div class="d-flex flex-row align-center">
+                    <MudAvatar Color="Color.Surface" Size="Size.Large" Style="width: 120px; height: 120px; font-size: 2.5rem;" Class="mud-elevation-4">
+                        @{
+                            var initials = currentUser?.FirstName?.FirstOrDefault().ToString().ToUpper() ?? 
+                                         currentUser?.LastName?.FirstOrDefault().ToString().ToUpper() ?? 
+                                         currentUser?.UserName?.FirstOrDefault().ToString().ToUpper() ?? "U";
+                        }
+                        @initials
+                    </MudAvatar>
+                    <div class="ml-6">
+                        <MudText Typo="Typo.h4" Color="Color.Surface" Class="mb-1">@($"{currentUser?.FirstName} {currentUser?.LastName}")</MudText>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Surface">@currentUser?.Email</MudText>
+                    </div>
+                </div>
+                <div class="d-flex flex-column align-end mt-4 mt-md-0">
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Surface"
+                              StartIcon="@Icons.Material.Filled.Edit"
+                              Size="Size.Large"
+                              OnClick="@(() => NavigationManager.NavigateTo("/profile/settings"))">
+                        Edit Profile
+                    </MudButton>
+                </div>
+            </div>
+        </MudPaper>
+    </div>
 
-                    @if (!isEditing)
+    <MudGrid>
+        <!-- Profile Info Card -->
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-6 rounded-lg" Elevation="0">
+                <MudText Typo="Typo.h6" Class="mb-4">Contact Information</MudText>
+                <div class="d-flex flex-column gap-4">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Email" Class="mr-3" Color="Color.Primary" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Primary">Email</MudText>
+                            <MudText>@currentUser?.Email</MudText>
+                        </div>
+                    </div>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Phone" Class="mr-3" Color="Color.Primary" />
+                        <div>
+                            <MudText Typo="Typo.caption" Color="Color.Primary">Phone</MudText>
+                            <MudText>@(string.IsNullOrEmpty(currentUser?.PhoneNumber) ? "No phone number" : currentUser.PhoneNumber)</MudText>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(currentUser?.Website))
                     {
-                        <MudCardActions Class="d-flex justify-center">
-                            <MudButton Variant="Variant.Text"
-                                      Color="Color.Primary"
-                                      OnClick="@(() => NavigationManager.NavigateTo("/my-events"))">
-                                My Events
-                            </MudButton>
-                            <MudButton Variant="Variant.Text"
-                                      Color="Color.Primary"
-                                      OnClick="OpenChangePasswordDialog">
-                                Change Password
-                            </MudButton>
-                        </MudCardActions>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Language" Class="mr-3" Color="Color.Primary" />
+                            <div>
+                                <MudText Typo="Typo.caption" Color="Color.Primary">Website</MudText>
+                                <MudLink Href="@currentUser.Website" Target="_blank">@currentUser.Website</MudLink>
+                            </div>
+                        </div>
                     }
-                </MudCard>
-            </MudItem>
-        </MudGrid>
-    }
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Events Section -->
+        <MudItem xs="12" md="8">
+            @if (registeredEvents?.Any() == true)
+            {
+                <div class="mb-6">
+                    <MudText Typo="Typo.h5" Class="mb-4">Your Registered Events</MudText>
+                    <div class="d-flex flex-column gap-4">
+                        @foreach (var evt in registeredEvents)
+                        {
+                            <MudPaper Class="pa-4 rounded-lg" Elevation="0" Style="border: 1px solid var(--mud-palette-lines-default)">
+                                <div class="d-flex justify-space-between align-center">
+                                    <div class="d-flex gap-4 align-center">
+                                        <div class="event-date d-flex flex-column align-center justify-center" 
+                                             style="background: var(--mud-palette-background-grey); width: 80px; height: 80px; border-radius: 12px;">
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">@evt.StartDate.ToString("dd")</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Primary">@evt.StartDate.ToString("MMM")</MudText>
+                                        </div>
+                                        <div>
+                                            <MudText Typo="Typo.h6" Class="mb-1">@evt.Title</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Primary">@evt.StartDate.ToString("HH:mm")</MudText>
+                                        </div>
+                                    </div>
+                                    <MudButton Variant="Variant.Text" 
+                                              Color="Color.Primary"
+                                              EndIcon="@Icons.Material.Filled.ChevronRight"
+                                              OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
+                                        View Details
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (currentUser != null && organizedEvents?.Any() == true)
+            {
+                <div>
+                    <MudText Typo="Typo.h5" Class="mb-4">Events You're Organizing</MudText>
+                    <div class="d-flex flex-column gap-4">
+                        @foreach (var evt in organizedEvents)
+                        {
+                            <MudCard>
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">@evt.Title</MudText>
+                                        <MudText Typo="Typo.body2">@evt.Description</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardActions>
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Link="@($"/event/{evt.Id}")">View Details</MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Secondary" Link="@($"/event/{evt.Id}/edit")">Edit</MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        }
+                    </div>
+                </div>
+            }
+
+            @if (currentUser != null)
+            {
+                <div>
+                    <MudText Typo="Typo.h5" Class="mb-4">Admin Panel</MudText>
+                    <div class="d-flex flex-column gap-4">
+                        <AdminPanel />
+                    </div>
+                </div>
+            }
+
+            @if (registeredEvents?.Any() != true && organizedEvents?.Any() != true)
+            {
+                <MudPaper Class="pa-6 rounded-lg d-flex flex-column align-center" Elevation="0">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Default" Size="Size.Large" Class="mb-4" />
+                    <MudText Typo="Typo.h6" Align="Align.Center">No Events Yet</MudText>
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-4">Start by browsing available events or create your own!</MudText>
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Primary"
+                              OnClick="@(() => NavigationManager.NavigateTo("/events"))">
+                        Browse Events
+                    </MudButton>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
 </MudContainer>
 
-<MudDialog @bind-IsVisible="showPasswordDialog">
-    <TitleContent>
-        <MudText Typo="Typo.h6">Change Password</MudText>
-    </TitleContent>
-    <DialogContent>
-        <MudForm @ref="passwordForm" @bind-IsValid="@passwordFormValid">
-            <MudTextField @bind-Value="passwordModel.CurrentPassword"
-                         Label="Current Password"
-                         Variant="Variant.Outlined"
-                         InputType="InputType.Password"
-                         Class="mt-3"/>
-                         
-            <MudTextField @bind-Value="passwordModel.NewPassword"
-                         Label="New Password"
-                         Variant="Variant.Outlined"
-                         InputType="InputType.Password"
-                         Class="mt-3"/>
-                         
-            <MudTextField @bind-Value="passwordModel.ConfirmNewPassword"
-                         Label="Confirm New Password"
-                         Variant="Variant.Outlined"
-                         InputType="InputType.Password"
-                         Class="mt-3"/>
-        </MudForm>
-    </DialogContent>
-    <DialogActions>
-        <MudButton Variant="Variant.Text"
-                   Color="Color.Default"
-                   OnClick="ClosePasswordDialog">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   OnClick="ChangePassword"
-                   Disabled="@(!passwordFormValid)">Change Password</MudButton>
-    </DialogActions>
-</MudDialog>
-
 @code {
-    private User? currentUser;
-    private bool isLoading = true;
-    private bool isEditing = false;
-    private bool success;
-    private MudForm? form;
-    private UpdateProfileRequest editModel = new();
-    
-    private bool showPasswordDialog = false;
-    private bool passwordFormValid;
-    private MudForm? passwordForm;
-    private ChangePasswordRequest passwordModel = new();
+    private ApplicationUser? currentUser;
+    private IEnumerable<Event>? registeredEvents;
+    private IEnumerable<Event>? organizedEvents;
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            isLoading = true;
-            currentUser = await UserService.GetCurrentUserAsync();
-            if (currentUser != null)
-            {
-                editModel = new UpdateProfileRequest
-                {
-                    FirstName = currentUser.FirstName,
-                    LastName = currentUser.LastName,
-                    PhoneNumber = currentUser.PhoneNumber,
-                    Location = currentUser.Location,
-                    Website = currentUser.Website,
-                    Bio = currentUser.Bio
-                };
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add("Failed to load user profile", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
-    private void CancelEdit()
-    {
+        currentUser = await AuthService.GetUserAsync();
         if (currentUser != null)
         {
-            editModel = new UpdateProfileRequest
-            {
-                FirstName = currentUser.FirstName,
-                LastName = currentUser.LastName,
-                PhoneNumber = currentUser.PhoneNumber,
-                Location = currentUser.Location,
-                Website = currentUser.Website,
-                Bio = currentUser.Bio
-            };
-        }
-        isEditing = false;
-    }
-
-    private async Task SaveChanges()
-    {
-        try
-        {
-            if (currentUser == null) return;
-            
-            var response = await UserService.UpdateUserAsync(currentUser.Id, editModel);
-            if (response.IsSuccessStatusCode)
-            {
-                currentUser = await UserService.GetCurrentUserAsync();
-                isEditing = false;
-                Snackbar.Add("Profile updated successfully", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Failed to update profile", Severity.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add("An error occurred while updating profile", Severity.Error);
-        }
-    }
-
-    private void OpenChangePasswordDialog() => showPasswordDialog = true;
-    private void ClosePasswordDialog() => showPasswordDialog = false;
-
-    private async Task ChangePassword()
-    {
-        try
-        {
-            if (currentUser == null) return;
-
-            if (passwordModel.NewPassword != passwordModel.ConfirmNewPassword)
-            {
-                Snackbar.Add("New passwords do not match", Severity.Error);
-                return;
-            }
-
-            var response = await UserService.ChangePasswordAsync(passwordModel.CurrentPassword, passwordModel.NewPassword);
-            if (response)
-            {
-                showPasswordDialog = false;
-                passwordModel = new ChangePasswordRequest();
-                Snackbar.Add("Password changed successfully", Severity.Success);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add("An error occurred while changing password", Severity.Error);
+            registeredEvents = await EventService.GetRegisteredEventsAsync();
+            organizedEvents = await EventService.GetOrganizedEventsAsync();
         }
     }
 }

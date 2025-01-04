@@ -81,23 +81,11 @@
     private double _progress;
     private bool _previewDialogOpen;
     private string _previewImage = string.Empty;
-    private List<string> _uploadedFiles = new();
     private const int MaxFileSize = 5 * 1024 * 1024; // 5MB
     private readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif" };
 
     [Parameter]
-    public List<string> UploadedFiles
-    {
-        get => _uploadedFiles;
-        set
-        {
-            if (_uploadedFiles != value)
-            {
-                _uploadedFiles = value;
-                UploadedFilesChanged.InvokeAsync(value);
-            }
-        }
-    }
+    public List<string> UploadedFiles { get; set; } = new();
 
     [Parameter]
     public EventCallback<List<string>> UploadedFilesChanged { get; set; }

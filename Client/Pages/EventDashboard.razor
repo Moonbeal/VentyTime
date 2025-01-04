@@ -246,7 +246,7 @@
 
     private async Task LoadEvents()
     {
-        var currentUser = await AuthService.GetCurrentUserAsync();
+        var currentUser = await AuthService.GetUserAsync();
         if (currentUser != null)
         {
             var allEvents = await EventService.GetEventsByOrganizerIdAsync(currentUser.Id);

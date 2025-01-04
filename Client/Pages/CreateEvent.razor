@@ -212,20 +212,12 @@
     {
         StartDate = DateTime.Now.Date.AddDays(1).AddHours(12),
         EndDate = DateTime.Now.Date.AddDays(1).AddHours(13),
-        StartTime = TimeSpan.FromHours(12), // Set default start time
-        Type = EventType.Other,
-        Category = EventCategories.Technology,
-        MaxAttendees = 50,
-        Price = 0,
-        Location = string.Empty,
-        IsActive = true,
-        CurrentCapacity = 0
     };
 
     private MudForm? form;
     private bool isValid;
-    private bool isLoading;
-    private IBrowserFile? selectedFile;
+    private string errorMessage = string.Empty;
+    private bool loading;
 
     private DateTime? startDate;
     private TimeSpan? startTime;
@@ -262,35 +254,21 @@
                 return;
             }
 
-            selectedFile = file;
-            isLoading = true;
-            StateHasChanged();
+            var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
 
-            try
+            var imageUrl = await EventService.UploadEventImage(content);
+            if (!string.IsNullOrEmpty(imageUrl))
             {
-                var content = new MultipartFormDataContent();
-                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
-                content.Add(fileContent, "file", file.Name);
-
-                var imageUrl = await EventService.UploadEventImage(content);
-                if (!string.IsNullOrEmpty(imageUrl))
-                {
-                    eventModel.ImageUrl = imageUrl;
-                    Snackbar.Add("Image uploaded successfully!", Severity.Success);
-                }
-            }
-            finally
-            {
-                isLoading = false;
-                StateHasChanged();
+                eventModel.ImageUrl = imageUrl;
+                Snackbar.Add("Image uploaded successfully!", Severity.Success);
             }
         }
         catch (Exception ex)
         {
-            isLoading = false;
             Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
-            StateHasChanged();
         }
     }
 
@@ -302,7 +280,6 @@
     private void ClearImage()
     {
         eventModel.ImageUrl = null;
-        selectedFile = null;
         StateHasChanged();
     }
 
@@ -341,7 +318,6 @@
 
         try
         {
-            isLoading = true;
             await form.Validate();
 
             if (form.IsValid)
@@ -379,10 +355,6 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Error creating event: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isLoading = false;
         }
     }
 

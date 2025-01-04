@@ -254,6 +254,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error loading user profile: {ex.Message}");
             Snackbar.Add("Failed to load user profile", Severity.Error);
         }
         finally
@@ -287,6 +288,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error updating profile: {ex.Message}");
             Snackbar.Add("Failed to update profile", Severity.Error);
         }
         finally
@@ -323,7 +325,8 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add("Failed to change password", Severity.Error);
+            Console.WriteLine($"Error updating password: {ex.Message}");
+            Snackbar.Add("Failed to update password", Severity.Error);
         }
         finally
         {
@@ -353,6 +356,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error saving notification settings: {ex.Message}");
             Snackbar.Add("Failed to save notification settings", Severity.Error);
         }
         finally

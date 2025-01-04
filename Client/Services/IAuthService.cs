@@ -8,9 +8,9 @@ namespace VentyTime.Client.Services
         Task<AuthResponse> LoginAsync(LoginRequest request);
         Task<AuthResponse> RegisterAsync(RegisterRequest request);
         Task<bool> LogoutAsync();
-        Task<User?> GetCurrentUserAsync();
+        Task<ApplicationUser?> GetUserAsync();
         Task<bool> IsAuthenticated();
-        Task<UserRole> GetUserRole();
+        Task<bool> IsInRoleAsync(ApplicationUser user, string role);
         Task<bool> UpdateProfileAsync(UpdateProfileRequest request);
         Task<bool> ChangePasswordAsync(ChangePasswordRequest request);
         Task<bool> RequestPasswordResetAsync(string email);

@@ -20,6 +20,7 @@ namespace VentyTime.Server.Services
         Task<IEnumerable<string>> GetCategoriesAsync();
         Task<Registration> RegisterUserForEventAsync(int eventId, string userId);
         Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
+        Task<IEnumerable<Event>> GetPopularEventsAsync();
         Task SeedTestEventsAsync();
     }
 
@@ -268,11 +269,7 @@ namespace VentyTime.Server.Services
                     throw new KeyNotFoundException($"Event with ID {@event.Id} not found");
 
                 // Check if user is admin
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                {
-                    throw new UnauthorizedAccessException("User not found");
-                }
+                var user = await _userManager.FindByIdAsync(userId) ?? throw new UnauthorizedAccessException("User not found");
 
                 var userRoles = await _userManager.GetRolesAsync(user);
                 bool isAdmin = userRoles.Contains("Admin");
@@ -598,6 +595,29 @@ namespace VentyTime.Server.Services
             return activeRegistrations < eventItem.MaxAttendees;
         }
 
+        public async Task<IEnumerable<Event>> GetPopularEventsAsync()
+        {
+            const string cacheKey = "popular_events";
+            
+            if (_cache.TryGetValue(cacheKey, out IEnumerable<Event>? cachedEvents) && cachedEvents is not null)
+            {
+                return cachedEvents;
+            }
+
+            var events = await _context.Events
+                .Include(e => e.Registrations)
+                .OrderByDescending(e => e.Registrations != null ? e.Registrations.Count : 0)
+                .Take(10)
+                .ToListAsync();
+
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
+
+            _cache.Set(cacheKey, events, cacheOptions);
+
+            return events;
+        }
+
         public async Task SeedTestEventsAsync()
         {
             try
@@ -609,7 +629,7 @@ namespace VentyTime.Server.Services
                     "https://images.unsplash.com/photo-1639322537228-f710d846310a",
                     "https://images.unsplash.com/photo-1550751827-4bd374c3f58b",
                     "https://images.unsplash.com/photo-1415201364774-f6f0bb35f28f",
-                    "https://images.unsplash.com/photo-1470225620780-dba8ba36b745",
+                    "https://images.unsplash.com/photo-1470225620780-d164df4dedc6",
                     "https://images.unsplash.com/photo-1465847899084-d164df4dedc6",
                     "https://images.unsplash.com/photo-1452626038306-9aae5e071dd3",
                     "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b",

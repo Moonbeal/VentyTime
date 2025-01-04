@@ -103,14 +103,12 @@
     private Event? selectedEvent;
 
     [Parameter]
-    public List<Event>? Events
+    public List<Event> Events { get; set; } = new();
+
+    protected override void OnParametersSet()
     {
-        get => events;
-        set
-        {
-            events = value;
-            HandleSearch();
-        }
+        events = Events;
+        HandleSearch();
     }
 
     private IEnumerable<Event> filteredEvents
