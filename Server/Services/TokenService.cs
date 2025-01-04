@@ -11,7 +11,7 @@ namespace VentyTime.Server.Services
 {
     public interface ITokenService
     {
-        string GenerateJwtToken(ApplicationUser user, UserRole selectedRole);
+        Task<string> GenerateJwtToken(ApplicationUser user, UserRole selectedRole);
         Task<ClaimsPrincipal> ValidateToken(string token);
         bool IsTokenExpired(string token);
     }
@@ -20,21 +20,35 @@ namespace VentyTime.Server.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<TokenService> _logger;
+        private readonly UserManager<ApplicationUser> _userManager;
 
         public TokenService(
             IConfiguration configuration,
-            ILogger<TokenService> logger)
+            ILogger<TokenService> logger,
+            UserManager<ApplicationUser> userManager)
         {
             _configuration = configuration;
             _logger = logger;
+            _userManager = userManager;
         }
 
-        public string GenerateJwtToken(ApplicationUser user, UserRole selectedRole)
+        public async Task<string> GenerateJwtToken(ApplicationUser user, UserRole selectedRole)
         {
             try
             {
                 _logger.LogInformation("Generating JWT token for user {Email} with role {Role}", 
                     user.Email, selectedRole);
+
+                // Get user's actual roles
+                var userRoles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("User {Email} has roles: {Roles}", user.Email, string.Join(", ", userRoles));
+
+                // Verify that user has the selected role
+                if (selectedRole == UserRole.Admin && !userRoles.Contains("Admin"))
+                {
+                    _logger.LogWarning("User {Email} attempted to generate token with Admin role without privileges", user.Email);
+                    throw new UnauthorizedAccessException("User does not have admin privileges");
+                }
 
                 var claims = new List<Claim>
                 {

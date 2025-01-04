@@ -92,7 +92,7 @@
                             <MudList Clickable="true">
                                 @foreach (var registration in registrations.OrderBy(r => r?.Event?.StartDate ?? DateTime.MaxValue))
                                 {
-                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{registration.EventId}"))">
+                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/event/{registration.EventId}"))">
                                         <div class="d-flex" style="gap: 16px;">
                                             @if (!string.IsNullOrEmpty(registration?.Event?.ImageUrl))
                                             {
@@ -144,7 +144,7 @@
                             <MudList Clickable="true">
                                 @foreach (var evt in organizedEvents.OrderByDescending(e => e?.StartDate ?? DateTime.MinValue))
                                 {
-                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
+                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
                                         <div class="d-flex" style="gap: 16px;">
                                             @if (!string.IsNullOrEmpty(evt?.ImageUrl))
                                             {
@@ -213,6 +213,6 @@
 
     private void NavigateToEditEvent(int eventId)
     {
-        NavigationManager.NavigateTo($"/events/{eventId}/edit");
+        NavigationManager.NavigateTo($"/event/{eventId}/edit");
     }
 }

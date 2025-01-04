@@ -538,5 +538,20 @@ namespace VentyTime.Client.Services
                 return false;
             }
         }
+
+        public async Task<bool> IsInRoleAsync(string role)
+        {
+            try
+            {
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                return user.IsInRole(role);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking user role");
+                return false;
+            }
+        }
     }
 }

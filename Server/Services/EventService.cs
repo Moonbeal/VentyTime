@@ -47,11 +47,39 @@ namespace VentyTime.Server.Services
             _userManager = userManager;
         }
 
+        private string NormalizeImagePath(string? imagePath)
+        {
+            if (string.IsNullOrEmpty(imagePath))
+            {
+                return "/images/events/default-event.jpg";
+            }
+
+            // Ensure path starts with /
+            if (!imagePath.StartsWith("/"))
+            {
+                imagePath = "/" + imagePath;
+            }
+
+            // Ensure path starts with /images/events/
+            if (!imagePath.StartsWith("/images/events/"))
+            {
+                imagePath = "/images/events/" + imagePath.TrimStart('/');
+            }
+
+            return imagePath;
+        }
+
         public async Task<List<Event>> GetEventsAsync()
         {
             try
             {
                 _logger.LogInformation("Getting all events");
+
+                var cacheKey = "all_events";
+                if (_cache.TryGetValue(cacheKey, out IEnumerable<Event>? cachedEvents))
+                {
+                    return cachedEvents!.ToList();
+                }
 
                 var events = await _context.Events
                     .Include(e => e.Organizer)
@@ -59,6 +87,16 @@ namespace VentyTime.Server.Services
                     .OrderByDescending(e => e.CreatedAt)
                     .ToListAsync();
 
+                // Normalize image paths
+                foreach (var @event in events)
+                {
+                    @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+                }
+
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetSlidingExpiration(TimeSpan.FromMinutes(5));
+
+                _cache.Set(cacheKey, events, cacheOptions);
                 _logger.LogInformation("Retrieved {Count} events", events.Count);
 
                 return events;
@@ -74,12 +112,13 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                var cacheKey = $"{EventCacheKeyPrefix}{id}";
+                _logger.LogInformation("Getting event with ID: {EventId}", id);
 
+                var cacheKey = $"event_{id}";
                 if (_cache.TryGetValue(cacheKey, out Event? cachedEvent))
                 {
                     _logger.LogInformation("Retrieved event {EventId} from cache", id);
-                    return cachedEvent;
+                    return cachedEvent!;
                 }
 
                 var @event = await _context.Events
@@ -87,14 +126,20 @@ namespace VentyTime.Server.Services
                     .Include(e => e.Registrations)
                     .FirstOrDefaultAsync(e => e.Id == id);
 
-                if (@event != null)
+                if (@event == null)
                 {
-                    var cacheOptions = new MemoryCacheEntryOptions()
-                        .SetAbsoluteExpiration(TimeSpan.FromMinutes(CacheExpirationMinutes));
-
-                    _cache.Set(cacheKey, @event, cacheOptions);
-                    _logger.LogInformation("Cached event {EventId}", id);
+                    _logger.LogWarning("Event {EventId} not found", id);
+                    throw new KeyNotFoundException($"Event with ID {id} not found");
                 }
+
+                // Normalize image path
+                @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetSlidingExpiration(TimeSpan.FromMinutes(5));
+
+                _cache.Set(cacheKey, @event, cacheOptions);
+                _logger.LogInformation("Retrieved and cached event {EventId} from database", id);
 
                 return @event;
             }
@@ -196,6 +241,9 @@ namespace VentyTime.Server.Services
                     @event.EndDate = @event.StartDate.Add(TimeSpan.FromHours(1));
                 }
 
+                // Normalize image path
+                @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+
                 _logger.LogInformation("Saving event with UTC dates - Start: {StartDate}, End: {EndDate}, StartTime: {StartTime}", 
                     @event.StartDate, @event.EndDate, @event.StartTime);
 
@@ -264,33 +312,51 @@ namespace VentyTime.Server.Services
             try
             {
                 _logger.LogInformation("Updating event {EventId} for user {UserId}", @event.Id, userId);
-                
-                var existingEvent = await _context.Events.FindAsync(@event.Id) ?? 
-                    throw new KeyNotFoundException($"Event with ID {@event.Id} not found");
 
-                // Check if user is admin
-                var user = await _userManager.FindByIdAsync(userId) ?? throw new UnauthorizedAccessException("User not found");
-
-                var userRoles = await _userManager.GetRolesAsync(user);
-                bool isAdmin = userRoles.Contains("Admin");
-
-                // Check if user is the organizer of this event
-                bool isOrganizer = existingEvent.OrganizerId == userId;
-
-                if (!isAdmin && !isOrganizer)
+                // Check if event exists
+                var existingEvent = await _context.Events.FindAsync(@event.Id);
+                if (existingEvent == null)
                 {
-                    _logger.LogWarning("User {UserId} attempted to update event {EventId} without permission", userId, @event.Id);
-                    throw new UnauthorizedAccessException("Only administrators and event organizers can update this event");
+                    _logger.LogWarning("Event {EventId} not found", @event.Id);
+                    throw new KeyNotFoundException($"Event with ID {@event.Id} not found");
                 }
 
+                // Check if user is authorized (must be admin or event organizer)
+                if (!await IsUserAuthorizedForEvent(@event.Id, userId, new[] { "Admin" }))
+                {
+                    _logger.LogWarning("User {UserId} is not authorized to update event {EventId}", userId, @event.Id);
+                    throw new UnauthorizedAccessException("User is not authorized to update this event");
+                }
+
+                // Convert dates to UTC
+                if (@event.StartDate.Kind != DateTimeKind.Utc)
+                {
+                    _logger.LogInformation("Converting StartDate from {Kind} to UTC", @event.StartDate.Kind);
+                    @event.StartDate = @event.StartDate.ToUniversalTime();
+                }
+
+                if (@event.EndDate.Kind != DateTimeKind.Utc)
+                {
+                    _logger.LogInformation("Converting EndDate from {Kind} to UTC", @event.EndDate.Kind);
+                    @event.EndDate = @event.EndDate.ToUniversalTime();
+                }
+
+                // Set StartTime from StartDate
+                @event.StartTime = @event.StartDate.TimeOfDay;
+
+                // Preserve original values
                 @event.OrganizerId = existingEvent.OrganizerId;
                 @event.CreatedAt = existingEvent.CreatedAt;
                 @event.UpdatedAt = DateTime.UtcNow;
 
+                // Normalize image path
+                @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    _context.Entry(existingEvent).CurrentValues.SetValues(@event);
+                    _context.Entry(existingEvent).State = EntityState.Detached;
+                    _context.Events.Update(@event);
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
 
@@ -302,13 +368,13 @@ namespace VentyTime.Server.Services
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error updating event {EventId}", @event.Id);
+                    _logger.LogError(ex, "Error updating event {EventId}: {Error}", @event.Id, ex.Message);
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating event");
+                _logger.LogError(ex, "Error updating event {EventId}", @event.Id);
                 throw;
             }
         }
@@ -388,6 +454,12 @@ namespace VentyTime.Server.Services
                     .AsNoTracking()
                     .ToListAsync();
 
+                // Normalize image paths
+                foreach (var @event in events)
+                {
+                    @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+                }
+
                 var cacheOptions = new MemoryCacheEntryOptions()
                     .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
                 
@@ -430,6 +502,12 @@ namespace VentyTime.Server.Services
                     .AsNoTracking()
                     .ToListAsync();
 
+                // Normalize image paths
+                foreach (var @event in events)
+                {
+                    @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+                }
+
                 var cacheOptions = new MemoryCacheEntryOptions()
                     .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
                 
@@ -452,9 +530,16 @@ namespace VentyTime.Server.Services
                 _logger.LogInformation("Checking user authorization for event {EventId} and user {UserId}", eventId, userId);
 
                 // First check if user is admin
-                var user = await _userManager.FindByIdAsync(userId) ?? throw new UnauthorizedAccessException("User not found");
+                var user = await _userManager.FindByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found", userId);
+                    throw new UnauthorizedAccessException("User not found");
+                }
 
                 var userRoles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("User {UserId} has roles: {Roles}", userId, string.Join(", ", userRoles));
+
                 if (userRoles.Contains("Admin"))
                 {
                     _logger.LogInformation("User {UserId} is admin, granting access", userId);
@@ -472,6 +557,7 @@ namespace VentyTime.Server.Services
                 }
 
                 // Check if user is the organizer
+                _logger.LogInformation("Event organizer ID: {OrganizerId}, User ID: {UserId}", @event.OrganizerId, userId);
                 if (@event.OrganizerId == userId)
                 {
                     _logger.LogInformation("User {UserId} is the organizer of event {EventId}", userId, eventId);
@@ -479,7 +565,10 @@ namespace VentyTime.Server.Services
                 }
 
                 // Check other roles
-                return userRoles.Any(role => allowedRoles.Contains(role));
+                var hasAllowedRole = userRoles.Any(role => allowedRoles.Contains(role));
+                _logger.LogInformation("User {UserId} has allowed role: {HasAllowedRole}. Allowed roles: {AllowedRoles}", 
+                    userId, hasAllowedRole, string.Join(", ", allowedRoles));
+                return hasAllowedRole;
             }
             catch (Exception ex)
             {
@@ -610,6 +699,12 @@ namespace VentyTime.Server.Services
                 .Take(10)
                 .ToListAsync();
 
+            // Normalize image paths
+            foreach (var @event in events)
+            {
+                @event.ImageUrl = NormalizeImagePath(@event.ImageUrl);
+            }
+
             var cacheOptions = new MemoryCacheEntryOptions()
                 .SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
 
@@ -697,6 +792,9 @@ namespace VentyTime.Server.Services
                         CreatorId = "1",
                         OrganizerId = "1"
                     };
+
+                    // Normalize image path
+                    newEvent.ImageUrl = NormalizeImagePath(newEvent.ImageUrl);
 
                     await _context.Events.AddAsync(newEvent);
                 }

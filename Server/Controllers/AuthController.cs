@@ -69,11 +69,12 @@ namespace VentyTime.Server.Controllers
                     return StatusCode(500, new { message = "User was created but could not be retrieved" });
                 }
 
-                _logger.LogInformation("Generating JWT token for user: {Email}", model.Email);
+                _logger.LogInformation("Generating JWT token for user {Email} with role {Role}", 
+                    model.Email, defaultRole);
                 var defaultRole = UserRole.User; // При реєстрації даємо базову роль User
                 _logger.LogInformation("Generating token for user {Email} with role {Role}", 
                     model.Email, defaultRole);
-                var token = _tokenService.GenerateJwtToken(user, defaultRole);
+                var token = await _tokenService.GenerateJwtToken(user, defaultRole);
                 
                 _logger.LogInformation("User registered successfully: {Email}", model.Email);
                 return Ok(new AuthResponse
@@ -141,10 +142,17 @@ namespace VentyTime.Server.Controllers
                 _logger.LogInformation("Current roles for user {Email}: {Roles}", 
                     model.Email, string.Join(", ", currentRoles));
 
+                // Check if user has the selected role
+                if (model.SelectedRole == UserRole.Admin && !currentRoles.Contains("Admin"))
+                {
+                    _logger.LogWarning("User {Email} attempted to login as Admin without admin privileges", model.Email);
+                    return BadRequest(new { message = "You don't have admin privileges" });
+                }
+
                 _logger.LogInformation("Generating token for user {Email} with role {Role}", 
                     model.Email, model.SelectedRole);
 
-                var token = _tokenService.GenerateJwtToken(user, model.SelectedRole);
+                var token = await _tokenService.GenerateJwtToken(user, model.SelectedRole);
 
                 _logger.LogInformation("User logged in successfully: {Email} with role {Role}", 
                     model.Email, model.SelectedRole);
@@ -282,7 +290,7 @@ namespace VentyTime.Server.Controllers
 
                 _logger.LogInformation("Generating token for user {Email} with role {Role}", 
                     email, currentRole);
-                var newToken = _tokenService.GenerateJwtToken(user, currentRole);
+                var newToken = await _tokenService.GenerateJwtToken(user, currentRole);
                 return Ok(new { token = newToken });
             }
             catch (Exception ex)

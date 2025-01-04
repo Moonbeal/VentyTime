@@ -134,7 +134,7 @@ namespace VentyTime.Server.Controllers
                     return BadRequest("Event data is required");
                 }
 
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
@@ -210,11 +210,14 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Organizer")]
+        [Authorize]
         public async Task<IActionResult> UpdateEvent(int id, [FromBody] Event @event)
         {
             try
             {
+                _logger.LogInformation("Updating event {EventId}. User claims: {@Claims}", 
+                    id, User.Claims.Select(c => new { c.Type, c.Value }));
+
                 if (id != @event.Id)
                 {
                     return BadRequest(new { message = "Event ID mismatch" });
@@ -225,13 +228,15 @@ namespace VentyTime.Server.Controllers
                     return BadRequest(ModelState);
                 }
 
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
                         User.Claims.Select(c => new { c.Type, c.Value }));
                     return Unauthorized(new { message = "User not authenticated" });
                 }
+
+                _logger.LogInformation("Found user ID: {UserId}", userId);
 
                 try
                 {
@@ -260,13 +265,18 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+                _logger.LogInformation("Deleting event {EventId}. User claims: {@Claims}", 
+                    id, User.Claims.Select(c => new { c.Type, c.Value }));
+
+                var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
                         User.Claims.Select(c => new { c.Type, c.Value }));
                     return Unauthorized(new { message = "User not authenticated" });
                 }
+
+                _logger.LogInformation("Found user ID: {UserId}", userId);
 
                 try
                 {
@@ -297,9 +307,11 @@ namespace VentyTime.Server.Controllers
         [Authorize]
         public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
         {
-            var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+            var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
+                _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
+                    User.Claims.Select(c => new { c.Type, c.Value }));
                 return Unauthorized(new { message = "User not authenticated" });
             }
 

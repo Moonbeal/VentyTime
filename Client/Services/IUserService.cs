@@ -26,4 +26,5 @@ public interface IUserService
     Task<List<ApplicationUser>> GetAllUsersAsync();
     Task<IList<string>> GetUserRolesAsync(string userId);
     Task<HttpResponseMessage> UploadAvatarAsync(string userId, MultipartFormDataContent content);
+    Task<bool> IsInRoleAsync(string role);
 }

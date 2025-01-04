@@ -37,6 +37,11 @@ namespace VentyTime.Client.Services
             return client;
         }
 
+        private async Task<string> GetTokenAsync()
+        {
+            return await _localStorage.GetItemAsync<string>("authToken");
+        }
+
         public async Task<List<Event>> GetEventsAsync()
         {
             try
@@ -140,17 +145,45 @@ namespace VentyTime.Client.Services
             {
                 var client = await CreateClientAsync();
 
+                // Get the current user's ID
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User ID not found. Please make sure you are logged in.");
+                }
+
                 // Get the local time zone offset in minutes for the event's date
                 var offsetMinutes = (int)TimeZoneInfo.Local.GetUtcOffset(eventItem.StartDate).TotalMinutes;
                 Console.WriteLine($"Time zone offset for event date: {offsetMinutes} minutes");
+
+                // Convert dates to UTC before sending
+                eventItem.StartDate = DateTime.SpecifyKind(eventItem.StartDate, DateTimeKind.Local).ToUniversalTime();
+                eventItem.EndDate = DateTime.SpecifyKind(eventItem.EndDate, DateTimeKind.Local).ToUniversalTime();
+                eventItem.StartTime = eventItem.StartDate.TimeOfDay;
 
                 using var request = new HttpRequestMessage(HttpMethod.Put, $"api/events/{eventItem.Id}");
                 request.Headers.Add("X-TimeZone-Offset", offsetMinutes.ToString());
                 request.Content = JsonContent.Create(eventItem);
 
+                Console.WriteLine($"Sending PUT request to: {request.RequestUri}");
+                Console.WriteLine($"Request content: {await request.Content.ReadAsStringAsync()}");
+
                 var response = await client.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadFromJsonAsync<Event>() ?? throw new Exception("Failed to update event");
+                var responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Response status: {response.StatusCode}");
+                Console.WriteLine($"Response content: {responseContent}");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Server error: {responseContent}");
+                    throw new HttpRequestException($"Server error: {responseContent}", null, response.StatusCode);
+                }
+
+                var updatedEvent = await response.Content.ReadFromJsonAsync<Event>();
+                return updatedEvent ?? throw new Exception("Updated event is null");
             }
             catch (Exception ex)
             {
@@ -164,8 +197,25 @@ namespace VentyTime.Client.Services
             try
             {
                 var client = await CreateClientAsync();
+
+                // Get the current user's ID
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User ID not found. Please make sure you are logged in.");
+                }
+
                 var response = await client.DeleteAsync($"api/events/{id}");
-                return response.IsSuccessStatusCode;
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Server error: {errorContent}");
+                    throw new HttpRequestException($"Server error: {errorContent}", null, response.StatusCode);
+                }
+                return true;
             }
             catch (Exception ex)
             {

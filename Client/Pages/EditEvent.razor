@@ -235,7 +235,9 @@
             }
 
             var userId = await UserService.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId) || userId != eventModel.OrganizerId)
+            var isAdmin = await UserService.IsInRoleAsync("Admin");
+
+            if (string.IsNullOrEmpty(userId) || (!isAdmin && userId != eventModel.OrganizerId))
             {
                 Snackbar.Add("You don't have permission to edit this event", Severity.Error);
                 NavigationManager.NavigateTo("/events");
@@ -258,11 +260,17 @@
         {
             if (eventModel == null) return;
 
+            if (!success)
+            {
+                Snackbar.Add("Please fix validation errors before saving", Severity.Warning);
+                return;
+            }
+
             var result = await EventService.UpdateEventAsync(eventModel);
             if (result != null)
             {
                 Snackbar.Add("Event updated successfully!", Severity.Success);
-                NavigationManager.NavigateTo($"/events/{result.Id}");
+                NavigationManager.NavigateTo($"/event/{result.Id}");
             }
             else
             {
