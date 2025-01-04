@@ -1,0 +1,228 @@
+@page "/event/{EventId:int}/register"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject IRegistrationService RegistrationService
+@inject NavigationManager NavigationManager
+@inject IAuthService AuthService
+@inject ISnackbar Snackbar
+@attribute [Authorize]
+
+<div class="container mt-4">
+    @if (loading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (eventModel == null)
+    {
+        <div class="alert alert-danger">
+            Event not found.
+        </div>
+    }
+    else if (!eventModel.IsRegistrationOpen)
+    {
+        <div class="alert alert-warning">
+            Registration is closed for this event.
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header">
+                <h2>Register for Event</h2>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h3>Event Details</h3>
+                        <div class="mb-3">
+                            <strong>Title:</strong>
+                            <p>@eventModel.Title</p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Date & Time:</strong>
+                            <p>@eventModel.StartDate.ToLocalTime().ToString("f")</p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Location:</strong>
+                            <p>@eventModel.Location</p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Price:</strong>
+                            <p>@(eventModel.Price > 0 ? $"${eventModel.Price:F2}" : "Free")</p>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Available Spots:</strong>
+                            <p>@(eventModel.MaxAttendees == 0 ? "Unlimited" : $"{eventModel.MaxAttendees - eventModel.CurrentParticipants} of {eventModel.MaxAttendees}")</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h3>Registration Form</h3>
+                        <EditForm Model="@registrationModel" OnValidSubmit="HandleRegistration">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            @if (eventModel.Price > 0)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Payment Method</label>
+                                    <div class="form-check">
+                                        <input type="radio" class="form-check-input" name="paymentMethod" value="CreditCard" checked="@(registrationModel.PaymentMethod == PaymentMethod.CreditCard)" @onchange="@(() => registrationModel.PaymentMethod = PaymentMethod.CreditCard)" />
+                                        <label class="form-check-label">Credit Card</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="radio" class="form-check-input" name="paymentMethod" value="BankTransfer" checked="@(registrationModel.PaymentMethod == PaymentMethod.BankTransfer)" @onchange="@(() => registrationModel.PaymentMethod = PaymentMethod.BankTransfer)" />
+                                        <label class="form-check-label">Bank Transfer</label>
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <label class="form-label">Special Requirements</label>
+                                <InputTextArea class="form-control" @bind-Value="registrationModel.SpecialRequirements" rows="3" placeholder="Any dietary restrictions, accessibility needs, etc." />
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <InputCheckbox class="form-check-input" @bind-Value="registrationModel.AcceptTerms" />
+                                <label class="form-check-label">
+                                    I accept the terms and conditions
+                                </label>
+                                <ValidationMessage For="@(() => registrationModel.AcceptTerms)" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" disabled="@(!registrationModel.AcceptTerms)">
+                                Complete Registration
+                            </button>
+                            <button type="button" class="btn btn-secondary ms-2" @onclick="NavigateBack">
+                                Cancel
+                            </button>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (showConfirmation)
+        {
+            <div class="modal fade show" style="display: block;" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Registration Successful</h5>
+                            <button type="button" class="btn-close" @onclick="CloseConfirmation"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>You have successfully registered for @eventModel.Title!</p>
+                            <p>A confirmation email has been sent to your registered email address.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" @onclick="ViewEventDetails">View Event Details</button>
+                            <button type="button" class="btn btn-secondary" @onclick="CloseConfirmation">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-backdrop fade show"></div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int EventId { get; set; }
+
+    private Event? eventModel;
+    private RegistrationModel registrationModel = new();
+    private bool loading = true;
+    private bool showConfirmation = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            eventModel = await EventService.GetEventByIdAsync(EventId);
+            var currentUser = await AuthService.GetCurrentUserAsync();
+            if (currentUser != null)
+            {
+                registrationModel.UserId = currentUser.Id;
+                registrationModel.EventId = EventId;
+            }
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task HandleRegistration()
+    {
+        try
+        {
+            var result = await RegistrationService.RegisterForEventAsync(EventId);
+            if (result.Success)
+            {
+                Snackbar.Add("Successfully registered for the event!", Severity.Success);
+                showConfirmation = true;
+            }
+            else
+            {
+                Snackbar.Add("Failed to register for the event", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo($"/event/{EventId}");
+    }
+
+    private void CloseConfirmation()
+    {
+        showConfirmation = false;
+    }
+
+    private void ViewEventDetails()
+    {
+        NavigationManager.NavigateTo($"/event/{EventId}");
+    }
+
+    public enum PaymentMethod
+    {
+        CreditCard,
+        BankTransfer
+    }
+
+    private class RegistrationModel
+    {
+        public string UserId { get; set; } = "";
+        public int EventId { get; set; }
+        public PaymentMethod PaymentMethod { get; set; }
+        public string SpecialRequirements { get; set; } = "";
+        public bool AcceptTerms { get; set; }
+    }
+}
+
+<style>
+    .modal {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .card {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .validation-message {
+        color: red;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>

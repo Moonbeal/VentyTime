@@ -12,8 +12,49 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="d-flex calendar-events-container gap-4">
+        <!-- Upcoming Events List -->
+        <MudPaper Class="pa-4 flex-grow-0 upcoming-events-paper" Elevation="0">
+            <MudText Typo="Typo.h5" Class="mb-4">Upcoming Events</MudText>
+            <div class="upcoming-events-container">
+                <MudList Clickable="true" Class="upcoming-events-list">
+                    @foreach (var evt in searchResults.Where(e => e.StartDate > DateTime.Now).OrderBy(e => e.StartDate))
+                    {
+                        <MudListItem OnClick="@(() => NavigateToEventDetails(evt.Id))" Class="py-2">
+                            <div class="d-flex align-center">
+                                <MudAvatar Class="mr-3" Style="@($"background-image: url({evt.ImageUrl}); background-size: cover;")">
+                                    @if(string.IsNullOrEmpty(evt.ImageUrl))
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Event" />
+                                    }
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">@evt.Title</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
+                                        @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="ml-2 mr-1" />
+                                        @evt.Location
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudListItem>
+                        <MudDivider />
+                    }
+                </MudList>
+            </div>
+        </MudPaper>
+
+        <!-- Calendar -->
+        <MudPaper Class="pa-4 flex-grow-1 calendar-paper" Elevation="0">
+            <div class="calendar-container">
+                <EventCalendar Events="@searchResults" OnEventClick="@((evt) => NavigateToEventDetails(evt.Id))" />
+            </div>
+        </MudPaper>
+    </div>
+
     <!-- Event Mosaic -->
-    <div class="events-calendar">
+    <div class="events-calendar mt-8">
         <div class="mosaic-grid">
             @{
                 var events = searchResults.Take(18).ToList();
@@ -65,42 +106,56 @@
             }
         </div>
     </div>
-
-    <EventCalendar Events="@searchResults" OnEventClick="@((evt) => NavigateToEventDetails(evt.Id))" />
-
-    <MudPaper Class="pa-4 mt-6" Elevation="0">
-        <MudText Typo="Typo.h5" Class="mb-4">Upcoming Events</MudText>
-        <div class="upcoming-events-container">
-            <MudList Clickable="true" Class="upcoming-events-list">
-                @foreach (var evt in searchResults.Where(e => e.StartDate > DateTime.Now).OrderBy(e => e.StartDate))
-                {
-                    <MudListItem OnClick="@(() => NavigateToEventDetails(evt.Id))">
-                        <div class="d-flex align-center">
-                            <MudAvatar Class="mr-3" Style="@($"background-image: url({evt.ImageUrl}); background-size: cover;")">
-                                @if(string.IsNullOrEmpty(evt.ImageUrl))
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Event" />
-                                }
-                            </MudAvatar>
-                            <div>
-                                <MudText Typo="Typo.subtitle1">@evt.Title</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-1" />
-                                    @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
-                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="ml-2 mr-1" />
-                                    @evt.Location
-                                </MudText>
-                            </div>
-                        </div>
-                    </MudListItem>
-                    <MudDivider Class="my-2" />
-                }
-            </MudList>
-        </div>
-    </MudPaper>
 </MudContainer>
 
 <style>
+    .calendar-events-container {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 32px;
+        align-items: flex-start;
+    }
+
+    .calendar-container {
+        margin-top: -16px;
+    }
+
+    .calendar-paper {
+        flex-grow: 1;
+        min-width: 600px;
+        height: fit-content;
+        padding-top: 20px !important;
+    }
+
+    .upcoming-events-paper {
+        width: 450px;
+        flex-shrink: 0;
+    }
+
+    .upcoming-events-container {
+        position: relative;
+        height: 912px;
+        overflow: hidden;
+    }
+
+    .upcoming-events-list {
+        height: 100%;
+        overflow-y: auto;
+        padding-right: 16px;
+    }
+
+    .upcoming-events-list ::deep .mud-list-item {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        height: 70px;
+    }
+
+    .upcoming-events-list ::deep .mud-list-item .mud-typography {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
     .events-calendar {
         margin: -0.15rem;
         width: calc(100% + 0.3rem);
@@ -456,36 +511,6 @@
         .mosaic-text-content .mud-typography-body2 { font-size: 0.75rem !important; }
         .mosaic-button-content .mud-typography-subtitle2 { font-size: 0.85rem !important; }
         .mosaic-button-content .mud-typography-caption { font-size: 0.65rem !important; }
-    }
-
-    .upcoming-events-container {
-        position: relative;
-        height: 400px;
-        overflow: hidden;
-    }
-
-    .upcoming-events-list {
-        height: 100%;
-        overflow-y: auto;
-        padding-right: 16px;
-    }
-
-    .upcoming-events-list::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    .upcoming-events-list::-webkit-scrollbar-track {
-        background: #f0f0f0;
-        border-radius: 4px;
-    }
-
-    .upcoming-events-list::-webkit-scrollbar-thumb {
-        background: #bdbdbd;
-        border-radius: 4px;
-    }
-
-    .upcoming-events-list::-webkit-scrollbar-thumb:hover {
-        background: #9e9e9e;
     }
 </style>
 
