@@ -20,6 +20,7 @@ namespace VentyTime.Server.Services
         Task<IEnumerable<string>> GetCategoriesAsync();
         Task<Registration> RegisterUserForEventAsync(int eventId, string userId);
         Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
+        Task SeedTestEventsAsync();
     }
 
     public class EventService : IEventService
@@ -595,6 +596,99 @@ namespace VentyTime.Server.Services
                 .Count(r => r.Status == RegistrationStatus.Confirmed);
 
             return activeRegistrations < eventItem.MaxAttendees;
+        }
+
+        public async Task SeedTestEventsAsync()
+        {
+            try
+            {
+                var random = new Random();
+                var imageUrls = new[]
+                {
+                    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e",
+                    "https://images.unsplash.com/photo-1639322537228-f710d846310a",
+                    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b",
+                    "https://images.unsplash.com/photo-1415201364774-f6f0bb35f28f",
+                    "https://images.unsplash.com/photo-1470225620780-dba8ba36b745",
+                    "https://images.unsplash.com/photo-1465847899084-d164df4dedc6",
+                    "https://images.unsplash.com/photo-1452626038306-9aae5e071dd3",
+                    "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b",
+                    "https://images.unsplash.com/photo-1546519638-68e109498ffc",
+                    "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3",
+                    "https://images.unsplash.com/photo-1505826759037-406b40feb4cd",
+                    "https://images.unsplash.com/photo-1436076863939-06870fe779c2",
+                    "https://images.unsplash.com/photo-1536924940846-227afb31e2a5",
+                    "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf",
+                    "https://images.unsplash.com/photo-1452587925148-ce544e77e70d",
+                    "https://images.unsplash.com/photo-1515187029135-18ee286d815b",
+                    "https://images.unsplash.com/photo-1557804506-669a67965ba0",
+                    "https://images.unsplash.com/photo-1444653614773-995cb1ef9efa"
+                };
+
+                var locations = new[]
+                {
+                    "UNIT.City, Kyiv",
+                    "Kyiv Expo Center",
+                    "President Hotel, Kyiv",
+                    "Atlas Club, Kyiv",
+                    "Art-zavod Platforma",
+                    "National Philharmonic",
+                    "Khreshchatyk Street",
+                    "Mariinsky Park",
+                    "Sports Complex Meridian",
+                    "Good Wine, Kyiv",
+                    "VDNH",
+                    "Varvar Brew",
+                    "Mystetskyi Arsenal, Kyiv",
+                    "Ivan Franko Theater",
+                    "Izone Creative Space",
+                    "Platforma Art-Zavod, Kyiv",
+                    "Hilton Kyiv",
+                    "IQ Business Center"
+                };
+
+                // Генеруємо 100 подій
+                for (int i = 0; i < 100; i++)
+                {
+                    var category = EventCategories.All[random.Next(EventCategories.All.Length)];
+                    var type = (EventType)random.Next(Enum.GetValues(typeof(EventType)).Length);
+                    var startDate = DateTime.UtcNow.AddDays(random.Next(1, 60));
+                    var duration = random.Next(1, 5);
+                    var price = random.Next(0, 1000);
+                    var maxAttendees = random.Next(20, 1000);
+
+                    var newEvent = new Event
+                    {
+                        Title = $"{category} Event #{i + 1}",
+                        Description = $"This is a {category.ToLower()} event with amazing content and opportunities for networking and learning. Join us for an unforgettable experience!",
+                        StartDate = startDate,
+                        EndDate = startDate.AddDays(duration),
+                        StartTime = TimeSpan.FromHours(random.Next(9, 20)),
+                        Location = locations[random.Next(locations.Length)],
+                        MaxAttendees = maxAttendees,
+                        CurrentCapacity = random.Next(0, maxAttendees),
+                        Category = category,
+                        Type = type,
+                        Price = price,
+                        ImageUrl = imageUrls[random.Next(imageUrls.Length)],
+                        IsActive = true,
+                        IsFeatured = random.Next(100) < 20, // 20% шанс бути featured
+                        CreatedAt = DateTime.UtcNow,
+                        CreatorId = "1",
+                        OrganizerId = "1"
+                    };
+
+                    await _context.Events.AddAsync(newEvent);
+                }
+
+                await _context.SaveChangesAsync();
+                _cache.Remove(EventsCacheKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error seeding test events");
+                throw;
+            }
         }
 
         private void InvalidateEventCache()
