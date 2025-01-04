@@ -454,12 +454,7 @@ namespace VentyTime.Server.Services
                 _logger.LogInformation("Checking user authorization for event {EventId} and user {UserId}", eventId, userId);
 
                 // First check if user is admin
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null)
-                {
-                    _logger.LogWarning("User {UserId} not found", userId);
-                    return false;
-                }
+                var user = await _userManager.FindByIdAsync(userId) ?? throw new UnauthorizedAccessException("User not found");
 
                 var userRoles = await _userManager.GetRolesAsync(user);
                 if (userRoles.Contains("Admin"))

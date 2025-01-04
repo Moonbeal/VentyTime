@@ -1,0 +1,378 @@
+@using VentyTime.Shared.Models
+@inject HttpClient Http
+
+<MudPaper Class="calendar-section" Elevation="0">
+    <div class="calendar-container">
+        <div class="calendar-navigation">
+            <div class="calendar-header">
+                <div class="nav-button prev-button" @onclick="PreviousMonth">
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
+                </div>
+                <div class="month-title">@currentDate.ToString("MMMM yyyy")</div>
+                <div class="nav-button next-button" @onclick="NextMonth">
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" />
+                </div>
+            </div>
+
+            @if (currentView == "month")
+            {
+                <MudItem xs="12">
+                    <div class="calendar-grid">
+                        @foreach (var day in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+                        {
+                            <div class="weekday-header">@day</div>
+                        }
+
+                        @{
+                            var firstDay = new DateTime(currentDate.Year, currentDate.Month, 1);
+                            var lastDay = firstDay.AddMonths(1).AddDays(-1);
+                            var startOffset = (int)firstDay.DayOfWeek;
+                            var totalDays = (int)(lastDay - firstDay).TotalDays + 1;
+                            var totalCells = ((totalDays + startOffset + 6) / 7) * 7;
+                        }
+
+                        @for (int i = 0; i < totalCells; i++)
+                        {
+                            var currentCell = firstDay.AddDays(i - startOffset);
+                            var isCurrentMonth = currentCell.Month == currentDate.Month;
+                            var isToday = currentCell.Date == DateTime.Today;
+                            var dayEvents = Events.Where(e => e.StartDate.Date == currentCell.Date).ToList();
+
+                            <div class="@($"calendar-day {(isCurrentMonth ? "" : "other-month")} {(isToday ? "today" : "")}")">
+                                <div class="day-number">@currentCell.Day</div>
+                                @if (dayEvents.Any())
+                                {
+                                    <div class="day-events">
+                                        @foreach (var evt in dayEvents.Take(3))
+                                        {
+                                            <div class="event-dot" @onclick="@(() => OnEventClick.InvokeAsync(evt))">
+                                                <MudTooltip Text="@evt.Title">
+                                                    <div class="event-indicator"></div>
+                                                </MudTooltip>
+                                            </div>
+                                        }
+                                        @if (dayEvents.Count > 3)
+                                        {
+                                            <div class="more-events">+@(dayEvents.Count - 3)</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <div class="events-list">
+                        @{
+                            var upcomingEvents = Events
+                                .Where(e => e.StartDate >= DateTime.Today)
+                                .OrderBy(e => e.StartDate)
+                                .Take(5);
+                        }
+                        @foreach (var evt in upcomingEvents)
+                        {
+                            <MudPaper Class="event-list-item pa-4 mb-3" Elevation="0" @onclick="@(() => OnEventClick.InvokeAsync(evt))">
+                                <div class="d-flex gap-4">
+                                    @if (!string.IsNullOrEmpty(evt.ImageUrl))
+                                    {
+                                        <div class="event-thumbnail" style="background-image: url(@evt.ImageUrl)"></div>
+                                    }
+                                    <div class="event-details">
+                                        <MudText Typo="Typo.h6">@evt.Title</MudText>
+                                        <div class="d-flex gap-4 mt-2">
+                                            <MudText Typo="Typo.body2">
+                                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
+                                                @evt.StartDate.ToString("MMM dd, yyyy HH:mm")
+                                            </MudText>
+                                            <MudText Typo="Typo.body2">
+                                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
+                                                @evt.Location
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        }
+                    </div>
+                </MudItem>
+            }
+        </div>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public List<Event> Events { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<Event> OnEventClick { get; set; }
+
+    private string currentView = "month";
+    private DateTime currentDate = DateTime.Today;
+
+    private string GetSeasonalGradient()
+    {
+        return currentDate.Month switch
+        {
+            12 => "linear-gradient(135deg, #A0E7E5 0%, #4B7BE5 100%)",  // Грудень: зимова казка
+            1 => "linear-gradient(135deg, #B4F8C8 0%, #4B7BE5 100%)",   // Січень: північне сяйво
+            2 => "linear-gradient(135deg, #FBE7C6 0%, #FF9190 100%)",   // Лютий: весняний подих
+            3 => "linear-gradient(135deg, #FFB7B7 0%, #FF4B91 100%)",   // Березень: цвіт сакури
+            4 => "linear-gradient(135deg, #B5FF7D 0%, #00E1D9 100%)",   // Квітень: весняна свіжість
+            5 => "linear-gradient(135deg, #FF9190 0%, #FF0080 100%)",   // Травень: яскраві тюльпани
+            6 => "linear-gradient(135deg, #FFF07C 0%, #80FF72 100%)",   // Червень: сонячний сад
+            7 => "linear-gradient(135deg, #FF9B71 0%, #FED800 100%)",   // Липень: літній закат
+            8 => "linear-gradient(135deg, #7EE8FA 0%, #80FF72 100%)",   // Серпень: морський бриз
+            9 => "linear-gradient(135deg, #FF7E5F 0%, #FEB47B 100%)",   // Вересень: осінній джем
+            10 => "linear-gradient(135deg, #FFB347 0%, #FF4B91 100%)",  // Жовтень: осіннє золото
+            11 => "linear-gradient(135deg, #FF7E5F 0%, #FF5757 100%)",  // Листопад: червоний клен
+            _ => "linear-gradient(135deg, #A0E7E5 0%, #4B7BE5 100%)"
+        };
+    }
+
+    private string GetEventGradient()
+    {
+        return currentDate.Month switch
+        {
+            12 or 1 or 2 => "linear-gradient(135deg, #4B7BE5 0%, #A0E7E5 100%)", // Зима
+            3 or 4 or 5 => "linear-gradient(135deg, #FF4B91 0%, #FFB7B7 100%)",  // Весна
+            6 or 7 or 8 => "linear-gradient(135deg, #80FF72 0%, #FFF07C 100%)",  // Літо
+            _ => "linear-gradient(135deg, #FF7E5F 0%, #FEB47B 100%)"             // Осінь
+        };
+    }
+
+    private void PreviousMonth()
+    {
+        currentDate = currentDate.AddMonths(-1);
+        StateHasChanged();
+    }
+
+    private void NextMonth()
+    {
+        currentDate = currentDate.AddMonths(1);
+        StateHasChanged();
+    }
+}
+
+<style>
+    .calendar-section {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        padding: clamp(1rem, 3vw, 2rem);
+        border-radius: clamp(16px, 2vw, 24px);
+        margin: clamp(1rem, 3vw, 2rem) auto;
+        box-shadow: 
+            0 8px 32px rgba(31, 38, 135, 0.2),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+        max-width: min(95vw, 1200px);
+        width: 100%;
+    }
+
+    .calendar-container {
+        position: relative;
+        z-index: 1;
+        background: white;
+        border-radius: clamp(12px, 1.5vw, 20px);
+        padding: clamp(0.5rem, 1.5vw, 1rem);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: clamp(4px, 1vw, 8px);
+        background: white;
+        border-radius: clamp(8px, 1vw, 16px);
+        padding: clamp(4px, 1vw, 8px);
+        margin-top: clamp(0.5rem, 1vw, 1rem);
+    }
+
+    .weekday-header {
+        background: @GetSeasonalGradient();
+        color: white;
+        padding: clamp(0.5rem, 1vw, 1rem);
+        text-align: center;
+        font-weight: 600;
+        font-size: clamp(0.75rem, 1.2vw, 1rem);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        border-radius: clamp(4px, 0.5vw, 8px);
+        margin-bottom: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .calendar-day {
+        background: linear-gradient(
+            to bottom right,
+            rgba(255, 255, 255, 0.95),
+            rgba(255, 255, 255, 0.85)
+        );
+        background-color: rgba(@(currentDate.Month switch {
+            12 => "160, 231, 229, 0.1",  // Грудень
+            1 => "180, 248, 200, 0.1",   // Січень
+            2 => "251, 231, 198, 0.1",   // Лютий
+            3 => "255, 183, 183, 0.1",   // Березень
+            4 => "181, 255, 125, 0.1",   // Квітень
+            5 => "255, 145, 144, 0.1",   // Травень
+            6 => "255, 240, 124, 0.1",   // Червень
+            7 => "255, 155, 113, 0.1",   // Липень
+            8 => "126, 232, 250, 0.1",   // Серпень
+            9 => "255, 126, 95, 0.1",    // Вересень
+            10 => "255, 179, 71, 0.1",   // Жовтень
+            11 => "255, 126, 95, 0.1",   // Листопад
+            _ => "160, 231, 229, 0.1"
+        }));
+        padding: clamp(0.3rem, 1vw, 0.5rem);
+        min-height: clamp(80px, 12vw, 120px);
+        position: relative;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(5px);
+    }
+
+    .calendar-day:hover {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        transform: translateY(-1px);
+        background: linear-gradient(
+            to bottom right,
+            rgba(255, 255, 255, 0.98),
+            rgba(255, 255, 255, 0.9)
+        );
+    }
+
+    .day-number {
+        font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+        font-weight: 600;
+        color: #444;
+        margin-bottom: clamp(0.3rem, 1vw, 0.5rem);
+    }
+
+    .today {
+        background: linear-gradient(
+            to bottom right,
+            rgba(255, 255, 255, 0.98),
+            rgba(255, 255, 255, 0.9)
+        );
+        border: 2px solid @GetEventGradient();
+    }
+
+    .today .day-number {
+        color: #FF4B91;
+        font-weight: 700;
+    }
+
+    .other-month {
+        opacity: 0.6;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: clamp(0.5rem, 2vw, 1rem);
+        position: relative;
+        background: white;
+        border-radius: clamp(8px, 1vw, 12px);
+        margin-bottom: clamp(0.5rem, 1vw, 1rem);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .month-title {
+        font-size: clamp(1.5rem, 3vw, 2.2rem);
+        font-weight: 700;
+        background: @GetSeasonalGradient();
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-align: center;
+        padding: 0 clamp(1rem, 2vw, 2rem);
+    }
+
+    .nav-button {
+        position: absolute;
+        background: #f5f5f5;
+        border: none;
+        color: #666;
+        padding: clamp(0.3rem, 1vw, 0.5rem) clamp(0.8rem, 1.5vw, 1rem);
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-button:hover {
+        background: #eee;
+        transform: translateY(-1px);
+    }
+
+    .prev-button {
+        left: clamp(0.5rem, 1vw, 1rem);
+    }
+
+    .next-button {
+        right: clamp(0.5rem, 1vw, 1rem);
+    }
+
+    .event-dot {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        padding: clamp(2px, 0.5vw, 4px);
+        margin: clamp(1px, 0.3vw, 2px) 0;
+        display: flex;
+        align-items: center;
+        position: relative;
+    }
+
+    .event-dot::before {
+        content: '✦';
+        font-size: clamp(12px, 1.4vw, 16px);
+        color: white;
+        width: clamp(20px, 2vw, 24px);
+        height: clamp(20px, 2vw, 24px);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 
+            0 0 0 2px rgba(255, 255, 255, 0.8),
+            0 0 10px rgba(0, 0, 0, 0.1);
+        animation: chaosMove 4s linear infinite;
+        animation-delay: calc(var(--event-index, 0) * -1s);
+    }
+
+    .event-dot:nth-child(1)::before {
+        background: linear-gradient(135deg, #FF9190 0%, #FF0080 100%);
+    }
+
+    .event-dot:nth-child(2)::before {
+        background: linear-gradient(135deg, #80FF72 0%, #7EE8FA 100%);
+    }
+
+    .event-dot:nth-child(3)::before {
+        background: linear-gradient(135deg, #FFF07C 0%, #FED800 100%);
+    }
+
+    .event-dot:hover::before {
+        animation-play-state: paused;
+        transform: scale(1.2);
+    }
+
+    @@keyframes chaosMove {
+        0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+        15% { transform: translate(60%, -30%) rotate(90deg) scale(1.1); }
+        30% { transform: translate(-40%, 50%) rotate(180deg) scale(0.9); }
+        45% { transform: translate(50%, 40%) rotate(270deg) scale(1.1); }
+        60% { transform: translate(-50%, -40%) rotate(360deg) scale(0.9); }
+        75% { transform: translate(30%, 50%) rotate(450deg) scale(1.1); }
+        90% { transform: translate(-30%, -50%) rotate(540deg) scale(0.9); }
+        100% { transform: translate(0, 0) rotate(720deg) scale(1); }
+    }
+</style>
