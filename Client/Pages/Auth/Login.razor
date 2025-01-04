@@ -5,83 +5,93 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Elevation="3" Class="pa-8" Style="border-radius: 12px;">
-        <MudText Typo="Typo.h4" Align="Align.Center" GutterBottom="true" Class="mb-6" Style="font-weight: 500; color: var(--mud-palette-primary);">Welcome Back!</MudText>
-        
-        <MudForm @ref="_form" @bind-IsValid="@_success">
-            <MudTextField T="string"
-                         @bind-Value="_model.Email"
-                         Label="Email"
-                         Required="true"
-                         RequiredError="Email is required!"
-                         Validation="@(new EmailAddressAttribute() {ErrorMessage = "Invalid email address"})"
-                         Variant="Variant.Outlined"
-                         Adornment="Adornment.Start"
-                         AdornmentIcon="@Icons.Material.Filled.Email"
-                         Style="border-radius: 8px;"
-                         Class="mb-4"/>
+<div class="login-container">
+    <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+        <MudPaper Elevation="3" Class="pa-8" Style="border-radius: 12px;">
+            <MudText Typo="Typo.h4" Align="Align.Center" GutterBottom="true" Class="mb-6" Style="font-weight: 500; color: var(--mud-palette-primary);">Welcome Back!</MudText>
+            
+            <MudForm @ref="_form" @bind-IsValid="@_success">
+                <MudTextField T="string"
+                             @bind-Value="_model.Email"
+                             Label="Email"
+                             Required="true"
+                             RequiredError="Email is required!"
+                             Validation="@(new EmailAddressAttribute() {ErrorMessage = "Invalid email address"})"
+                             Variant="Variant.Outlined"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Email"
+                             Style="border-radius: 8px;"
+                             Class="mb-4"/>
 
-            <MudTextField T="string"
-                         @bind-Value="_model.Password"
-                         Label="Password"
-                         Required="true"
-                         RequiredError="Password is required!"
-                         InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                         Variant="Variant.Outlined"
-                         Adornment="Adornment.End"
-                         AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
-                         OnAdornmentClick="() => _showPassword = !_showPassword"
-                         Style="border-radius: 8px;"
-                         Class="mb-4"/>
+                <MudTextField T="string"
+                             @bind-Value="_model.Password"
+                             Label="Password"
+                             Required="true"
+                             RequiredError="Password is required!"
+                             InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                             Variant="Variant.Outlined"
+                             Adornment="Adornment.End"
+                             AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                             OnAdornmentClick="() => _showPassword = !_showPassword"
+                             Style="border-radius: 8px;"
+                             Class="mb-4"/>
 
-            <MudSelect T="UserRole"
-                      @bind-Value="_model.SelectedRole"
-                      Label="Select Your Role"
-                      Required="true"
-                      RequiredError="Role is required!"
-                      Variant="Variant.Outlined"
-                      Style="border-radius: 8px;"
-                      Class="mb-4">
-                <MudSelectItem Value="@UserRole.User">User</MudSelectItem>
-                <MudSelectItem Value="@UserRole.Organizer">Event Organizer</MudSelectItem>
-                <MudSelectItem Value="@UserRole.Admin">Administrator</MudSelectItem>
-            </MudSelect>
+                <MudSelect T="UserRole"
+                          @bind-Value="_model.SelectedRole"
+                          Label="Select Your Role"
+                          Required="true"
+                          RequiredError="Role is required!"
+                          Variant="Variant.Outlined"
+                          Style="border-radius: 8px;"
+                          Class="mb-4">
+                    <MudSelectItem Value="@UserRole.User">User</MudSelectItem>
+                    <MudSelectItem Value="@UserRole.Organizer">Event Organizer</MudSelectItem>
+                    <MudSelectItem Value="@UserRole.Admin">Administrator</MudSelectItem>
+                </MudSelect>
 
-            <MudCheckBox T="bool"
-                        @bind-Checked="_model.RememberMe"
-                        Label="Remember me"
-                        Color="Color.Primary"
-                        Class="mb-4"/>
+                <MudCheckBox T="bool"
+                            @bind-Checked="_model.RememberMe"
+                            Label="Remember me"
+                            Color="Color.Primary"
+                            Class="mb-4"/>
 
-            <MudButton Variant="Variant.Filled"
-                      Color="Color.Primary"
-                      Size="Size.Large"
-                      FullWidth="true"
-                      OnClick="LoginAsync"
-                      Disabled="@(!_success || _processing)"
-                      Style="border-radius: 25px; height: 48px; font-size: 1rem; text-transform: none;"
-                      Class="mb-4">
-                @if (_processing)
-                {
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                    <MudText Class="ms-2">Processing...</MudText>
-                }
-                else
-                {
-                    <MudText>Login</MudText>
-                }
-            </MudButton>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          Size="Size.Large"
+                          FullWidth="true"
+                          OnClick="LoginAsync"
+                          Disabled="@(!_success || _processing)"
+                          Style="border-radius: 25px; height: 48px; font-size: 1rem; text-transform: none;"
+                          Class="mb-4">
+                    @if (_processing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                        <MudText Class="ms-2">Processing...</MudText>
+                    }
+                    else
+                    {
+                        <MudText>Login</MudText>
+                    }
+                </MudButton>
 
-            <MudDivider Class="my-6"/>
+                <MudDivider Class="my-6"/>
 
-            <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
-                <MudLink Href="/auth/register" Color="Color.Primary" Underline="Underline.Always">Create an account</MudLink>
-                <MudLink Href="/auth/forgot-password" Color="Color.Primary" Underline="Underline.Always">Forgot password?</MudLink>
-            </MudStack>
-        </MudForm>
-    </MudPaper>
-</MudContainer>
+                <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
+                    <MudLink Href="/register" Color="Color.Primary" Underline="Underline.Always">Create an account</MudLink>
+                </MudStack>
+            </MudForm>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+<style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: calc(100vh - 64px);
+    }
+</style>
 
 @code {
     private MudForm? _form;

@@ -72,27 +72,77 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpPost("event/{eventId}")]
-        public async Task<ActionResult<Comment>> CreateComment(int eventId, [FromBody] Comment comment)
+        public async Task<ActionResult<Comment>> CreateComment(int eventId, [FromBody] Comment commentDto)
         {
             try
             {
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userId))
+                _logger.LogInformation("Received comment creation request for event {EventId}. Comment: {@Comment}", eventId, commentDto);
+
+                if (commentDto == null)
                 {
-                    return Unauthorized();
+                    var message = "Comment cannot be null";
+                    _logger.LogWarning("Comment is null for event {EventId}: {Message}", eventId, message);
+                    return BadRequest(new { message });
                 }
 
-                comment.EventId = eventId;
-                var createdComment = await _commentService.CreateCommentAsync(comment, userId);
-                return CreatedAtAction(nameof(GetComment), new { id = createdComment.Id }, createdComment);
+                if (string.IsNullOrWhiteSpace(commentDto.Content))
+                {
+                    var message = "Comment content cannot be empty";
+                    _logger.LogWarning("Empty comment content for event {EventId}: {Message}", eventId, message);
+                    return BadRequest(new { message });
+                }
+
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation("User ID from claims: {UserId}", userId);
+
+                if (string.IsNullOrEmpty(userId))
+                {
+                    var message = "User must be authenticated to create comments";
+                    _logger.LogWarning("Unauthorized comment creation attempt for event {EventId}: {Message}", eventId, message);
+                    return Unauthorized(new { message });
+                }
+
+                var comment = new Comment
+                {
+                    EventId = eventId,
+                    UserId = userId, 
+                    Content = commentDto.Content.Trim(),
+                    CreatedAt = DateTime.UtcNow,
+                    IsEdited = false,
+                    UpdatedAt = null
+                };
+
+                _logger.LogInformation("Creating comment for event {EventId} by user {UserId}. Comment: {@Comment}", 
+                    eventId, userId, comment);
+                
+                try 
+                {
+                    var createdComment = await _commentService.CreateCommentAsync(comment, userId);
+                    _logger.LogInformation("Successfully created comment {CommentId} for event {EventId}", 
+                        createdComment.Id, eventId);
+                    
+                    return CreatedAtAction(nameof(GetComment), new { id = createdComment.Id }, createdComment);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error from comment service while creating comment for event {EventId}. Error: {Error}", 
+                        eventId, ex.ToString());
+                    throw;
+                }
             }
             catch (KeyNotFoundException ex)
             {
+                _logger.LogWarning(ex, "Event not found for comment creation. EventId: {EventId}", eventId);
                 return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid comment data for event {EventId}", eventId);
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating comment for event {EventId}", eventId);
+                _logger.LogError(ex, "Error creating comment for event {EventId}. Error: {Error}", eventId, ex.ToString());
                 return StatusCode(500, new { message = "An error occurred while creating comment" });
             }
         }

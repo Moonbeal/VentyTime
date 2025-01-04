@@ -39,44 +39,80 @@ namespace VentyTime.Server.Services
 
             try
             {
-                _logger.LogInformation("Creating comment for event {EventId} by user {UserId}", 
-                    comment.EventId, userId);
+                _logger.LogInformation("Creating comment for event {EventId} by user {UserId}. Comment: {@Comment}", 
+                    comment.EventId, userId, comment);
 
-                var @event = await _eventService.GetEventByIdAsync(comment.EventId) 
-                    ?? throw new KeyNotFoundException($"Event with ID {comment.EventId} not found");
+                // Verify user exists
+                _logger.LogInformation("Looking for user with email: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found", userId);
+                    throw new KeyNotFoundException($"User with email {userId} not found");
+                }
+                _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
+
+                // Set the correct UserId from the found user
+                comment.UserId = user.Id;
+
+                _logger.LogInformation("Looking for event with ID: {EventId}", comment.EventId);
+                var @event = await _eventService.GetEventByIdAsync(comment.EventId);
+                if (@event == null)
+                {
+                    _logger.LogWarning("Event {EventId} not found", comment.EventId);
+                    throw new KeyNotFoundException($"Event with ID {comment.EventId} not found");
+                }
+                _logger.LogInformation("Found event: {EventTitle} ({EventId})", @event.Title, @event.Id);
 
                 if (!@event.IsActive)
                 {
+                    _logger.LogWarning("Event {EventId} is not active", comment.EventId);
                     throw new InvalidOperationException("Cannot comment on inactive events");
                 }
 
-                comment.UserId = userId;
-                comment.CreatedAt = DateTime.UtcNow;
-                comment.IsEdited = false;
-                comment.UpdatedAt = null;
+                // Verify that the comment belongs to the authenticated user
+                if (comment.UserId != user.Id)
+                {
+                    _logger.LogWarning("User {UserId} attempted to create comment for user {CommentUserId}", 
+                        userId, comment.UserId);
+                    throw new UnauthorizedAccessException("Cannot create comments for other users");
+                }
+
+                // Set only the fields that haven't been set yet
+                if (comment.CreatedAt == default)
+                {
+                    comment.CreatedAt = DateTime.UtcNow;
+                }
+
+                _logger.LogInformation("Starting database transaction for comment creation");
 
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    _context.Comments.Add(comment);
+                    var entry = _context.Comments.Add(comment);
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
 
                     _logger.LogInformation("Successfully created comment {CommentId} for event {EventId}", 
                         comment.Id, comment.EventId);
 
-                    return comment;
+                    // Reload the comment with navigation properties
+                    return await _context.Comments
+                        .Include(c => c.User)
+                        .Include(c => c.Event)
+                        .FirstAsync(c => c.Id == comment.Id);
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Database error while saving comment. Rolling back transaction");
                     await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error saving comment to database");
                     throw;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating comment");
+                _logger.LogError(ex, "Error creating comment for event {EventId} by user {UserId}", 
+                    comment.EventId, userId);
                 throw;
             }
         }
@@ -90,8 +126,17 @@ namespace VentyTime.Server.Services
 
             try
             {
+                _logger.LogInformation("Looking for user with email: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found", userId);
+                    throw new KeyNotFoundException($"User with email {userId} not found");
+                }
+                _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
+
                 _logger.LogInformation("Updating comment {CommentId} by user {UserId}", 
-                    comment.Id, userId);
+                    comment.Id, user.Id);
 
                 var existingComment = await _context.Comments
                     .Include(c => c.Event)
@@ -108,7 +153,7 @@ namespace VentyTime.Server.Services
                     throw new InvalidOperationException("Cannot update comments on inactive events");
                 }
 
-                if (existingComment.UserId != userId)
+                if (existingComment.UserId != user.Id)
                 {
                     throw new UnauthorizedAccessException("User is not authorized to update this comment");
                 }
@@ -125,7 +170,11 @@ namespace VentyTime.Server.Services
 
                     _logger.LogInformation("Successfully updated comment {CommentId}", comment.Id);
 
-                    return existingComment;
+                    // Reload the comment with navigation properties
+                    return await _context.Comments
+                        .Include(c => c.User)
+                        .Include(c => c.Event)
+                        .FirstAsync(c => c.Id == comment.Id);
                 }
                 catch (Exception ex)
                 {
@@ -147,7 +196,16 @@ namespace VentyTime.Server.Services
 
             try
             {
-                _logger.LogInformation("Deleting comment {CommentId} by user {UserId}", id, userId);
+                _logger.LogInformation("Looking for user with email: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found", userId);
+                    throw new KeyNotFoundException($"User with email {userId} not found");
+                }
+                _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
+
+                _logger.LogInformation("Deleting comment {CommentId} by user {UserId}", id, user.Id);
 
                 var comment = await _context.Comments
                     .Include(c => c.Event)
@@ -164,7 +222,7 @@ namespace VentyTime.Server.Services
                     throw new InvalidOperationException("Cannot delete comments on inactive events");
                 }
 
-                if (comment.UserId != userId)
+                if (comment.UserId != user.Id)
                 {
                     throw new UnauthorizedAccessException("User is not authorized to delete this comment");
                 }

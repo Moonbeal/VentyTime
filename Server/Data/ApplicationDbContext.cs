@@ -48,6 +48,11 @@ namespace VentyTime.Server.Data
                     .HasForeignKey(r => r.EventId)
                     .OnDelete(DeleteBehavior.Cascade);
 
+                entity.HasMany(e => e.Comments)
+                    .WithOne(c => c.Event)
+                    .HasForeignKey(c => c.EventId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
                 entity.Property(e => e.Title)
                     .HasMaxLength(100)
                     .IsRequired();
@@ -108,6 +113,42 @@ namespace VentyTime.Server.Data
                     .HasDefaultValue(true);
             });
 
+            builder.Entity<Comment>(entity =>
+            {
+                entity.HasKey(c => c.Id);
+
+                entity.HasOne(c => c.Event)
+                    .WithMany(e => e.Comments)
+                    .HasForeignKey(c => c.EventId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                entity.HasOne(c => c.User)
+                    .WithMany()
+                    .HasForeignKey(c => c.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                entity.Property(c => c.Content)
+                    .IsRequired()
+                    .HasMaxLength(1000);
+
+                entity.Property(c => c.CreatedAt)
+                    .IsRequired()
+                    .HasConversion(
+                        v => v,
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+                entity.Property(c => c.UpdatedAt)
+                    .HasConversion(
+                        v => v,
+                        v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+                entity.Property(c => c.IsEdited)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+            });
+
             builder.Entity<Registration>(entity =>
             {
                 entity.HasKey(r => r.Id);
@@ -141,12 +182,6 @@ namespace VentyTime.Server.Data
                     .HasForeignKey(r => r.EventId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
-
-            builder.Entity<Comment>()
-                .HasOne(c => c.Event)
-                .WithMany(e => e.Comments)
-                .HasForeignKey(c => c.EventId)
-                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

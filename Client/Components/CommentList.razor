@@ -136,25 +136,40 @@
 
     private async Task AddCommentAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newCommentContent)) return;
+        if (string.IsNullOrWhiteSpace(_newCommentContent))
+        {
+            return;
+        }
+
+        var comment = new Comment
+        {
+            Content = _newCommentContent,
+            EventId = EventId,
+            UserId = _currentUserId
+        };
 
         try
         {
-            var comment = new Comment
+            Console.WriteLine($"Sending comment: EventId={comment.EventId}, UserId={comment.UserId}, Content={comment.Content}");
+            var response = await CommentService.AddCommentAsync(EventId, comment);
+            
+            if (response.IsSuccessStatusCode)
             {
-                EventId = EventId,
-                Content = _newCommentContent,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await CommentService.AddCommentAsync(comment);
-            _newCommentContent = string.Empty;
-            await LoadCommentsAsync();
+                _newCommentContent = string.Empty;
+                await LoadCommentsAsync();
+            }
+            else
+            {
+                var error = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+                var errorMessage = error != null && error.ContainsKey("message") 
+                    ? error["message"] 
+                    : "Failed to add comment";
+                Console.WriteLine($"Server error: {errorMessage}");
+            }
         }
         catch (Exception ex)
         {
-            // Handle error
-            Console.WriteLine($"Error adding comment: {ex.Message}");
+            Console.WriteLine($"Failed to add comment: {ex}");
         }
     }
 

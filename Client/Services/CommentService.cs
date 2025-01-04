@@ -6,9 +6,9 @@ namespace VentyTime.Client.Services
     public interface ICommentService
     {
         Task<List<Comment>> GetEventCommentsAsync(int eventId);
-        Task<bool> AddCommentAsync(Comment comment);
-        Task<bool> UpdateCommentAsync(Comment comment);
-        Task<bool> DeleteCommentAsync(int commentId);
+        Task<HttpResponseMessage> AddCommentAsync(int eventId, Comment comment);
+        Task<HttpResponseMessage> UpdateCommentAsync(Comment comment);
+        Task<HttpResponseMessage> DeleteCommentAsync(int commentId);
     }
 
     public class CommentService : ICommentService
@@ -25,42 +25,53 @@ namespace VentyTime.Client.Services
             return await _httpClient.GetFromJsonAsync<List<Comment>>($"api/comments/event/{eventId}") ?? new List<Comment>();
         }
 
-        public async Task<bool> AddCommentAsync(Comment comment)
+        public async Task<HttpResponseMessage> AddCommentAsync(int eventId, Comment comment)
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("api/comments", comment);
-                return response.IsSuccessStatusCode;
+                Console.WriteLine($"Sending comment to server: EventId={eventId}, UserId={comment.UserId}, Content={comment.Content}");
+                var response = await _httpClient.PostAsJsonAsync($"api/comments/event/{eventId}", comment);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Server error response: {error}");
+                }
+                
+                return response;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                Console.WriteLine($"Exception in AddCommentAsync: {ex}");
+                throw;
             }
         }
 
-        public async Task<bool> UpdateCommentAsync(Comment comment)
+        public async Task<HttpResponseMessage> UpdateCommentAsync(Comment comment)
         {
             try
             {
                 var response = await _httpClient.PutAsJsonAsync($"api/comments/{comment.Id}", comment);
-                return response.IsSuccessStatusCode;
+                return response;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                Console.WriteLine($"Exception in UpdateCommentAsync: {ex}");
+                throw;
             }
         }
 
-        public async Task<bool> DeleteCommentAsync(int commentId)
+        public async Task<HttpResponseMessage> DeleteCommentAsync(int commentId)
         {
             try
             {
                 var response = await _httpClient.DeleteAsync($"api/comments/{commentId}");
-                return response.IsSuccessStatusCode;
+                return response;
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                Console.WriteLine($"Exception in DeleteCommentAsync: {ex}");
+                throw;
             }
         }
     }

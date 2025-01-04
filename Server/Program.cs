@@ -36,7 +36,12 @@ builder.Services.AddControllersWithViews()
 
 // Configure database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.EnableSensitiveDataLogging();
+    options.EnableDetailedErrors();
+    options.LogTo(Console.WriteLine, LogLevel.Information);
+});
 
 // Register ImageService
 builder.Services.AddScoped<IImageService, ImageService>();
