@@ -1,5 +1,6 @@
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
+@using VentyTime.Client.Components
 @inject IEventService EventService
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
@@ -49,7 +50,7 @@
             @foreach (var evt in filteredEvents)
             {
                 <div class="col">
-                    <div class="card h-100 event-card">
+                    <div class="card h-100 event-card" @onclick="() => NavigateToDetails(evt.Id)">
                         @if (!string.IsNullOrEmpty(evt.ImageUrl))
                         {
                             <img src="@evt.ImageUrl" class="card-img-top" alt="@evt.Title">
@@ -62,17 +63,6 @@
                                 <p><i class="fas fa-map-marker-alt"></i> @evt.Location</p>
                                 <p><i class="fas fa-users"></i> @evt.CurrentParticipants/@(evt.MaxAttendees == 0 ? "∞" : evt.MaxAttendees.ToString())</p>
                             </div>
-                        </div>
-                        <div class="card-footer">
-                            <button class="btn btn-primary" @onclick="() => NavigateToDetails(evt.Id)">
-                                View Details
-                            </button>
-                            @if (evt.IsRegistrationOpen)
-                            {
-                                <button class="btn btn-success ms-2" @onclick="() => RegisterForEvent(evt.Id)">
-                                    Register
-                                </button>
-                            }
                         </div>
                     </div>
                 </div>
@@ -109,51 +99,43 @@
     private string searchTerm = "";
     private string selectedCategory = "";
     private int currentPage = 1;
-    private const int PageSize = 9;
-    private int totalPages => events == null ? 0 : (int)Math.Ceiling(filteredEvents.Count() / (double)PageSize);
+    private int pageSize = 9;
+    private int totalPages => (int)Math.Ceiling((double)filteredEvents.Count() / pageSize);
+    private Event? selectedEvent;
 
-    protected override async Task OnInitializedAsync()
+    [Parameter]
+    public List<Event>? Events
     {
-        await LoadEvents();
-    }
-
-    private async Task LoadEvents()
-    {
-        events = await EventService.GetEventsAsync();
-    }
-
-    private IEnumerable<Event> filteredEvents
-    {
-        get
+        get => events;
+        set
         {
-            if (events == null) return Enumerable.Empty<Event>();
-
-            var filtered = events.AsEnumerable();
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                filtered = filtered.Where(e =>
-                    e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    e.Location.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
-            }
-
-            if (!string.IsNullOrWhiteSpace(selectedCategory))
-            {
-                filtered = filtered.Where(e => e.Category == selectedCategory);
-            }
-
-            // Apply pagination
-            return filtered
-                .Skip((currentPage - 1) * PageSize)
-                .Take(PageSize);
+            events = value;
+            HandleSearch();
         }
     }
 
-    private async Task HandleSearch()
+    private IEnumerable<Event> filteredEvents => events?
+        .Where(e =>
+            (string.IsNullOrEmpty(searchTerm) ||
+             e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(selectedCategory) ||
+             e.Category == selectedCategory))
+        .Skip((currentPage - 1) * pageSize)
+        .Take(pageSize) ?? Array.Empty<Event>();
+
+    private void HandleSearch()
     {
         currentPage = 1;
-        await InvokeAsync(StateHasChanged);
+        StateHasChanged();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+        }
     }
 
     private void NavigateToDetails(int eventId)
@@ -163,29 +145,28 @@
 
     private async Task RegisterForEvent(int eventId)
     {
-        if (await AuthService.IsAuthenticated())
+        try
         {
-            NavigationManager.NavigateTo($"/event/{eventId}/register");
+            await EventService.RegisterForEventAsync(eventId);
+            NavigationManager.NavigateTo($"/event/{eventId}");
         }
-        else
+        catch (Exception ex)
         {
-            NavigationManager.NavigateTo($"/login?returnUrl=/event/{eventId}/register");
+            // Handle error
+            Console.Error.WriteLine($"Error registering for event: {ex.Message}");
         }
     }
 
-    private void ChangePage(int page)
+    private void ShowEventCard(Event evt)
     {
-        if (page >= 1 && page <= totalPages)
-        {
-            currentPage = page;
-            StateHasChanged();
-        }
+        selectedEvent = evt;
     }
 }
 
 <style>
     .event-card {
         transition: transform 0.2s;
+        cursor: pointer;
     }
 
     .event-card:hover {
@@ -206,13 +187,14 @@
     .event-details i {
         width: 20px;
         text-align: center;
-        margin-right: 5px;
+        color: var(--mud-palette-primary);
     }
 
     .filters {
-        background-color: #f8f9fa;
+        background: white;
         padding: 1rem;
-        border-radius: 0.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
     .filter-options {
