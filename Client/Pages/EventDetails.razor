@@ -196,6 +196,7 @@
             {
                 isRegistered = true;
                 Snackbar.Add("Successfully registered for the event!", Severity.Success);
+                NavigationManager.NavigateTo($"/event/{Id}");
                 StateHasChanged();
             }
             else

@@ -167,7 +167,7 @@
                             {
                                 @foreach (var eventItem in eventsForDate)
                                 {
-                                    <MudListItem @onclick="@(() => NavigationManager.NavigateTo($"/event/{eventItem.Id}"))" Class="calendar-event">
+                                    <MudListItem @onclick="@(() => NavigateToEventDetails(eventItem.Id))" Class="calendar-event">
                                         <div class="d-flex gap-4">
                                             <div class="calendar-event-content">
                                                 <MudText Typo="Typo.h6" Class="calendar-event-title">@eventItem.Title</MudText>
