@@ -9,39 +9,72 @@
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
     <MudText Typo="Typo.h3" Class="mb-4">Events</MudText>
 
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField @bind-Value="searchTerm" 
+                         Label="Search events" 
+                         Variant="Variant.Outlined"
+                         Adornment="Adornment.Start"
+                         AdornmentIcon="@Icons.Material.Filled.Search"
+                         OnKeyUp="@SearchEvents" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="string" Label="Category" @bind-Value="selectedCategory" Variant="Variant.Outlined">
+                <MudSelectItem Value="@string.Empty">All Categories</MudSelectItem>
+                @foreach (var category in categories)
+                {
+                    <MudSelectItem Value="@category">@category</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="string" Label="Sort by" @bind-Value="sortBy" Variant="Variant.Outlined">
+                <MudSelectItem Value="@SortOptions.DateAsc">Date (Nearest first)</MudSelectItem>
+                <MudSelectItem Value="@SortOptions.DateDesc">Date (Furthest first)</MudSelectItem>
+                <MudSelectItem Value="@SortOptions.Title">Title</MudSelectItem>
+                <MudSelectItem Value="@SortOptions.Location">Location</MudSelectItem>
+                <MudSelectItem Value="@SortOptions.Spots">Available Spots</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
     @if (_events == null)
     {
         <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
     }
-    else if (!_events.Any())
+    else if (!FilteredEvents.Any())
     {
-        <MudAlert Severity="Severity.Info">No events found.</MudAlert>
+        <MudAlert Severity="Severity.Info">No events found matching your criteria.</MudAlert>
     }
     else
     {
         <MudGrid>
-            @foreach (var evt in _events)
+            @foreach (var evt in FilteredEvents)
             {
                 <MudItem xs="12" sm="6" md="4">
-                    <MudCard>
+                    <MudCard Elevation="3" Class="event-card">
                         @if (!string.IsNullOrEmpty(evt.ImageUrl))
                         {
                             <MudCardMedia Image="@evt.ImageUrl" Height="200" />
                         }
                         <MudCardContent>
                             <MudText Typo="Typo.h5">@evt.Title</MudText>
-                            <MudText Typo="Typo.body2">@evt.Description</MudText>
-                            <MudText Typo="Typo.body2" Class="mt-2">
-                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                <MudChip Size="Size.Small" Color="Color.Primary">@evt.Category</MudChip>
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="event-description">@evt.Description</MudText>
+                            <MudDivider Class="my-2"/>
+                            <MudText Typo="Typo.body2" Class="d-flex align-center mt-2">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2"/>
                                 @evt.Location
                             </MudText>
-                            <MudText Typo="Typo.body2">
-                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                            <MudText Typo="Typo.body2" Class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2"/>
                                 @evt.StartDate.ToLocalTime().ToString("f")
                             </MudText>
-                            <MudText Typo="Typo.body2">
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
-                                @evt.MaxAttendees spots available
+                            <MudText Typo="Typo.body2" Class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-2"/>
+                                @(evt.MaxAttendees == 0 ? "Unlimited spots" : $"{evt.MaxAttendees - evt.CurrentParticipants} spots available")
                             </MudText>
                         </MudCardContent>
                         <MudCardActions>
@@ -57,8 +90,45 @@
     }
 </MudContainer>
 
+<style>
+    .event-card {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s;
+    }
+
+    .event-card:hover {
+        transform: translateY(-4px);
+    }
+
+    .event-description {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
+</style>
+
 @code {
     private List<Event>? _events;
+    private string searchTerm = "";
+    private string selectedCategory = "";
+    private string sortBy = SortOptions.DateAsc;
+    private string[] categories = {
+        "Technology", "Business", "Arts & Culture", "Health & Wellness",
+        "Education", "Entertainment", "Sports", "Food & Drink"
+    };
+
+    private static class SortOptions
+    {
+        public const string DateAsc = "date_asc";
+        public const string DateDesc = "date_desc";
+        public const string Title = "title";
+        public const string Location = "location";
+        public const string Spots = "spots";
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -69,6 +139,54 @@
         catch (Exception ex)
         {
             Snackbar.Add("Error loading events: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private IEnumerable<Event> FilteredEvents
+    {
+        get
+        {
+            if (_events == null) return Enumerable.Empty<Event>();
+
+            var query = _events.AsEnumerable();
+
+            // Применяем поиск
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.ToLower();
+                query = query.Where(e =>
+                    e.Title.ToLower().Contains(term) ||
+                    e.Description.ToLower().Contains(term) ||
+                    e.Location.ToLower().Contains(term) ||
+                    e.Category.ToLower().Contains(term));
+            }
+
+            // Фильтруем по категории
+            if (!string.IsNullOrWhiteSpace(selectedCategory))
+            {
+                query = query.Where(e => e.Category == selectedCategory);
+            }
+
+            // Применяем сортировку
+            query = sortBy switch
+            {
+                SortOptions.DateAsc => query.OrderBy(e => e.StartDate),
+                SortOptions.DateDesc => query.OrderByDescending(e => e.StartDate),
+                SortOptions.Title => query.OrderBy(e => e.Title),
+                SortOptions.Location => query.OrderBy(e => e.Location),
+                SortOptions.Spots => query.OrderBy(e => e.MaxAttendees == 0 ? int.MaxValue : e.MaxAttendees - e.CurrentParticipants),
+                _ => query.OrderBy(e => e.StartDate)
+            };
+
+            return query;
+        }
+    }
+
+    private async Task SearchEvents(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await InvokeAsync(StateHasChanged);
         }
     }
 

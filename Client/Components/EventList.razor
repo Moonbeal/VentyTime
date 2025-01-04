@@ -100,7 +100,6 @@
     private string selectedCategory = "";
     private int currentPage = 1;
     private int pageSize = 9;
-    private int totalPages => (int)Math.Ceiling((double)filteredEvents.Count() / pageSize);
     private Event? selectedEvent;
 
     [Parameter]
@@ -114,15 +113,71 @@
         }
     }
 
-    private IEnumerable<Event> filteredEvents => events?
-        .Where(e =>
-            (string.IsNullOrEmpty(searchTerm) ||
-             e.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-             e.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
-            (string.IsNullOrEmpty(selectedCategory) ||
-             e.Category == selectedCategory))
-        .Skip((currentPage - 1) * pageSize)
-        .Take(pageSize) ?? Array.Empty<Event>();
+    private IEnumerable<Event> filteredEvents
+    {
+        get
+        {
+            if (events == null) return Array.Empty<Event>();
+
+            var query = events.AsEnumerable();
+
+            // Поиск по всем релевантным полям
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var searchTermLower = searchTerm.ToLowerInvariant();
+                query = query.Where(e =>
+                    e.Title.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                    e.Description.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                    e.Location.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                    e.Category.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase)
+                );
+            }
+
+            // Фильтрация по категории
+            if (!string.IsNullOrWhiteSpace(selectedCategory))
+            {
+                query = query.Where(e => 
+                    e.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Сортировка: сначала предстоящие события, потом прошедшие
+            query = query.OrderBy(e => e.StartDate < DateTime.Now)
+                        .ThenBy(e => e.StartDate);
+
+            // Применяем пагинацию
+            return query.Skip((currentPage - 1) * pageSize)
+                       .Take(pageSize);
+        }
+    }
+
+    private int totalPages => events == null ? 0 : 
+        (int)Math.Ceiling((double)GetFilteredEventsCount() / pageSize);
+
+    private int GetFilteredEventsCount()
+    {
+        if (events == null) return 0;
+
+        var query = events.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var searchTermLower = searchTerm.ToLowerInvariant();
+            query = query.Where(e =>
+                e.Title.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                e.Description.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                e.Location.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase) ||
+                e.Category.Contains(searchTermLower, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCategory))
+        {
+            query = query.Where(e => 
+                e.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return query.Count();
+    }
 
     private void HandleSearch()
     {
