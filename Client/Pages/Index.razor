@@ -30,16 +30,6 @@
                             </div>
                         </div>
                     }
-                    if (i == 12) // Кнопка Explore після 12-го елемента
-                    {
-                        <div class="mosaic-button" @onclick="@(() => NavigationManager.NavigateTo("/events"))">
-                            <div class="mosaic-button-content">
-                                <span class="mosaic-button-icon">✨</span>
-                                <MudText Typo="Typo.subtitle2">Explore All Events</MudText>
-                                <MudText Typo="Typo.caption" Style="opacity: 0.9">Discover more amazing events</MudText>
-                            </div>
-                        </div>
-                    }
                     if (i == 9) // Кнопка Shuffle після 9-го елемента
                     {
                         <div class="mosaic-button shuffle-button" @onclick="ShuffleEvents">
