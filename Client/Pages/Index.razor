@@ -11,84 +11,68 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>VentyTime - Discover Amazing Events</PageTitle>
-
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <div class="hero-section pa-8 mb-8">
-        <MudText Typo="Typo.h2" Class="mb-4">Discover Amazing Events</MudText>
-        <MudText Typo="Typo.h6" Class="mb-6">Find and join exciting events in your area</MudText>
-        
-        <MudTextField T="string" 
-                     @bind-Value="searchQuery"
-                     Placeholder="Search events..."
-                     Variant="Variant.Outlined"
-                     Class="mt-4 mb-4 search-field"
-                     Adornment="Adornment.Start"
-                     AdornmentIcon="@Icons.Material.Filled.Search"
-                     AdornmentColor="Color.Primary"
-                     OnKeyUp="@(async (e) => { if (e.Key == "Enter") await HandleSearch(); })" />
-        
-        <MudButton Class="explore-button" 
-                   StartIcon="@Icons.Material.Filled.Explore" 
-                   OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-            EXPLORE ALL EVENTS
-        </MudButton>
-    </div>
-
     <!-- Event Mosaic -->
-    <div class="event-mosaic @(isCompact ? "compact" : "expanded")">
-        <div class="mosaic-controls mb-4">
-            <MudText Typo="Typo.h5">Featured Events</MudText>
-            <div class="d-flex gap-2">
-                <MudIconButton Icon="@Icons.Material.Filled.ViewModule" 
-                             Color="@(isCompact ? Color.Default : Color.Primary)"
-                             OnClick="@(() => isCompact = false)" />
-                <MudIconButton Icon="@Icons.Material.Filled.ViewComfy" 
-                             Color="@(!isCompact ? Color.Default : Color.Primary)"
-                             OnClick="@(() => isCompact = true)" />
-            </div>
-        </div>
-
+    <div class="events-calendar">
         <div class="mosaic-grid">
-            @foreach (var evt in searchResults.Take(6))
-            {
-                <div class="mosaic-item @GetMosaicItemSize(evt)" @onclick="@(() => NavigateToEventDetails(evt.Id))">
-                    <div class="mosaic-content">
-                        @if (!string.IsNullOrEmpty(evt.ImageUrl))
-                        {
-                            <div class="event-image" style="background-image: url(@evt.ImageUrl)"></div>
-                        }
-                        <div class="event-overlay">
-                            <div class="event-info">
-                                <MudText Typo="Typo.h5" Class="event-title">@evt.Title</MudText>
-                                <MudText Typo="Typo.body2" Class="event-date">
-                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
-                                    @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy")
-                                </MudText>
-                                <MudText Typo="Typo.body2" Class="event-location">
-                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
-                                    @evt.Location
-                                </MudText>
-                                <MudButton Variant="Variant.Text" 
-                                         Color="Color.Primary" 
-                                         Class="view-details-btn"
-                                         OnClick="@(() => NavigateToEventDetails(evt.Id))">
-                                    View Details
-                                </MudButton>
+            @{
+                var events = searchResults.Take(18).ToList();
+                for (int i = 0; i < events.Count; i++)
+                {
+                    var evt = events[i];
+                    if (i == 6) // Текстовий блок після 6-го елемента
+                    {
+                        <div class="mosaic-text" @onclick="@(() => NavigationManager.NavigateTo("/events"))">
+                            <div class="mosaic-text-content">
+                                <span class="mosaic-text-icon">🌟</span>
+                                <MudText Typo="Typo.h6" Class="mb-1">Time to Create Memories</MudText>
+                                <MudText Typo="Typo.body2" Style="opacity: 0.9">Every moment is a chance for something special</MudText>
+                            </div>
+                        </div>
+                    }
+                    if (i == 12) // Кнопка Explore після 12-го елемента
+                    {
+                        <div class="mosaic-button" @onclick="@(() => NavigationManager.NavigateTo("/events"))">
+                            <div class="mosaic-button-content">
+                                <span class="mosaic-button-icon">✨</span>
+                                <MudText Typo="Typo.subtitle2">Explore All Events</MudText>
+                                <MudText Typo="Typo.caption" Style="opacity: 0.9">Discover more amazing events</MudText>
+                            </div>
+                        </div>
+                    }
+                    if (i == 9) // Кнопка Shuffle після 9-го елемента
+                    {
+                        <div class="mosaic-button shuffle-button" @onclick="ShuffleEvents">
+                            <div class="mosaic-button-content">
+                                <span class="mosaic-button-icon">🎲</span>
+                                <MudText Typo="Typo.subtitle2">Shuffle Events</MudText>
+                                <MudText Typo="Typo.caption" Style="opacity: 0.9">Find something new</MudText>
+                            </div>
+                        </div>
+                    }
+                    <div class="mosaic-item" @onclick="@(() => NavigateToEventDetails(evt.Id))">
+                        <div class="mosaic-content">
+                            @if (!string.IsNullOrEmpty(evt.ImageUrl))
+                            {
+                                <div class="event-image" style="background-image: url(@evt.ImageUrl)"></div>
+                            }
+                            <div class="event-overlay">
+                                <div class="event-info">
+                                    <MudText Typo="Typo.h5" Class="event-title">@evt.Title</MudText>
+                                    <MudText Typo="Typo.body2" Class="event-date">
+                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                                        @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy")
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="event-location">
+                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+                                        @evt.Location
+                                    </MudText>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                }
             }
-        </div>
-
-        <div class="text-center mt-6">
-            <MudButton Variant="Variant.Filled" 
-                      Color="Color.Primary" 
-                      Size="Size.Large"
-                      OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-                View All Events
-            </MudButton>
         </div>
     </div>
 
@@ -96,344 +80,361 @@
 </MudContainer>
 
 <style>
-    .hero-section {
-        background: linear-gradient(135deg, #9333EA 0%, #E11D48 100%);
-        color: white;
-        border-radius: var(--mud-default-borderradius);
-        margin-bottom: 2rem;
-        position: relative;
-        overflow: hidden;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-
-    .hero-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(10px);
-        z-index: 0;
-    }
-
-    .stats-card {
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 12px;
-        transition: all 0.2s ease-in-out;
-        border: 1px solid rgba(147, 51, 234, 0.1);
-        backdrop-filter: blur(10px);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stats-card::before {
-        content: '';
-        position: absolute;
-        width: 4px;
-        height: 4px;
-        background: white;
-        border-radius: 50%;
-        animation: star-float-1 3s ease-in-out infinite;
-        opacity: 0.7;
-    }
-
-    .stats-card:nth-child(1)::before {
-        animation-duration: 4s;
-        animation-delay: 0s;
-    }
-
-    .stats-card:nth-child(2)::before {
-        animation-duration: 5s;
-        animation-delay: 1s;
-    }
-
-    .stats-card:nth-child(3)::before {
-        animation-duration: 3.5s;
-        animation-delay: 0.5s;
-    }
-
-    .stats-card:nth-child(4)::before {
-        animation-duration: 4.5s;
-        animation-delay: 1.5s;
-    }
-
-    @keyframes star-float-1 {
-        0% {
-            transform: translate(0, 0) scale(1);
-            opacity: 0;
-        }
-        50% {
-            transform: translate(100px, -50px) scale(1.5);
-            opacity: 0.8;
-        }
-        100% {
-            transform: translate(200px, 0) scale(1);
-            opacity: 0;
-        }
-    }
-
-    .event-card {
-        transition: all 0.2s ease-in-out;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        backdrop-filter: blur(10px);
-        position: relative;
-    }
-
-    .event-card::before {
-        content: '';
-        position: absolute;
-        width: 3px;
-        height: 3px;
-        background: rgba(147, 51, 234, 0.8);
-        border-radius: 50%;
-        animation: star-float-2 4s ease-in-out infinite;
-        opacity: 0.6;
-    }
-
-    .event-card:nth-child(1)::before {
-        animation-duration: 3s;
-        animation-delay: 0.2s;
-    }
-
-    .event-card:nth-child(2)::before {
-        animation-duration: 4.5s;
-        animation-delay: 1.2s;
-    }
-
-    .event-card:nth-child(3)::before {
-        animation-duration: 3.8s;
-        animation-delay: 0.8s;
-    }
-
-    @keyframes star-float-2 {
-        0% {
-            transform: translate(0, 0) scale(1) rotate(0deg);
-            opacity: 0;
-        }
-        50% {
-            transform: translate(-80px, -30px) scale(1.8) rotate(180deg);
-            opacity: 0.8;
-        }
-        100% {
-            transform: translate(-160px, 0) scale(1) rotate(360deg);
-            opacity: 0;
-        }
-    }
-
     .events-calendar {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 2px 8px rgba(147, 51, 234, 0.15);
-        border: 1px solid rgba(147, 51, 234, 0.3);
-        margin-top: 2rem;
-        backdrop-filter: blur(10px);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .events-calendar::before {
-        content: '';
-        position: absolute;
-        width: 5px;
-        height: 5px;
-        background: rgba(233, 30, 99, 0.8);
-        border-radius: 50%;
-        animation: star-float-3 5s ease-in-out infinite;
-        opacity: 0.7;
-    }
-
-    @keyframes star-float-3 {
-        0% {
-            transform: translate(0, 0) scale(1) rotate(0deg);
-            opacity: 0;
-        }
-        50% {
-            transform: translate(120px, -80px) scale(2) rotate(-180deg);
-            opacity: 0.9;
-        }
-        100% {
-            transform: translate(240px, 0) scale(1) rotate(-360deg);
-            opacity: 0;
-        }
-    }
-
-    .search-field {
-        max-width: 600px;
-        margin: 0 auto;
-    }
-
-    .search-field ::deep .mud-input {
-        background-color: white;
-        border-radius: var(--mud-default-borderradius);
-    }
-
-    .explore-button {
-        background-color: white !important;
-        color: var(--mud-palette-primary) !important;
-        padding: 12px 24px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-
-    .explore-button:hover {
-        background-color: white !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .event-mosaic {
-        margin-top: 2rem;
-    }
-
-    .mosaic-controls {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        margin: -0.15rem;
+        width: calc(100% + 0.3rem);
+        padding: 0 !important;
+        background: none !important;
     }
 
     .mosaic-grid {
         display: grid;
-        grid-gap: 1rem;
-        transition: all 0.3s ease;
-    }
-
-    .expanded .mosaic-grid {
-        grid-template-columns: repeat(12, 1fr);
-    }
-
-    .compact .mosaic-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(24, 1fr);
+        gap: 0.15rem;
+        padding: 0.15rem;
+        width: 100%;
+        max-width: 1600px;
+        margin: 0 auto;
     }
 
     .mosaic-item {
         position: relative;
-        border-radius: var(--mud-default-borderradius);
+        border-radius: 8px;
         overflow: hidden;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        aspect-ratio: 1;
+    }
+
+    .mosaic-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .mosaic-item:hover .event-image {
+        transform: scale(1.05);
+    }
+
+    /* Велика картка */
+    .mosaic-item:nth-child(24n+1) {
+        grid-row: span 6;
+        grid-column: span 6;
+    }
+    .mosaic-item:nth-child(24n+1) .event-title {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .mosaic-item:nth-child(24n+1) .event-date,
+    .mosaic-item:nth-child(24n+1) .event-location {
+        font-size: 1rem;
+        margin-bottom: 0.35rem;
+    }
+
+    /* Середня картка */
+    .mosaic-item:nth-child(12n+2) {
+        grid-row: span 4;
+        grid-column: span 4;
+    }
+    .mosaic-item:nth-child(12n+2) .event-title {
+        font-size: 1.2rem;
+        margin-bottom: 0.4rem;
+    }
+    .mosaic-item:nth-child(12n+2) .event-date,
+    .mosaic-item:nth-child(12n+2) .event-location {
+        font-size: 0.9rem;
+    }
+
+    /* Висока картка */
+    .mosaic-item:nth-child(14n+3) {
+        grid-row: span 6;
+        grid-column: span 4;
+    }
+    .mosaic-item:nth-child(14n+3) .event-title {
+        font-size: 1.3rem;
+        margin-bottom: 0.45rem;
+    }
+    .mosaic-item:nth-child(14n+3) .event-date,
+    .mosaic-item:nth-child(14n+3) .event-location {
+        font-size: 0.95rem;
+    }
+
+    /* Широка картка */
+    .mosaic-item:nth-child(10n+4) {
+        grid-row: span 4;
+        grid-column: span 6;
+    }
+    .mosaic-item:nth-child(10n+4) .event-title {
+        font-size: 1.4rem;
+        margin-bottom: 0.45rem;
+    }
+    .mosaic-item:nth-child(10n+4) .event-date,
+    .mosaic-item:nth-child(10n+4) .event-location {
+        font-size: 0.95rem;
+    }
+
+    /* Маленька картка */
+    .mosaic-item:nth-child(4n) {
+        grid-row: span 3;
+        grid-column: span 3;
+    }
+    .mosaic-item:nth-child(4n) .event-title {
+        font-size: 0.85rem;
+        margin-bottom: 0.15rem;
+        line-height: 1.2;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .mosaic-item:nth-child(4n) .event-date,
+    .mosaic-item:nth-child(4n) .event-location {
+        font-size: 0.7rem;
+        margin-bottom: 0.1rem;
+        opacity: 0.9;
+    }
+    .mosaic-item:nth-child(4n) .event-info {
+        padding: 0.5rem;
+        background: linear-gradient(0deg, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.6) 100%);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+    .mosaic-item:nth-child(4n) .event-overlay {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .mosaic-item:nth-child(4n):hover .event-overlay {
+        opacity: 1;
+    }
+    .mosaic-item:nth-child(4n) .mud-icon-root {
+        font-size: 0.7rem !important;
+        margin-right: 0.15rem !important;
+    }
+    .mosaic-item:nth-child(4n) .event-date,
+    .mosaic-item:nth-child(4n) .event-location {
+        display: inline-flex;
+        margin-right: 0.5rem;
+    }
+    .mosaic-item:nth-child(4n) .event-info {
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+    }
+    .mosaic-item:nth-child(4n):hover .event-info {
+        transform: translateY(0);
+    }
+    .mosaic-item:nth-child(4n) .event-image {
+        transform: scale(1.1);
+    }
+    .mosaic-item:nth-child(4n):hover .event-image {
+        transform: scale(1);
+    }
+
+    @@media (max-width: 600px) {
+        .mosaic-item:nth-child(4n) .event-info {
+            transform: translateY(0);
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 100%);
+        }
+        .mosaic-item:nth-child(4n) .event-overlay {
+            opacity: 1;
+        }
+        .mosaic-item:nth-child(4n) .event-image {
+            transform: scale(1);
+        }
+    }
+
+    .mosaic-text, .mosaic-button {
+        grid-row: span 4;
+        grid-column: span 4;
+    }
+
+    .mosaic-text {
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+        border-radius: 8px;
+        padding: 1rem;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
         cursor: pointer;
         transition: all 0.3s ease;
     }
 
-    .mosaic-item:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    .mosaic-text:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
 
-    .expanded .mosaic-item.size-large {
-        grid-column: span 8;
-        grid-row: span 2;
+    .mosaic-text-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
     }
 
-    .expanded .mosaic-item.size-medium {
-        grid-column: span 4;
-        grid-row: span 2;
+    .mosaic-text-icon {
+        font-size: 2rem;
+        margin-bottom: 0.25rem;
     }
 
-    .expanded .mosaic-item.size-small {
-        grid-column: span 4;
-        grid-row: span 1;
+    .mosaic-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--mud-palette-primary) 0%, var(--mud-palette-primary-darken) 100%);
+        border-radius: 8px;
+        padding: 1rem;
+        color: white;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
     }
 
-    .compact .mosaic-item {
-        grid-column: span 1;
-        grid-row: span 1;
+    .mosaic-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
 
-    @@media (max-width: 959px) {
-        .expanded .mosaic-grid {
-            grid-template-columns: repeat(6, 1fr);
-        }
-
-        .compact .mosaic-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-
-        .expanded .mosaic-item.size-large {
-            grid-column: span 6;
-        }
-
-        .expanded .mosaic-item.size-medium,
-        .expanded .mosaic-item.size-small {
-            grid-column: span 3;
-        }
+    .mosaic-button-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
     }
 
-    @@media (max-width: 599px) {
-        .expanded .mosaic-grid,
-        .compact .mosaic-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .mosaic-item {
-            grid-column: span 1 !important;
-        }
+    .mosaic-button-icon {
+        font-size: 1.75rem;
+        margin-bottom: 0.25rem;
     }
 
-    .mosaic-content {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        min-height: 250px;
+    .shuffle-button {
+        background: linear-gradient(135deg, #4A90E2 0%, #967ADC 100%);
+    }
+
+    .shuffle-button:hover {
+        animation: shake 0.5s ease-in-out;
+    }
+
+    .mosaic-text-content h6 {
+        font-size: 1.3rem !important;
+        margin-bottom: 0.4rem !important;
+    }
+
+    .mosaic-text-content .mud-typography-body2 {
+        font-size: 0.9rem !important;
+    }
+
+    .mosaic-button-content .mud-typography-subtitle2 {
+        font-size: 1.1rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    .mosaic-button-content .mud-typography-caption {
+        font-size: 0.8rem !important;
     }
 
     .event-image {
-        position: absolute;
-        top: 0;
-        left: 0;
         width: 100%;
         height: 100%;
         background-size: cover;
         background-position: center;
+        transition: transform 0.3s ease;
     }
 
     .event-overlay {
         position: absolute;
-        top: 0;
+        bottom: 0;
         left: 0;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-        display: flex;
-        align-items: flex-end;
-        padding: 1.5rem;
-        color: white;
-    }
-
-    .mosaic-item:hover .event-overlay {
-        opacity: 1;
+        right: 0;
+        background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0) 100%);
     }
 
     .event-info {
-        width: 100%;
+        padding: 0.75rem;
+        position: relative;
+        z-index: 1;
+        color: white;
     }
 
     .event-title {
-        margin-bottom: 0.5rem;
-        color: white;
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 0.35rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     .event-date, .event-location {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.35rem;
+        font-size: 0.8rem;
         margin-bottom: 0.25rem;
-        color: rgba(255, 255, 255, 0.9);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
-    .view-details-btn {
-        margin-top: 1rem;
-        color: white !important;
-        border: 1px solid white;
+    @@keyframes shake {
+        0% { transform: rotate(0deg); }
+        25% { transform: rotate(-5deg); }
+        50% { transform: rotate(5deg); }
+        75% { transform: rotate(-5deg); }
+        100% { transform: rotate(0deg); }
+    }
+
+    @@media (max-width: 1400px) {
+        .mosaic-grid {
+            grid-template-columns: repeat(16, 1fr);
+        }
+        
+        .mosaic-item:nth-child(24n+1) .event-title { font-size: 1.3rem; }
+        .mosaic-item:nth-child(24n+1) .event-date,
+        .mosaic-item:nth-child(24n+1) .event-location { font-size: 0.9rem; }
+
+        .mosaic-item:nth-child(12n+2) .event-title { font-size: 1.1rem; }
+        .mosaic-item:nth-child(12n+2) .event-date,
+        .mosaic-item:nth-child(12n+2) .event-location { font-size: 0.85rem; }
+
+        .mosaic-text-content h6 { font-size: 1.1rem !important; }
+        .mosaic-text-content .mud-typography-body2 { font-size: 0.85rem !important; }
+        .mosaic-button-content .mud-typography-subtitle2 { font-size: 1rem !important; }
+        .mosaic-button-content .mud-typography-caption { font-size: 0.75rem !important; }
+    }
+
+    @@media (max-width: 960px) {
+        .mosaic-grid {
+            grid-template-columns: repeat(12, 1fr);
+        }
+
+        .mosaic-item:nth-child(24n+1) .event-title { font-size: 1.2rem; }
+        .mosaic-item:nth-child(24n+1) .event-date,
+        .mosaic-item:nth-child(24n+1) .event-location { font-size: 0.85rem; }
+
+        .mosaic-item:nth-child(12n+2) .event-title { font-size: 1rem; }
+        .mosaic-item:nth-child(12n+2) .event-date,
+        .mosaic-item:nth-child(12n+2) .event-location { font-size: 0.8rem; }
+
+        .mosaic-text-content h6 { font-size: 1rem !important; }
+        .mosaic-text-content .mud-typography-body2 { font-size: 0.8rem !important; }
+        .mosaic-button-content .mud-typography-subtitle2 { font-size: 0.9rem !important; }
+        .mosaic-button-content .mud-typography-caption { font-size: 0.7rem !important; }
+    }
+
+    @@media (max-width: 600px) {
+        .mosaic-grid {
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.1rem;
+        }
+        .events-calendar {
+            margin: -0.1rem;
+            width: calc(100% + 0.2rem);
+        }
+
+        .event-title { font-size: 0.9rem !important; }
+        .event-date, .event-location { font-size: 0.75rem !important; }
+
+        .mosaic-text-content h6 { font-size: 0.9rem !important; }
+        .mosaic-text-content .mud-typography-body2 { font-size: 0.75rem !important; }
+        .mosaic-button-content .mud-typography-subtitle2 { font-size: 0.85rem !important; }
+        .mosaic-button-content .mud-typography-caption { font-size: 0.65rem !important; }
     }
 </style>
 
@@ -442,7 +443,6 @@
     private List<Event> searchResults = new();
     private string searchQuery = "";
     private bool isLoading = false;
-    private bool isCompact = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -468,18 +468,15 @@
         }
     }
 
-    private string GetMosaicItemSize(Event evt)
+    private string GetRandomPosition()
     {
-        if (!isCompact)
-        {
-            // Определяем размер карточки на основе характеристик события
-            if (evt.IsFeatured && evt.ImageUrl != null)
-                return "size-large";
-            if (evt.ImageUrl != null || evt.IsFeatured)
-                return "size-medium";
-            return "size-small";
-        }
-        return "";
+        var random = new Random();
+        var top = random.Next(-20, 21); // від -20 до +20
+        var left = random.Next(-20, 21);
+        var rotate = random.Next(-10, 11); // від -10 до +10 градусів
+        var scale = 0.95 + random.NextDouble() * 0.1; // від 0.95 до 1.05
+
+        return $"transform: translate({left}px, {top}px) rotate({rotate}deg) scale({scale:F2});";
     }
 
     private async Task HandleSearch()
@@ -493,5 +490,12 @@
     private void NavigateToEventDetails(int eventId)
     {
         NavigationManager.NavigateTo($"/event/{eventId}");
+    }
+
+    private async Task ShuffleEvents()
+    {
+        var allEvents = await EventService.GetEventsAsync();
+        searchResults = allEvents.OrderBy(x => Guid.NewGuid()).ToList();
+        StateHasChanged();
     }
 }
