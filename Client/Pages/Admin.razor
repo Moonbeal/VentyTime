@@ -1,0 +1,9 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@inject NavigationManager NavigationManager
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Class="pa-4">
+        <AdminPanel />
+    </MudPaper>
+</MudContainer>

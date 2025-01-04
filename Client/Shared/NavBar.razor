@@ -39,10 +39,14 @@
                             </ActivatorContent>
                             <ChildContent>
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/dashboard"))">Profile</MudMenuItem>
-                                <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/my-events"))">My Events</MudMenuItem>
                                 <AuthorizeView Roles="Admin, Organizer">
                                     <Authorized Context="innerAuth">
                                         <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/create-event"))">Create Event</MudMenuItem>
+                                    </Authorized>
+                                </AuthorizeView>
+                                <AuthorizeView Roles="Admin">
+                                    <Authorized Context="adminContext">
+                                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/admin"))">Admin Panel</MudMenuItem>
                                     </Authorized>
                                 </AuthorizeView>
                                 <MudDivider />
