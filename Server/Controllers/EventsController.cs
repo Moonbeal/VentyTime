@@ -34,7 +34,7 @@ namespace VentyTime.Server.Controllers
                     User.Identity?.IsAuthenticated,
                     User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value);
 
-                var (events, totalCount) = await _eventService.GetEventsAsync();
+                var events = await _eventService.GetEventsAsync();
                 return Ok(events);
             }
             catch (Exception ex)
@@ -134,7 +134,7 @@ namespace VentyTime.Server.Controllers
                     return BadRequest("Event data is required");
                 }
 
-                var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogError("User ID not found in claims");

@@ -8,7 +8,7 @@ namespace VentyTime.Server.Services
 {
     public interface IEventService
     {
-        Task<(IEnumerable<Event> Events, int TotalCount)> GetEventsAsync(int page = 1, int pageSize = 10, string? category = null, DateTime? startDate = null, DateTime? endDate = null);
+        Task<List<Event>> GetEventsAsync();
         Task<Event?> GetEventByIdAsync(int id);
         Task<Event> CreateEventAsync(Event @event, string userIdOrEmail);
         Task<Event> UpdateEventAsync(Event @event, string userId);
@@ -45,51 +45,21 @@ namespace VentyTime.Server.Services
             _userManager = userManager;
         }
 
-        public async Task<(IEnumerable<Event> Events, int TotalCount)> GetEventsAsync(
-            int page = 1, 
-            int pageSize = 10, 
-            string? category = null, 
-            DateTime? startDate = null, 
-            DateTime? endDate = null)
+        public async Task<List<Event>> GetEventsAsync()
         {
             try
             {
-                _logger.LogInformation("Getting events with pagination and filters");
+                _logger.LogInformation("Getting all events");
 
-                var query = _context.Events
+                var events = await _context.Events
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
-                    .AsQueryable();
-
-                // Apply filters
-                if (!string.IsNullOrEmpty(category))
-                {
-                    query = query.Where(e => e.Category == category);
-                }
-
-                if (startDate.HasValue)
-                {
-                    query = query.Where(e => e.StartDate >= startDate.Value);
-                }
-
-                if (endDate.HasValue)
-                {
-                    query = query.Where(e => e.StartDate <= endDate.Value);
-                }
-
-                // Get total count for pagination
-                var totalCount = await query.CountAsync();
-
-                // Apply pagination
-                var events = await query
                     .OrderByDescending(e => e.CreatedAt)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
                     .ToListAsync();
 
-                _logger.LogInformation("Retrieved {Count} events from page {Page}", events.Count, page);
+                _logger.LogInformation("Retrieved {Count} events", events.Count);
 
-                return (events, totalCount);
+                return events;
             }
             catch (Exception ex)
             {
@@ -205,7 +175,7 @@ namespace VentyTime.Server.Services
 
                 // Load and set the creator/organizer
                 var user = await _userManager.FindByIdAsync(userIdOrEmail) ?? 
-                    await _userManager.FindByEmailAsync(userIdOrEmail) ??
+                    await _userManager.FindByEmailAsync(userIdOrEmail) ?? 
                     throw new InvalidOperationException("User not found");
 
                 @event.CreatorId = user.Id;

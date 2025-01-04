@@ -226,7 +226,7 @@ if (app.Environment.IsDevelopment())
         if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
         {
             context.Response.ContentType = "application/javascript";
-            await context.Response.WriteAsync(@"
+            await context.Response.WriteAsync(@"// <![CDATA[
                 (function() {
                     const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
                     eventSource.onmessage = function(event) {
@@ -235,7 +235,7 @@ if (app.Environment.IsDevelopment())
                         }
                     };
                 })();
-            ");
+            // ]]>");
             return;
         }
         await next();
@@ -283,7 +283,11 @@ app.UseStaticFiles();
 
 // Configure CORS
 app.UseCors(policy =>
-    policy.WithOrigins("https://localhost:7242")
+    policy.WithOrigins(
+        "https://localhost:7241",
+        "http://localhost:5241",
+        "https://localhost:7242",
+        "http://localhost:5242")
           .AllowAnyMethod()
           .AllowAnyHeader()
           .AllowCredentials());

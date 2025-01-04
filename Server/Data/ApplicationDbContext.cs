@@ -43,6 +43,11 @@ namespace VentyTime.Server.Data
                     .HasForeignKey(e => e.OrganizerId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                entity.HasMany(e => e.Registrations)
+                    .WithOne(r => r.Event)
+                    .HasForeignKey(r => r.EventId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
                 entity.Property(e => e.Title)
                     .HasMaxLength(100)
                     .IsRequired();
@@ -51,12 +56,15 @@ namespace VentyTime.Server.Data
                     .HasMaxLength(500)
                     .IsRequired();
 
-                entity.Property(e => e.Category)
-                    .HasMaxLength(50)
-                    .IsRequired();
-
                 entity.Property(e => e.Location)
                     .HasMaxLength(200)
+                    .IsRequired();
+
+                entity.Property(e => e.ImageUrl)
+                    .HasMaxLength(2000);
+
+                entity.Property(e => e.Category)
+                    .HasMaxLength(50)
                     .IsRequired();
 
                 entity.Property(e => e.StartDate)
@@ -88,9 +96,6 @@ namespace VentyTime.Server.Data
                 entity.Property(e => e.Type)
                     .IsRequired()
                     .HasConversion<string>();
-
-                entity.Property(e => e.ImageUrl)
-                    .HasMaxLength(2000);
 
                 entity.Property(e => e.OrganizerId)
                     .IsRequired();
@@ -126,14 +131,14 @@ namespace VentyTime.Server.Data
                         v => v,
                         v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
 
+                entity.HasOne(r => r.User)
+                    .WithMany(u => u.Registrations)
+                    .HasForeignKey(r => r.UserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
                 entity.HasOne(r => r.Event)
                     .WithMany(e => e.Registrations)
                     .HasForeignKey(r => r.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(r => r.User)
-                    .WithMany()
-                    .HasForeignKey(r => r.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
