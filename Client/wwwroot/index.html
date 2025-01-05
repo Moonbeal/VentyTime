@@ -39,6 +39,11 @@
             set: (value) => window.localStorage['BlazorCulture'] = value
         };
     </script>
+    <script>
+        window.clickElement = function (elementId) {
+            document.getElementById(elementId).click();
+        };
+    </script>
 </body>
 
 </html>

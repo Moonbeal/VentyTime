@@ -224,66 +224,74 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
-    app.UseDeveloperExceptionPage();
-
-    // Configure development-specific middleware
-    app.Use(async (context, next) =>
-    {
-        if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
-        {
-            context.Response.ContentType = "application/javascript";
-            await context.Response.WriteAsync(@"// <![CDATA[
-                (function() {
-                    const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
-                    eventSource.onmessage = function(event) {
-                        if (event.data === 'reload') {
-                            window.location.reload();
-                        }
-                    };
-                })();
-            // ]]>");
-            return;
-        }
-        await next();
-    });
-
-    // Add detailed error handling in development
-    app.Use(async (context, next) =>
-    {
-        try
-        {
-            await next();
-        }
-        catch (Exception ex)
-        {
-            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
-            
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = 500;
-                context.Response.ContentType = "application/json";
-                
-                var error = new
-                {
-                    message = "An error occurred while processing your request",
-                    error = ex.Message,
-                    stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
-                    innerError = ex.InnerException?.Message
-                };
-                
-                await context.Response.WriteAsJsonAsync(error);
-            }
-        }
-    });
 }
 else
 {
     app.UseExceptionHandler("/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
-// app.UseHttpsRedirection();
+// Ensure wwwroot/uploads directory exists
+var uploadsPath = Path.Combine(app.Environment.WebRootPath, "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
+app.UseHttpsRedirection();
+
+// Configure development-specific middleware
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
+    {
+        context.Response.ContentType = "application/javascript";
+        await context.Response.WriteAsync(@"// <![CDATA[
+            (function() {
+                const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
+                eventSource.onmessage = function(event) {
+                    if (event.data === 'reload') {
+                        window.location.reload();
+                    }
+                };
+            })();
+        // ]]>");
+        return;
+    }
+    await next();
+});
+
+// Add detailed error handling in development
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
+        
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            
+            var error = new
+            {
+                message = "An error occurred while processing your request",
+                error = ex.Message,
+                stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
+                innerError = ex.InnerException?.Message
+            };
+            
+            await context.Response.WriteAsJsonAsync(error);
+        }
+    }
+});
+
 app.UseBlazorFrameworkFiles();
 
 // Configure static files
@@ -303,6 +311,14 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/images"
 });
 
+// Configure static files for uploads
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(builder.Environment.WebRootPath, "uploads")),
+    RequestPath = "/uploads"
+});
+
 // Configure CORS
 app.UseCors(policy =>
     policy.WithOrigins(
@@ -318,13 +334,6 @@ app.UseCors(policy =>
 if (!Directory.Exists(builder.Environment.WebRootPath))
 {
     Directory.CreateDirectory(builder.Environment.WebRootPath);
-}
-
-// Create uploads directory if it doesn't exist
-var uploadsDirectory = Path.Combine(builder.Environment.WebRootPath, "uploads");
-if (!Directory.Exists(uploadsDirectory))
-{
-    Directory.CreateDirectory(uploadsDirectory);
 }
 
 // Create thumbnails directory if it doesn't exist

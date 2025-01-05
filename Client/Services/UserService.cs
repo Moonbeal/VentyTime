@@ -482,18 +482,20 @@ namespace VentyTime.Client.Services
                     PhoneNumber = phoneNumber
                 };
 
-                var userId = await GetCurrentUserIdAsync();
-                if (string.IsNullOrEmpty(userId))
+                var response = await _httpClient.PutAsJsonAsync($"api/users/profile", request);
+                if (response.IsSuccessStatusCode)
                 {
-                    return false;
+                    _snackbar.Add("Profile updated successfully", Severity.Success);
+                    return true;
                 }
 
-                var response = await UpdateUserAsync(userId, request);
-                return response.IsSuccessStatusCode;
+                _snackbar.Add("Failed to update profile", Severity.Error);
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating user profile");
+                _logger.LogError(ex, "Error updating profile");
+                _snackbar.Add("An error occurred while updating profile", Severity.Error);
                 return false;
             }
         }
@@ -502,18 +504,26 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var request = new
+                var request = new ChangePasswordRequest
                 {
                     CurrentPassword = currentPassword,
                     NewPassword = newPassword
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("api/user/change-password", request);
-                return response.IsSuccessStatusCode;
+                var response = await _httpClient.PostAsJsonAsync("api/users/change-password", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    _snackbar.Add("Password changed successfully", Severity.Success);
+                    return true;
+                }
+
+                _snackbar.Add("Failed to change password", Severity.Error);
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error changing password");
+                _snackbar.Add("An error occurred while changing password", Severity.Error);
                 return false;
             }
         }
@@ -522,19 +532,27 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var request = new
+                var request = new NotificationSettingsModel
                 {
                     EmailNotifications = emailNotifications,
                     PushNotifications = pushNotifications,
                     EventReminders = eventReminders
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("api/user/notification-settings", request);
-                return response.IsSuccessStatusCode;
+                var response = await _httpClient.PutAsJsonAsync("api/users/notifications", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    _snackbar.Add("Notification settings updated successfully", Severity.Success);
+                    return true;
+                }
+
+                _snackbar.Add("Failed to update notification settings", Severity.Error);
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating notification settings");
+                _snackbar.Add("An error occurred while updating notification settings", Severity.Error);
                 return false;
             }
         }

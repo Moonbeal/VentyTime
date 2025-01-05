@@ -1,7 +1,9 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using VentyTime.Shared.Models
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
-@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUserService UserService
+@inject IJSRuntime JS
 
 <MudAppBar Elevation="1">
     <MudContainer MaxWidth="MaxWidth.ExtraLarge">
@@ -28,8 +30,15 @@
                         
                         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                             <ActivatorContent>
-                                <MudAvatar Color="Color.Secondary" Style="cursor: pointer;">
-                                    <MudIcon Icon="@Icons.Material.Filled.Person" />
+                                <MudAvatar Style="height: 40px; width: 40px;" Class="ma-2">
+                                    @if (!string.IsNullOrEmpty(currentUser?.AvatarUrl))
+                                    {
+                                        <MudImage Src="@currentUser.AvatarUrl" Alt="Profile" ObjectFit="ObjectFit.Cover" Width="40" Height="40" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Person" />
+                                    }
                                 </MudAvatar>
                             </ActivatorContent>
                             <ChildContent>
@@ -72,6 +81,26 @@
 </MudAppBar>
 
 @code {
+    [Parameter]
+    public EventCallback OnDrawerToggle { get; set; }
+
+    private User? currentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserData();
+        await JS.InvokeVoidAsync("window.addEventListener", "userProfileUpdated", async () =>
+        {
+            await LoadUserData();
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private async Task LoadUserData()
+    {
+        currentUser = await UserService.GetCurrentUserAsync();
+    }
+
     private async Task Logout()
     {
         await AuthService.LogoutAsync();

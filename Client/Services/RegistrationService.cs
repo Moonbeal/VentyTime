@@ -145,18 +145,45 @@ namespace VentyTime.Client.Services
         {
             try
             {
+                Console.WriteLine("Getting user registrations...");
                 var token = await _localStorage.GetItemAsync<string>("authToken");
+                Console.WriteLine($"Auth token exists: {!string.IsNullOrEmpty(token)}");
+                
                 if (string.IsNullOrEmpty(token))
                     return new List<Registration>();
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>("api/registrations/user");
+                Console.WriteLine("Making API request to get registrations...");
+                var response = await _httpClient.GetAsync("api/registrations/user");
+                Console.WriteLine($"API response status: {response.StatusCode}");
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"API error response: {errorContent}");
+                    _snackbar.Add($"Failed to get registrations: {errorContent}", Severity.Error);
+                    return new List<Registration>();
+                }
+
+                var registrations = await response.Content.ReadFromJsonAsync<List<Registration>>();
+                Console.WriteLine($"Registrations loaded: {registrations?.Count ?? 0}");
+                
+                if (registrations != null && registrations.Any())
+                {
+                    foreach (var reg in registrations)
+                    {
+                        Console.WriteLine($"Registration: EventId={reg.EventId}, Event={reg.Event?.Title ?? "null"}, Status={reg.Status}");
+                    }
+                }
+
                 return registrations ?? new List<Registration>();
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Error getting registrations: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 _snackbar.Add($"Error: {ex.Message}", Severity.Error);
                 return new List<Registration>();
             }

@@ -143,6 +143,7 @@ namespace VentyTime.Server.Services
         {
             return await _context.Registrations
                 .Include(r => r.Event)
+                .ThenInclude(e => e.Organizer)
                 .Where(r => r.UserId == userId)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();

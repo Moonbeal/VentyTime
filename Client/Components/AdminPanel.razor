@@ -329,6 +329,7 @@
     {
         try
         {
+            await Task.Delay(100); // Add this line to make the method actually async
             // Implement settings save logic
             Snackbar.Add("Settings saved successfully", Severity.Success);
         }
