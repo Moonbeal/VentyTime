@@ -6,6 +6,7 @@ using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 
 namespace VentyTime.Server.Controllers;
 
@@ -16,13 +17,19 @@ public class UserController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IStorageService _storageService;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly ILogger _logger;
 
     public UserController(
         ApplicationDbContext context,
-        IStorageService storageService)
+        IStorageService storageService,
+        UserManager<ApplicationUser> userManager,
+        ILogger<UserController> logger)
     {
         _context = context;
         _storageService = storageService;
+        _userManager = userManager;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -210,29 +217,53 @@ public class UserController : ControllerBase
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId))
+        try
         {
-            return Unauthorized();
-        }
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                _logger.LogWarning("Unauthorized attempt to change password");
+                return Unauthorized();
+            }
 
-        var user = await _context.Users.FindAsync(userId);
-        if (user == null)
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            if (user == null)
+            {
+                _logger.LogWarning("User not found for email: {UserEmail}", userEmail);
+                return NotFound(new { message = "User not found" });
+            }
+
+            if (string.IsNullOrEmpty(request.CurrentPassword) || string.IsNullOrEmpty(request.NewPassword))
+            {
+                _logger.LogWarning("Invalid password change request for user {UserId}: missing passwords", user.Id);
+                return BadRequest(new { message = "Current password and new password are required" });
+            }
+
+            // Verify current password
+            var isCurrentPasswordValid = await _userManager.CheckPasswordAsync(user, request.CurrentPassword);
+            if (!isCurrentPasswordValid)
+            {
+                _logger.LogWarning("Invalid current password for user {UserId}", user.Id);
+                return BadRequest(new { message = "Current password is incorrect" });
+            }
+
+            // Change password
+            var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+            if (result.Succeeded)
+            {
+                _logger.LogInformation("Password changed successfully for user {UserId}", user.Id);
+                return Ok(new { message = "Password updated successfully" });
+            }
+
+            _logger.LogWarning("Failed to change password for user {UserId}. Errors: {Errors}", 
+                user.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
+            return BadRequest(new { message = "Failed to change password", errors = result.Errors.Select(e => e.Description) });
+        }
+        catch (Exception ex)
         {
-            return NotFound();
+            _logger.LogError(ex, "Error changing password for user {UserEmail}", User.FindFirstValue(ClaimTypes.Email));
+            return StatusCode(500, new { message = "An error occurred while changing the password" });
         }
-
-        if (string.IsNullOrEmpty(request.CurrentPassword) || string.IsNullOrEmpty(request.NewPassword))
-        {
-            return BadRequest("Current password and new password are required");
-        }
-
-        // Here you would typically:
-        // 1. Verify the current password
-        // 2. Hash the new password
-        // 3. Update the user's password hash
-        // For now, we'll just return success
-        return Ok(new { message = "Password updated successfully" });
     }
 
     [HttpPost("notification-settings")]

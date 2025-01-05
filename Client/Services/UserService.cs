@@ -510,14 +510,16 @@ namespace VentyTime.Client.Services
                     NewPassword = newPassword
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("api/users/change-password", request);
+                var response = await _httpClient.PostAsJsonAsync("api/user/change-password", request);
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Password changed successfully", Severity.Success);
                     return true;
                 }
 
-                _snackbar.Add("Failed to change password", Severity.Error);
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Failed to change password: {Error}", error);
+                _snackbar.Add(error, Severity.Error);
                 return false;
             }
             catch (Exception ex)
