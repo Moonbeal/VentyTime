@@ -572,12 +572,27 @@ namespace VentyTime.Server.Services
 
         public async Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId)
         {
-            return await _context.Events
-                .Include(e => e.Organizer)
-                .Include(e => e.Registrations)
-                .Where(e => e.Registrations != null && e.Registrations.Any(r => r.UserId == userId && r.Status == RegistrationStatus.Confirmed))
-                .OrderBy(e => e.StartDate)
-                .ToListAsync();
+            try
+            {
+                _logger.LogInformation("Getting registered events for user {UserId}", userId);
+
+                var events = await _context.Events
+                    .Include(e => e.Organizer)
+                    .Include(e => e.Registrations)
+                    .Where(e => e.Registrations != null && 
+                               e.Registrations.Any(r => r.UserId == userId && 
+                                                      r.Status == RegistrationStatus.Confirmed))
+                    .OrderBy(e => e.StartDate)
+                    .ToListAsync();
+
+                _logger.LogInformation("Found {Count} registered events for user {UserId}", events.Count, userId);
+                return events;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting registered events for user {UserId}", userId);
+                throw;
+            }
         }
 
         public async Task<bool> HasAvailableSpacesAsync(int eventId)

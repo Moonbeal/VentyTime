@@ -320,13 +320,19 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _logger.LogInformation("Getting registered events for user");
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+                
                 if (string.IsNullOrEmpty(userId))
                 {
-                    return Unauthorized();
+                    _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
+                        User.Claims.Select(c => new { c.Type, c.Value }));
+                    return Unauthorized(new { message = "User not authenticated" });
                 }
 
+                _logger.LogInformation("Found user ID: {UserId}", userId);
                 var events = await _eventService.GetRegisteredEventsAsync(userId);
+                _logger.LogInformation("Retrieved {Count} registered events for user {UserId}", events?.Count() ?? 0, userId);
                 return Ok(events);
             }
             catch (Exception ex)

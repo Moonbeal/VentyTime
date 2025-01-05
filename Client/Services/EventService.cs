@@ -252,11 +252,29 @@ namespace VentyTime.Client.Services
         {
             try
             {
+                Console.WriteLine("Getting registered events...");
                 var client = await CreateClientAsync();
-                return await client.GetFromJsonAsync<List<Event>>("api/events/registered") ?? new List<Event>();
+                var response = await client.GetAsync("api/events/registered");
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Error getting registered events. Status: {response.StatusCode}, Error: {errorContent}");
+                    return new List<Event>();
+                }
+
+                var events = await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
+                Console.WriteLine($"Retrieved {events.Count} registered events");
+                return events;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Console.WriteLine($"Error getting registered events: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+                }
                 return new List<Event>();
             }
         }

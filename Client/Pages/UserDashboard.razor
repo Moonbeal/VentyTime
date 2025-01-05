@@ -30,14 +30,34 @@
                         <MudAvatar Style="width: 150px; height: 150px; border: 4px solid var(--mud-palette-background);" Class="mud-elevation-5">
                             @if (!string.IsNullOrEmpty(currentUser?.AvatarUrl))
                             {
-                                <MudImage Src="@currentUser.AvatarUrl" Alt="Profile" ObjectFit="ObjectFit.Cover" Width="150" Height="150" Class="rounded-circle" />
+                                <MudImage Src="@currentUser.AvatarUrl" Alt="User avatar" Style="width: 100%; height: 100%; object-fit: cover;" />
                             }
                             else
                             {
                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
                             }
                         </MudAvatar>
-                        <MudText Typo="Typo.h5" Class="mt-4 mb-1">@currentUser?.Email</MudText>
+                        <MudText Typo="Typo.h5" Class="mt-4">@currentUser?.UserName</MudText>
+                        @if (!string.IsNullOrEmpty(currentUser?.FirstName) || !string.IsNullOrEmpty(currentUser?.LastName))
+                        {
+                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-1">
+                                @($"{currentUser?.FirstName} {currentUser?.LastName}")
+                            </MudText>
+                        }
+                        @if (!string.IsNullOrEmpty(currentUser?.PhoneNumber))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                <MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" Class="mr-1" />
+                                @currentUser.PhoneNumber
+                            </MudText>
+                        }
+                        @if (!string.IsNullOrEmpty(currentUser?.Email))
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                <MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" Class="mr-1" />
+                                @currentUser.Email
+                            </MudText>
+                        }
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
                             Member since @currentUser?.CreatedAt.ToString("MMMM yyyy")
                         </MudText>
@@ -67,7 +87,7 @@
             <MudItem xs="12" sm="12" md="8" lg="9">
                 <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mud-elevation-4">
                     <MudTabPanel Text="Upcoming Events" Icon="@Icons.Material.Filled.Event">
-                        @if (!registeredEvents.Any())
+                        @if (!registeredEvents.Where(e => e.StartDate > DateTime.Now).Any())
                         {
                             <div class="d-flex flex-column align-center py-8">
                                 <MudIcon Icon="@Icons.Material.Filled.Event" 
@@ -75,6 +95,87 @@
                                         Size="Size.Large" 
                                         Class="mb-4" />
                                 <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">No Upcoming Events</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                                    You haven't registered for any upcoming events yet.
+                                </MudText>
+                                <MudButton Variant="Variant.Filled"
+                                          Color="Color.Primary"
+                                          OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                                    Browse Events
+                                </MudButton>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudGrid Spacing="4">
+                                @foreach (var evt in registeredEvents.Where(e => e.StartDate > DateTime.Now).OrderBy(e => e.StartDate))
+                                {
+                                    <MudItem xs="12" sm="6" md="6">
+                                        <MudCard Elevation="2" Class="rounded">
+                                            <MudCardHeader>
+                                                <CardHeaderContent>
+                                                    <MudText Typo="Typo.h6" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                        @evt.Title
+                                                    </MudText>
+                                                </CardHeaderContent>
+                                                <CardHeaderActions>
+                                                    @if (evt.StartDate > DateTime.Now)
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Success"
+                                                                Class="rounded-pill">
+                                                            Upcoming
+                                                        </MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Default"
+                                                                Class="rounded-pill">
+                                                            Past
+                                                        </MudChip>
+                                                    }
+                                                </CardHeaderActions>
+                                            </MudCardHeader>
+                                            <MudCardContent>
+                                                <div class="d-flex flex-column gap-2">
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2">
+                                                            @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                                                        </MudText>
+                                                    </div>
+                                                    <div class="d-flex align-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
+                                                        <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                            @evt.Location
+                                                        </MudText>
+                                                    </div>
+                                                </div>
+                                            </MudCardContent>
+                                            <MudCardActions Class="d-flex justify-end">
+                                                <MudButton Variant="Variant.Text"
+                                                          Color="Color.Primary"
+                                                          OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
+                                                    View Details
+                                                </MudButton>
+                                            </MudCardActions>
+                                        </MudCard>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        }
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="All Registered Events" Icon="@Icons.Material.Filled.EventNote">
+                        @if (!registeredEvents.Any())
+                        {
+                            <div class="d-flex flex-column align-center py-8">
+                                <MudIcon Icon="@Icons.Material.Filled.Event" 
+                                        Color="Color.Secondary" 
+                                        Size="Size.Large" 
+                                        Class="mb-4" />
+                                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">No Registered Events</MudText>
                                 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
                                     You haven't registered for any events yet.
                                 </MudText>
@@ -88,7 +189,7 @@
                         else
                         {
                             <MudGrid Spacing="4">
-                                @foreach (var evt in registeredEvents.OrderBy(e => e.StartDate))
+                                @foreach (var evt in registeredEvents.OrderByDescending(e => e.StartDate))
                                 {
                                     <MudItem xs="12" sm="6" md="6">
                                         <MudCard Elevation="2" Class="rounded">
@@ -99,11 +200,22 @@
                                                     </MudText>
                                                 </CardHeaderContent>
                                                 <CardHeaderActions>
-                                                    <MudChip Size="Size.Small"
-                                                            Color="@(evt.StartDate > DateTime.Now ? Color.Success : Color.Default)"
-                                                            Class="rounded-pill">
-                                                        @(evt.StartDate > DateTime.Now ? "Upcoming" : "Past")
-                                                    </MudChip>
+                                                    @if (evt.StartDate > DateTime.Now)
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Success"
+                                                                Class="rounded-pill">
+                                                            Upcoming
+                                                        </MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Default"
+                                                                Class="rounded-pill">
+                                                            Past
+                                                        </MudChip>
+                                                    }
                                                 </CardHeaderActions>
                                             </MudCardHeader>
                                             <MudCardContent>
@@ -169,11 +281,22 @@
                                                     </MudText>
                                                 </CardHeaderContent>
                                                 <CardHeaderActions>
-                                                    <MudChip Size="Size.Small"
-                                                            Color="@(evt.StartDate > DateTime.Now ? Color.Success : Color.Default)"
-                                                            Class="rounded-pill">
-                                                        @(evt.StartDate > DateTime.Now ? "Upcoming" : "Past")
-                                                    </MudChip>
+                                                    @if (evt.StartDate > DateTime.Now)
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Success"
+                                                                Class="rounded-pill">
+                                                            Upcoming
+                                                        </MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudChip Size="Size.Small"
+                                                                Color="Color.Default"
+                                                                Class="rounded-pill">
+                                                            Past
+                                                        </MudChip>
+                                                    }
                                                 </CardHeaderActions>
                                             </MudCardHeader>
                                             <MudCardContent>
