@@ -75,15 +75,15 @@
                         @if (!registrations.Any())
                         {
                             <div class="d-flex flex-column align-center py-8">
-                                <MudIcon Icon="@Icons.Material.Filled.EventBusy" 
+                                <MudIcon Icon="@Icons.Material.Filled.Event" 
                                         Color="Color.Secondary" 
                                         Size="Size.Large" 
                                         Class="mb-4" />
                                 <MudText Color="Color.Secondary" Class="mb-4">You haven't registered for any events yet</MudText>
                                 <MudButton Variant="Variant.Filled" 
                                          Color="Color.Primary"
-                                         OnClick="@(() => NavigationManager.NavigateTo("/"))">
-                                    Browse Events
+                                         OnClick="@(() => NavigationManager.NavigateTo("/events"))">
+                                    BROWSE EVENTS
                                 </MudButton>
                             </div>
                         }
@@ -144,8 +144,8 @@
                             <MudList Clickable="true">
                                 @foreach (var evt in organizedEvents.OrderByDescending(e => e?.StartDate ?? DateTime.MinValue))
                                 {
-                                    <MudListItem OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
-                                        <div class="d-flex" style="gap: 16px;">
+                                    <MudListItem>
+                                        <div class="d-flex" style="gap: 16px; cursor: pointer;" @onclick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
                                             @if (!string.IsNullOrEmpty(evt?.ImageUrl))
                                             {
                                                 <MudImage ObjectFit="ObjectFit.Cover"
