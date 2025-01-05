@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Logging;
 using MudBlazor;
 using VentyTime.Client.Auth;
@@ -344,6 +345,25 @@ namespace VentyTime.Client.Services
             }
         }
 
+        public async Task<bool> UpdateUserAsync(ApplicationUser user)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"api/user/{user.Id}", user);
+                if (response.IsSuccessStatusCode)
+                {
+                    // Оновлюємо локальний стан користувача
+                    await _localStorage.SetItemAsync("user", JsonSerializer.Serialize(user));
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public async Task<List<Event>> GetUserEventsAsync()
         {
             try
@@ -465,9 +485,24 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<HttpResponseMessage> UploadAvatarAsync(string userId, MultipartFormDataContent content)
+        public async Task<HttpResponseMessage> UploadAvatarAsync(string userId, IBrowserFile file)
         {
-            return await _httpClient.PostAsync($"api/user/{userId}/avatar", content);
+            try
+            {
+                // Create form data
+                var content = new MultipartFormDataContent();
+                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "file", file.Name);
+
+                // Upload the file
+                return await _httpClient.PostAsync($"api/user/avatar", content);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar");
+                throw;
+            }
         }
 
         public async Task<bool> UpdateProfileAsync(string firstName, string lastName, string email, string phoneNumber)
@@ -482,14 +517,16 @@ namespace VentyTime.Client.Services
                     PhoneNumber = phoneNumber
                 };
 
-                var response = await _httpClient.PutAsJsonAsync($"api/users/profile", request);
+                var response = await _httpClient.PutAsJsonAsync($"api/user/profile", request);
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Profile updated successfully", Severity.Success);
                     return true;
                 }
 
-                _snackbar.Add("Failed to update profile", Severity.Error);
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Failed to update profile: {Error}", error);
+                _snackbar.Add(error, Severity.Error);
                 return false;
             }
             catch (Exception ex)
@@ -530,7 +567,13 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<bool> UpdateNotificationSettingsAsync(bool emailNotifications, bool pushNotifications, bool eventReminders)
+        public async Task<bool> UpdateNotificationSettingsAsync(
+            bool emailNotifications, 
+            bool pushNotifications, 
+            bool eventReminders,
+            bool newFollowerNotifications,
+            bool newLikeNotifications,
+            bool newCommentNotifications)
         {
             try
             {
@@ -538,7 +581,10 @@ namespace VentyTime.Client.Services
                 {
                     EmailNotifications = emailNotifications,
                     PushNotifications = pushNotifications,
-                    EventReminders = eventReminders
+                    EventReminders = eventReminders,
+                    NewFollowerNotifications = newFollowerNotifications,
+                    NewLikeNotifications = newLikeNotifications,
+                    NewCommentNotifications = newCommentNotifications
                 };
 
                 var response = await _httpClient.PutAsJsonAsync("api/users/notifications", request);
@@ -556,6 +602,26 @@ namespace VentyTime.Client.Services
                 _logger.LogError(ex, "Error updating notification settings");
                 _snackbar.Add("An error occurred while updating notification settings", Severity.Error);
                 return false;
+            }
+        }
+
+        public async Task<NotificationSettingsModel?> GetNotificationSettingsAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("api/users/notifications");
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadFromJsonAsync<NotificationSettingsModel>();
+                }
+
+                _logger.LogWarning("Failed to get notification settings");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting notification settings");
+                return null;
             }
         }
     }

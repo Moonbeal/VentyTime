@@ -161,41 +161,81 @@ public class UserController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("{id}/avatar")]
-    public async Task<IActionResult> UploadAvatar(string id, IFormFile file)
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request)
     {
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (id != currentUserId && !User.IsInRole("Admin"))
-        {
-            return Forbid();
-        }
-
-        var user = await _context.Users.FindAsync(id);
-        if (user == null)
-        {
-            return NotFound();
-        }
-
-        if (file == null || file.Length == 0)
-        {
-            return BadRequest("No file uploaded");
-        }
-
-        // Validate file type
-        var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif" };
-        if (!allowedTypes.Contains(file.ContentType.ToLower()))
-        {
-            return BadRequest("Invalid file type. Only JPEG, PNG and GIF are allowed.");
-        }
-
         try
         {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                return Unauthorized();
+            }
+
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+            user.PhoneNumber = request.PhoneNumber;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var result = await _userManager.UpdateAsync(user);
+            if (result.Succeeded)
+            {
+                return Ok();
+            }
+
+            return BadRequest(new { message = "Failed to update profile", errors = result.Errors.Select(e => e.Description) });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating profile for user {UserEmail}", User.FindFirstValue(ClaimTypes.Email));
+            return StatusCode(500, new { message = "An error occurred while updating the profile" });
+        }
+    }
+
+    [HttpPost("avatar")]
+    public async Task<IActionResult> UploadAvatar(IFormFile file)
+    {
+        try
+        {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                return Unauthorized();
+            }
+
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+
+            // Validate file type
+            var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif" };
+            if (!allowedTypes.Contains(file.ContentType.ToLower()))
+            {
+                return BadRequest("Invalid file type. Only JPEG, PNG and GIF are allowed.");
+            }
+
+            // Create a unique file name
+            var extension = Path.GetExtension(file.FileName);
+            var fileName = $"avatars/{user.Id}/{Guid.NewGuid()}{extension}";
+
             // Upload file to storage
-            var fileName = $"avatars/{id}/{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
             var avatarUrl = await _storageService.UploadFileAsync(file.OpenReadStream(), fileName, file.ContentType);
 
             // Delete old avatar if it exists
-            if (!string.IsNullOrEmpty(user.AvatarUrl) && user.AvatarUrl != "/images/default-profile.png")
+            if (!string.IsNullOrEmpty(user.AvatarUrl) && !user.AvatarUrl.Contains("default-profile"))
             {
                 var oldFileName = user.AvatarUrl.Replace("/uploads/", "");
                 await _storageService.DeleteFileAsync(oldFileName);
@@ -210,6 +250,7 @@ public class UserController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error uploading avatar for user {UserEmail}", User.FindFirstValue(ClaimTypes.Email));
             return StatusCode(500, $"An error occurred while uploading the file: {ex.Message}");
         }
     }

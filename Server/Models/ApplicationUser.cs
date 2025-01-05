@@ -26,6 +26,14 @@ namespace VentyTime.Server.Models
 
         public string FullName => $"{FirstName} {LastName}".Trim();
 
+        // Notification settings
+        public bool EmailNotifications { get; set; } = true;
+        public bool PushNotifications { get; set; } = true;
+        public bool EventReminders { get; set; } = true;
+        public bool NewFollowerNotifications { get; set; } = true;
+        public bool NewLikeNotifications { get; set; } = true;
+        public bool NewCommentNotifications { get; set; } = true;
+
         // Navigation properties
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
         public virtual ICollection<Registration> Registrations { get; set; } = new List<Registration>();

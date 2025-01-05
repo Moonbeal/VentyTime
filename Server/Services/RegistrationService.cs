@@ -142,8 +142,8 @@ namespace VentyTime.Server.Services
         public async Task<IEnumerable<Registration>> GetRegistrationsByUserAsync(string userId)
         {
             return await _context.Registrations
-                .Include(r => r.Event)
-                .ThenInclude(e => e.Organizer)
+                .Include(r => r.Event!)
+                .ThenInclude(e => e.Organizer!)
                 .Where(r => r.UserId == userId)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
@@ -238,13 +238,9 @@ namespace VentyTime.Server.Services
                 .FirstOrDefaultAsync(e => e.Id == eventId)
                 ?? throw new KeyNotFoundException($"Event with ID {eventId} not found");
 
-            if (@event.Registrations == null)
-            {
-                return false;
-            }
-
+            var registrations = @event.Registrations ?? new List<Registration>();
             return @event.MaxAttendees > 0 && 
-                   @event.Registrations.Count(r => r.Status != RegistrationStatus.Cancelled) >= @event.MaxAttendees;
+                   registrations.Count(r => r.Status != RegistrationStatus.Cancelled) >= @event.MaxAttendees;
         }
     }
 }

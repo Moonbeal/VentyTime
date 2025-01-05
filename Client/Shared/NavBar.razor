@@ -4,6 +4,7 @@
 @inject IAuthService AuthService
 @inject IUserService UserService
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <MudAppBar Elevation="1">
     <MudContainer MaxWidth="MaxWidth.ExtraLarge">
@@ -45,7 +46,7 @@
                                 <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/dashboard"))">Profile</MudMenuItem>
                                 <AuthorizeView Roles="Admin, Organizer">
                                     <Authorized Context="innerAuth">
-                                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/create-event"))">Create Event</MudMenuItem>
+                                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/events/create"))">Create Event</MudMenuItem>
                                     </Authorized>
                                 </AuthorizeView>
                                 <AuthorizeView Roles="Admin">
@@ -81,24 +82,22 @@
 </MudAppBar>
 
 @code {
-    [Parameter]
-    public EventCallback OnDrawerToggle { get; set; }
-
-    private User? currentUser;
+    private ApplicationUser? currentUser;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadUserData();
-        await JS.InvokeVoidAsync("window.addEventListener", "userProfileUpdated", async () =>
+        try
         {
-            await LoadUserData();
-            await InvokeAsync(StateHasChanged);
-        });
-    }
-
-    private async Task LoadUserData()
-    {
-        currentUser = await UserService.GetCurrentUserAsync();
+            var userId = await UserService.GetCurrentUserIdAsync();
+            if (!string.IsNullOrEmpty(userId))
+            {
+                currentUser = await UserService.GetUserByIdAsync(userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error loading user data", Severity.Error);
+        }
     }
 
     private async Task Logout()

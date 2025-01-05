@@ -34,6 +34,14 @@ namespace VentyTime.Shared.Models
         public DateTime? UpdatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }
 
+        // Notification settings
+        public bool EmailNotifications { get; set; } = true;
+        public bool PushNotifications { get; set; } = true;
+        public bool EventReminders { get; set; } = true;
+        public bool NewFollowerNotifications { get; set; } = true;
+        public bool NewLikeNotifications { get; set; } = true;
+        public bool NewCommentNotifications { get; set; } = true;
+
         [JsonIgnore]
         public virtual ICollection<Event> OrganizedEvents { get; set; } = new List<Event>();
 

@@ -1,6 +1,6 @@
 namespace VentyTime.Shared.Models
 {
-    public class NotificationSettingsModel
+    public class NotificationSettings
     {
         public bool EmailNotifications { get; set; }
         public bool PushNotifications { get; set; }

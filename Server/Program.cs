@@ -45,6 +45,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register ImageService
 builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IStorageService, LocalStorageService>();
 
 // Configure file upload limits
 builder.Services.Configure<FormOptions>(options =>
@@ -166,6 +167,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IRegistrationService, RegistrationService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<IStorageService, LocalStorageService>();
 builder.Services.AddHttpContextAccessor();
@@ -311,7 +314,7 @@ app.UseStaticFiles(new StaticFileOptions
     RequestPath = "/images"
 });
 
-// Configure static files for uploads
+// Serve files from the uploads directory
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(

@@ -19,5 +19,13 @@ namespace VentyTime.Shared.Models
         public string Website { get; set; } = string.Empty;
         public List<string> OrganizedEventIds { get; set; } = new();
         public List<string> RegisteredEventIds { get; set; } = new();
+
+        // Notification settings
+        public bool EmailNotifications { get; set; }
+        public bool PushNotifications { get; set; }
+        public bool EventReminders { get; set; }
+        public bool NewFollowerNotifications { get; set; }
+        public bool NewLikeNotifications { get; set; }
+        public bool NewCommentNotifications { get; set; }
     }
 }
