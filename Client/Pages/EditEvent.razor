@@ -230,7 +230,7 @@
             if (eventModel == null)
             {
                 Snackbar.Add("Event not found", Severity.Error);
-                NavigationManager.NavigateTo("/events");
+                NavigationManager.NavigateTo("/");
                 return;
             }
 
@@ -238,7 +238,7 @@
             if (string.IsNullOrEmpty(userId) || userId != eventModel.OrganizerId)
             {
                 Snackbar.Add("You don't have permission to edit this event", Severity.Error);
-                NavigationManager.NavigateTo("/events");
+                NavigationManager.NavigateTo($"/event/{Id}");
                 return;
             }
         }
@@ -262,7 +262,7 @@
             if (result != null)
             {
                 Snackbar.Add("Event updated successfully!", Severity.Success);
-                NavigationManager.NavigateTo($"/events/{result.Id}");
+                NavigationManager.NavigateTo($"/event/{result.Id}");
             }
             else
             {
