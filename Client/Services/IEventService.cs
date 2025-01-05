@@ -9,7 +9,7 @@ namespace VentyTime.Client.Services
         Task<Event?> GetEventByIdAsync(int id);
         Task<Event> CreateEventAsync(Event eventItem);
         Task<Event> UpdateEventAsync(Event eventItem);
-        Task<bool> DeleteEventAsync(int id);
+        Task<(bool success, string? error)> DeleteEventAsync(int id);
         Task<List<Event>> GetEventsByOrganizerIdAsync(string organizerId);
         Task<List<Event>> SearchEventsAsync(string query);
         Task<List<Event>> GetUpcomingEventsAsync();

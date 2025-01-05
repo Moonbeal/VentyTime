@@ -159,18 +159,35 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<bool> DeleteEventAsync(int id)
+        public async Task<(bool success, string? error)> DeleteEventAsync(int id)
         {
             try
             {
                 var client = await CreateClientAsync();
                 var response = await client.DeleteAsync($"api/events/{id}");
-                return response.IsSuccessStatusCode;
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    return (true, null);
+                }
+                
+                var errorContent = await response.Content.ReadAsStringAsync();
+                var error = response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.BadRequest => errorContent,
+                    System.Net.HttpStatusCode.Unauthorized => "You are not authorized to delete this event",
+                    System.Net.HttpStatusCode.Forbidden => "You do not have permission to delete this event",
+                    System.Net.HttpStatusCode.NotFound => "Event not found",
+                    _ => "Failed to delete event"
+                };
+                
+                Console.WriteLine($"Error deleting event: {error}");
+                return (false, error);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error deleting event: {ex.Message}");
-                return false;
+                return (false, "An unexpected error occurred while deleting the event");
             }
         }
 

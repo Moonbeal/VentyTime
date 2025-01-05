@@ -275,7 +275,7 @@
         {
             try
             {
-                var success = await EventService.DeleteEventAsync(eventId);
+                var (success, error) = await EventService.DeleteEventAsync(eventId);
                 if (success)
                 {
                     Snackbar.Add("Event deleted successfully", Severity.Success);
@@ -283,12 +283,12 @@
                 }
                 else
                 {
-                    Snackbar.Add("Failed to delete event", Severity.Error);
+                    Snackbar.Add(error ?? "Failed to delete event", Severity.Error);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Snackbar.Add("Error deleting event", Severity.Error);
+                Snackbar.Add($"Error deleting event: {ex.Message}", Severity.Error);
             }
         }
     }
