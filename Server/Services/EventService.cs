@@ -52,21 +52,30 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Getting all events");
+                if (_cache.TryGetValue(EventsCacheKey, out List<Event>? cachedEvents) && cachedEvents != null)
+                {
+                    return cachedEvents;
+                }
 
                 var events = await _context.Events
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
                     .OrderByDescending(e => e.CreatedAt)
+                    .AsNoTracking()
                     .ToListAsync();
 
                 _logger.LogInformation("Retrieved {Count} events", events.Count);
+
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(CacheExpirationMinutes));
+                
+                _cache.Set(EventsCacheKey, events, cacheOptions);
 
                 return events;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events");
+                _logger.LogError(ex, "Error retrieving events");
                 throw;
             }
         }
@@ -76,32 +85,30 @@ namespace VentyTime.Server.Services
             try
             {
                 var cacheKey = $"{EventCacheKeyPrefix}{id}";
-
                 if (_cache.TryGetValue(cacheKey, out Event? cachedEvent))
                 {
-                    _logger.LogInformation("Retrieved event {EventId} from cache", id);
                     return cachedEvent;
                 }
 
                 var @event = await _context.Events
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.Id == id);
 
                 if (@event != null)
                 {
                     var cacheOptions = new MemoryCacheEntryOptions()
                         .SetAbsoluteExpiration(TimeSpan.FromMinutes(CacheExpirationMinutes));
-
+                    
                     _cache.Set(cacheKey, @event, cacheOptions);
-                    _logger.LogInformation("Cached event {EventId}", id);
                 }
 
                 return @event;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting event {EventId}", id);
+                _logger.LogError(ex, "Error retrieving event {EventId}", id);
                 throw;
             }
         }
@@ -325,37 +332,26 @@ namespace VentyTime.Server.Services
                     .FirstOrDefaultAsync(e => e.Id == id) ?? 
                     throw new KeyNotFoundException($"Event with ID {id} not found");
 
-                if (!await IsUserAuthorizedForEvent(id, userId, new[] { "Admin", "Organizer" }))
+                // Check if user has permission to delete the event
+                if (@event.CreatorId != userId && @event.OrganizerId != userId)
                 {
-                    throw new UnauthorizedAccessException("User is not authorized to delete this event");
+                    throw new UnauthorizedAccessException("You do not have permission to delete this event");
                 }
 
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                try
+                // Check if event has any confirmed registrations
+                if (@event.Registrations != null && @event.Registrations.Any(r => r.Status == RegistrationStatus.Confirmed))
                 {
-                    // Видаляємо всі реєстрації, якщо вони є
-                    if (@event.Registrations != null && @event.Registrations.Any())
-                    {
-                        _context.Registrations.RemoveRange(@event.Registrations);
-                    }
-
-                    _context.Events.Remove(@event);
-                    await _context.SaveChangesAsync();
-                    await transaction.CommitAsync();
-
-                    InvalidateEventCache(id);
-                    _logger.LogInformation("Successfully deleted event {EventId} and all its registrations", id);
+                    throw new InvalidOperationException("Cannot delete event with confirmed registrations");
                 }
-                catch (Exception ex)
-                {
-                    await transaction.RollbackAsync();
-                    _logger.LogError(ex, "Error deleting event {EventId}", id);
-                    throw;
-                }
+
+                _context.Events.Remove(@event);
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Event {EventId} deleted successfully", id);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting event");
+                _logger.LogError(ex, "Error deleting event {EventId}", id);
                 throw;
             }
         }
@@ -364,13 +360,9 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Searching events with query: {Query}", query);
-                
-                var cacheKey = $"Search_{query.ToLower()}";
-                if (_cache.TryGetValue(cacheKey, out List<Event>? cachedResults))
+                if (string.IsNullOrWhiteSpace(query))
                 {
-                    _logger.LogInformation("Retrieved {Count} search results from cache", cachedResults?.Count ?? 0);
-                    return cachedResults ??= new List<Event>();
+                    return await GetEventsAsync();
                 }
 
                 query = query.ToLower();
@@ -380,22 +372,18 @@ namespace VentyTime.Server.Services
                     .Where(e => e.IsActive &&
                            (e.Title.ToLower().Contains(query) ||
                             e.Description.ToLower().Contains(query) ||
-                            e.Category.ToLower().Contains(query) ||
                             e.Location.ToLower().Contains(query)))
+                    .OrderByDescending(e => e.StartDate)
+                    .Take(20)
                     .AsNoTracking()
                     .ToListAsync();
 
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
-                
-                _cache.Set(cacheKey, events, cacheOptions);
-                _logger.LogInformation("Retrieved and cached {Count} search results from database", events.Count);
-
+                _logger.LogInformation("Found {Count} events matching query '{Query}'", events.Count, query);
                 return events;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error searching events");
+                _logger.LogError(ex, "Error searching events with query '{Query}'", query);
                 throw;
             }
         }
@@ -404,20 +392,6 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Getting upcoming events with count: {Count}", count);
-                
-                if (count <= 0 || count > 50)
-                {
-                    throw new ArgumentException("Count must be between 1 and 50", nameof(count));
-                }
-
-                var cacheKey = $"UpcomingEvents_{count}";
-                if (_cache.TryGetValue(cacheKey, out List<Event>? cachedEvents))
-                {
-                    _logger.LogInformation("Retrieved {Count} upcoming events from cache", cachedEvents?.Count ?? 0);
-                    return cachedEvents ??= new List<Event>();
-                }
-
                 var now = DateTime.UtcNow;
                 var events = await _context.Events
                     .Include(e => e.Registrations)
@@ -427,17 +401,12 @@ namespace VentyTime.Server.Services
                     .AsNoTracking()
                     .ToListAsync();
 
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
-                
-                _cache.Set(cacheKey, events, cacheOptions);
-                _logger.LogInformation("Retrieved and cached {Count} upcoming events from database", events.Count);
-
+                _logger.LogInformation("Retrieved {Count} upcoming events", events.Count);
                 return events;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting upcoming events");
+                _logger.LogError(ex, "Error retrieving upcoming events");
                 throw;
             }
         }
@@ -489,18 +458,19 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Getting events for organizer {OrganizerId}", organizerId);
+                _logger.LogInformation("Retrieving events for organizer {OrganizerId}", organizerId);
                 
                 return await _context.Events
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
                     .Where(e => e.OrganizerId == organizerId)
                     .OrderByDescending(e => e.StartDate)
+                    .AsNoTracking()
                     .ToListAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting events for organizer {OrganizerId}", organizerId);
+                _logger.LogError(ex, "Error retrieving events for organizer {OrganizerId}", organizerId);
                 throw;
             }
         }
@@ -509,7 +479,7 @@ namespace VentyTime.Server.Services
         {
             // Load event with active registrations
             var @event = await _context.Events
-                .Include(e => e.Registrations)
+                .Include(e => e.Registrations!)
                 .FirstOrDefaultAsync(e => e.Id == eventId);
 
             if (@event == null)
@@ -571,7 +541,7 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                _logger.LogInformation("Getting registered events for user {UserId}", userId);
+                _logger.LogInformation("Retrieving registered events for user {UserId}", userId);
 
                 var events = await _context.Events
                     .Include(e => e.Organizer)
@@ -579,7 +549,8 @@ namespace VentyTime.Server.Services
                     .Where(e => e.Registrations != null && 
                                e.Registrations.Any(r => r.UserId == userId && 
                                                       r.Status == RegistrationStatus.Confirmed))
-                    .OrderBy(e => e.StartDate)
+                    .OrderByDescending(e => e.StartDate)
+                    .AsNoTracking()
                     .ToListAsync();
 
                 _logger.LogInformation("Found {Count} registered events for user {UserId}", events.Count, userId);
@@ -587,7 +558,7 @@ namespace VentyTime.Server.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting registered events for user {UserId}", userId);
+                _logger.LogError(ex, "Error retrieving registered events for user {UserId}", userId);
                 throw;
             }
         }
@@ -595,7 +566,7 @@ namespace VentyTime.Server.Services
         public async Task<bool> HasAvailableSpacesAsync(int eventId)
         {
             var eventItem = await _context.Events
-                .Include(e => e.Registrations)
+                .Include(e => e.Registrations!)
                 .FirstOrDefaultAsync(e => e.Id == eventId);
 
             if (eventItem == null || eventItem.Registrations == null)
@@ -609,25 +580,27 @@ namespace VentyTime.Server.Services
 
         public async Task<IEnumerable<Event>> GetPopularEventsAsync()
         {
-            const string cacheKey = "popular_events";
-            
-            if (_cache.TryGetValue(cacheKey, out IEnumerable<Event>? cachedEvents) && cachedEvents is not null)
+            try
             {
-                return cachedEvents;
+                _logger.LogInformation("Retrieving popular events");
+
+                var events = await _context.Events
+                    .Include(e => e.Registrations)
+                    .OrderByDescending(e => e.Registrations != null 
+                        ? e.Registrations.Count(r => r.Status == RegistrationStatus.Confirmed) 
+                        : 0)
+                    .Take(10)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                _logger.LogInformation("Retrieved {Count} popular events", events.Count);
+                return events;
             }
-
-            var events = await _context.Events
-                .Include(e => e.Registrations)
-                .OrderByDescending(e => e.Registrations != null ? e.Registrations.Count : 0)
-                .Take(10)
-                .ToListAsync();
-
-            var cacheOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
-
-            _cache.Set(cacheKey, events, cacheOptions);
-
-            return events;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving popular events");
+                throw;
+            }
         }
 
         public async Task SeedTestEventsAsync()
@@ -732,8 +705,11 @@ namespace VentyTime.Server.Services
                     .Include(r => r.Event)
                     .Where(r => r.EventId == eventId)
                     .OrderByDescending(r => r.CreatedAt)
+                    .AsNoTracking()
                     .ToListAsync();
 
+                _logger.LogInformation("Retrieved {Count} registrations for event {EventId}", registrations.Count, eventId);
+                
                 return registrations;
             }
             catch (Exception ex)

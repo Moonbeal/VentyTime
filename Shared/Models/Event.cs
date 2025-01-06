@@ -99,6 +99,11 @@ namespace VentyTime.Shared.Models
         [DataType(DataType.DateTime)]
         public DateTime? UpdatedAt { get; set; }
 
+        [NotMapped]
+        public int CurrentParticipants => Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
+
+        public virtual ICollection<Registration>? Registrations { get; set; }
+
         [Required(ErrorMessage = "Creator ID is required")]
         public string CreatorId { get; set; } = string.Empty;
 
@@ -113,14 +118,10 @@ namespace VentyTime.Shared.Models
         public virtual ApplicationUser? Organizer { get; set; }
 
         [JsonIgnore]
-        public virtual ICollection<Registration>? Registrations { get; set; }
-
-        [JsonIgnore]
         public virtual ICollection<Comment>? Comments { get; set; }
 
         // Computed properties
         public bool IsFull => MaxAttendees > 0 && CurrentParticipants >= MaxAttendees;
-        public int CurrentParticipants => Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
         public bool IsRegistrationOpen => MaxAttendees == 0 || CurrentParticipants < MaxAttendees;
 

@@ -109,16 +109,16 @@
                             <HeaderContent>
                                 <MudTh>Title</MudTh>
                                 <MudTh>Date</MudTh>
-                                <MudTh>Status</MudTh>
+                                <MudTh>Attendance</MudTh>
                                 <MudTh>Actions</MudTh>
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd>@context.Title</MudTd>
                                 <MudTd>@context.StartDate.ToShortDateString()</MudTd>
                                 <MudTd>
-                                    <MudChip Color="@(context.IsActive ? Color.Success : Color.Error)" 
+                                    <MudChip Color="@(context.CurrentParticipants >= context.MaxAttendees && context.MaxAttendees > 0 ? Color.Error : Color.Success)" 
                                             Size="Size.Small">
-                                        @(context.IsActive ? "Active" : "Cancelled")
+                                        @context.CurrentParticipants / @(context.MaxAttendees == 0 ? "∞" : context.MaxAttendees.ToString())
                                     </MudChip>
                                 </MudTd>
                                 <MudTd>
