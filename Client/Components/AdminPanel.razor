@@ -6,235 +6,152 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
+@inject IDialogService DialogService
 @attribute [Authorize(Roles = "Admin")]
 
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">System Overview</h5>
-                    <div class="stats-list">
-                        <div class="stat-item">
-                            <span class="stat-label">Total Users</span>
-                            <span class="stat-value">@statistics.TotalUsers</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Active Events</span>
-                            <span class="stat-value">@statistics.ActiveEvents</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Total Revenue</span>
-                            <span class="stat-value">$@statistics.TotalRevenue.ToString("F2")</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card mt-3">
-                <div class="card-body">
-                    <h5 class="card-title">Quick Actions</h5>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Users">
-                            <i class="fas fa-users"></i> Manage Users
-                        </button>
-                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Events">
-                            <i class="fas fa-calendar"></i> Manage Events
-                        </button>
-                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Reports">
-                            <i class="fas fa-chart-bar"></i> View Reports
-                        </button>
-                        <button class="btn btn-primary" @onclick="() => activeTab = AdminTab.Settings">
-                            <i class="fas fa-cog"></i> System Settings
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-9">
-            <div class="card">
-                <div class="card-body">
-                    <ul class="nav nav-tabs">
-                        <li class="nav-item">
-                            <button class="nav-link @(activeTab == AdminTab.Users ? "active" : "")"
-                                    @onclick="() => activeTab = AdminTab.Users">
-                                Users
-                            </button>
-                        </li>
-                        <li class="nav-item">
-                            <button class="nav-link @(activeTab == AdminTab.Events ? "active" : "")"
-                                    @onclick="() => activeTab = AdminTab.Events">
-                                Events
-                            </button>
-                        </li>
-                        <li class="nav-item">
-                            <button class="nav-link @(activeTab == AdminTab.Reports ? "active" : "")"
-                                    @onclick="() => activeTab = AdminTab.Reports">
-                                Reports
-                            </button>
-                        </li>
-                        <li class="nav-item">
-                            <button class="nav-link @(activeTab == AdminTab.Settings ? "active" : "")"
-                                    @onclick="() => activeTab = AdminTab.Settings">
-                                Settings
-                            </button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content mt-3">
-                        @switch (activeTab)
-                        {
-                            case AdminTab.Users:
-                                <div class="mb-3">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" placeholder="Search users..."
-                                               @bind="userSearchTerm" @bind:event="oninput" />
-                                        <button class="btn btn-outline-secondary" @onclick="SearchUsers">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <MudTable Items="@filteredUsers" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
-                                    <HeaderContent>
-                                        <MudTh>Username</MudTh>
-                                        <MudTh>Email</MudTh>
-                                        <MudTh>Role</MudTh>
-                                        <MudTh>Actions</MudTh>
-                                    </HeaderContent>
-                                    <RowTemplate>
-                                        <MudTd DataLabel="Username">@context.UserName</MudTd>
-                                        <MudTd DataLabel="Email">@context.Email</MudTd>
-                                        <MudTd DataLabel="Role">@(GetUserRole(context))</MudTd>
-                                        <MudTd>
-                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                     OnClick="@(() => ViewUserDetails(context))">
-                                                View
-                                            </MudButton>
-                                        </MudTd>
-                                    </RowTemplate>
-                                </MudTable>
-                                break;
-
-                            case AdminTab.Events:
-                                <div class="mb-3">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" placeholder="Search events..."
-                                               @bind="eventSearchTerm" @bind:event="oninput" />
-                                        <button class="btn btn-outline-secondary" @onclick="SearchEvents">
-                                            <i class="fas fa-search"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <MudTable Items="@filteredEvents" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
-                                    <HeaderContent>
-                                        <MudTh>Title</MudTh>
-                                        <MudTh>Date & Time</MudTh>
-                                        <MudTh>Status</MudTh>
-                                        <MudTh>Actions</MudTh>
-                                    </HeaderContent>
-                                    <RowTemplate>
-                                        <MudTd DataLabel="Title">@context.Title</MudTd>
-                                        <MudTd DataLabel="Date">@context.StartDate.ToLocalTime().ToString("f")</MudTd>
-                                        <MudTd DataLabel="Status">
-                                            @if (context.IsFull)
-                                            {
-                                                <MudChip Color="Color.Error">Full</MudChip>
-                                            }
-                                            else if (context.IsFinished())
-                                            {
-                                                <MudChip Color="Color.Default">Finished</MudChip>
-                                            }
-                                            else if (context.HasStarted())
-                                            {
-                                                <MudChip Color="Color.Warning">In Progress</MudChip>
-                                            }
-                                            else
-                                            {
-                                                <MudChip Color="Color.Success">Open</MudChip>
-                                            }
-                                        </MudTd>
-                                        <MudTd>
-                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                                     OnClick="@(() => ViewEventDetails(context.Id))">
-                                                View
-                                            </MudButton>
-                                            <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
-                                                     OnClick="@(() => CancelEvent(context))"
-                                                     Disabled="@(context.HasStarted() || context.IsFinished())">
-                                                Cancel
-                                            </MudButton>
-                                        </MudTd>
-                                    </RowTemplate>
-                                </MudTable>
-                                break;
-
-                            case AdminTab.Reports:
-                                <div class="row">
-                                    <div class="col-md-6 mb-4">
-                                        <div class="card">
-                                            <div class="card-body">
-                                                <h5 class="card-title">Generate Reports</h5>
-                                                <div class="mb-3">
-                                                    <label class="form-label">Event ID</label>
-                                                    <input type="number" class="form-control" @bind="selectedEventId" />
-                                                </div>
-                                                <button class="btn btn-primary" @onclick="GenerateReport">
-                                                    Generate Report
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                break;
-
-                            case AdminTab.Settings:
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h5>General Settings</h5>
-                                        <div class="mb-3">
-                                            <label class="form-label">Maximum Events Per User</label>
-                                            <input type="number" class="form-control" @bind="settings.MaxEventsPerUser" />
-                                        </div>
-                                        <div class="mb-3">
-                                            <label class="form-label">Default Event Duration (hours)</label>
-                                            <input type="number" class="form-control" @bind="settings.DefaultEventDuration" />
-                                        </div>
-                                        <button class="btn btn-primary" @onclick="SaveSettings">Save Settings</button>
-                                    </div>
-                                </div>
-                                break;
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-@code {
-    private enum AdminTab
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (isLoading)
     {
-        Users,
-        Events,
-        Reports,
-        Settings
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+    }
+    
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
     }
 
-    private AdminTab activeTab = AdminTab.Users;
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
+                <MudStack>
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Align="Align.Center">@statistics.TotalUsers</MudText>
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Total Users</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
+                <MudStack>
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Secondary" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Align="Align.Center">@statistics.ActiveEvents</MudText>
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Active Events</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
+                <MudStack>
+                    <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Color="Color.Success" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Align="Align.Center">$@statistics.TotalRevenue.ToString("F2")</MudText>
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Total Revenue</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
+                <MudStack>
+                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Color="Color.Warning" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Align="Align.Center">@(events.Count(e => e.IsFinished()))</MudText>
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Completed Events</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pt-6">
+                    <MudTabPanel Text="Users" Icon="@Icons.Material.Filled.People">
+                        <MudTextField @bind-Value="userSearchTerm" Label="Search Users" 
+                                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                    Class="mt-0 mb-4" />
+                        
+                        <MudTable Items="@filteredUsers" Dense="true" Hover="true" Elevation="0"
+                                 Loading="@isLoading" LoadingProgressColor="Color.Info">
+                            <HeaderContent>
+                                <MudTh>Username</MudTh>
+                                <MudTh>Email</MudTh>
+                                <MudTh>Role</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                                        <MudAvatar Size="Size.Small" Color="Color.Secondary">@(context.UserName.FirstOrDefault())</MudAvatar>
+                                        <MudText>@context.UserName</MudText>
+                                    </MudStack>
+                                </MudTd>
+                                <MudTd>@context.Email</MudTd>
+                                <MudTd>
+                                    <MudChip Color="@(GetUserRole(context) == "Admin" ? Color.Error : Color.Default)" 
+                                            Size="Size.Small">@GetUserRole(context)</MudChip>
+                                </MudTd>
+                                <MudTd>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
+                                                 Size="Size.Small" OnClick="@(() => ViewUserDetails(context))" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Events" Icon="@Icons.Material.Filled.EventNote">
+                        <MudTextField @bind-Value="eventSearchTerm" Label="Search Events"
+                                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                    Class="mt-0 mb-4" />
+                        
+                        <MudTable Items="@filteredEvents" Dense="true" Hover="true" Elevation="0"
+                                 Loading="@isLoading" LoadingProgressColor="Color.Info">
+                            <HeaderContent>
+                                <MudTh>Title</MudTh>
+                                <MudTh>Date & Time</MudTh>
+                                <MudTh>Status</MudTh>
+                                <MudTh>Actions</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>@context.Title</MudTd>
+                                <MudTd>@context.StartDate.ToLocalTime().ToString("f")</MudTd>
+                                <MudTd>
+                                    @if (context.IsFull)
+                                    {
+                                        <MudChip Color="Color.Error" Size="Size.Small">Full</MudChip>
+                                    }
+                                    else if (context.IsFinished())
+                                    {
+                                        <MudChip Color="Color.Default" Size="Size.Small">Finished</MudChip>
+                                    }
+                                    else if (context.HasStarted())
+                                    {
+                                        <MudChip Color="Color.Warning" Size="Size.Small">In Progress</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip Color="Color.Success" Size="Size.Small">Open</MudChip>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
+                                                 Size="Size.Small" OnClick="@(() => ViewEventDetails(context.Id))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                                                 Size="Size.Small" OnClick="@(() => CancelEvent(context))"
+                                                 Disabled="@(context.HasStarted() || context.IsFinished())" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudTabPanel>
+                </MudTabs>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
     private List<ApplicationUser> users = new();
     private List<Event> events = new();
     private string userSearchTerm = "";
     private string eventSearchTerm = "";
-    private int selectedEventId;
-
-    private SystemSettings settings = new()
-    {
-        MaxEventsPerUser = 5,
-        DefaultEventDuration = 2
-    };
 
     private SystemStatistics statistics = new()
     {
@@ -244,6 +161,9 @@
     };
 
     private Dictionary<string, string> userRoles = new();
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private IDialogReference? dialogRef;
 
     protected override async Task OnInitializedAsync()
     {
@@ -254,6 +174,10 @@
     {
         try
         {
+            isLoading = true;
+            errorMessage = string.Empty;
+            StateHasChanged();
+
             users = (await UserService.GetAllUsersAsync()).ToList();
             events = (await EventService.GetEventsAsync()).ToList();
 
@@ -263,17 +187,28 @@
                 userRoles[user.Id] = roles.FirstOrDefault() ?? "User";
             }
 
-            statistics = new SystemStatistics
-            {
-                TotalUsers = users.Count,
-                ActiveEvents = events.Count(e => !e.IsFinished()),
-                TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
-            };
+            UpdateStatistics();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Failed to load data: {ex.Message}", Severity.Error);
+            errorMessage = $"Failed to load data: {ex.Message}";
+            Snackbar.Add(errorMessage, Severity.Error);
         }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateStatistics()
+    {
+        statistics = new SystemStatistics
+        {
+            TotalUsers = users.Count,
+            ActiveEvents = events.Count(e => !e.IsFinished()),
+            TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
+        };
     }
 
     private IEnumerable<ApplicationUser> filteredUsers =>
@@ -287,55 +222,30 @@
             string.IsNullOrEmpty(eventSearchTerm) ||
             (e.Title?.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<Event>();
 
-    private async Task SearchUsers()
-    {
-        await LoadData();
-    }
-
-    private async Task SearchEvents()
-    {
-        await LoadData();
-    }
-
     private async Task CancelEvent(Event evt)
     {
-        try 
+        var parameters = new DialogParameters
         {
-            await EventService.CancelEventAsync(evt.Id);
-            Snackbar.Add("Event cancelled successfully", Severity.Success);
-            await LoadData();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to cancel event: {ex.Message}", Severity.Error);
-        }
-    }
+            { "ContentText", $"Are you sure you want to cancel the event '{evt.Title}'?" },
+            { "ButtonText", "Cancel Event" },
+            { "Color", Color.Error }
+        };
 
-    private async Task GenerateReport()
-    {
-        try 
-        {
-            var bytes = await EventService.GenerateReportAsync(selectedEventId);
-            await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "event-report.pdf", bytes);
-            Snackbar.Add("Report generated successfully!", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Error generating report: {ex.Message}", Severity.Error);
-        }
-    }
+        dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Action", parameters);
+        var result = await dialogRef.Result;
 
-    private async Task SaveSettings()
-    {
-        try
+        if (!result.Canceled)
         {
-            await Task.Delay(100); // Add this line to make the method actually async
-            // Implement settings save logic
-            Snackbar.Add("Settings saved successfully", Severity.Success);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to save settings: {ex.Message}", Severity.Error);
+            try 
+            {
+                await EventService.CancelEventAsync(evt.Id);
+                Snackbar.Add("Event cancelled successfully", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to cancel event: {ex.Message}", Severity.Error);
+            }
         }
     }
 
@@ -354,12 +264,6 @@
         return userRoles.TryGetValue(user.Id, out var role) ? role : "User";
     }
 
-    private class SystemSettings
-    {
-        public int MaxEventsPerUser { get; set; }
-        public int DefaultEventDuration { get; set; }
-    }
-
     private class SystemStatistics
     {
         public int TotalUsers { get; set; }
@@ -367,36 +271,3 @@
         public decimal TotalRevenue { get; set; }
     }
 }
-
-<style>
-    .stats-list {
-        display: grid;
-        gap: 1rem;
-    }
-
-    .stat-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem;
-        background-color: #f8f9fa;
-        border-radius: 0.25rem;
-    }
-
-    .stat-label {
-        color: #6c757d;
-    }
-
-    .stat-value {
-        font-weight: bold;
-        color: #0d6efd;
-    }
-
-    .nav-tabs .nav-link {
-        cursor: pointer;
-    }
-
-    .nav-tabs .nav-link.active {
-        font-weight: bold;
-    }
-</style>
