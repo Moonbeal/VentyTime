@@ -24,9 +24,6 @@ namespace VentyTime.Server.Data
                 entity.Property(e => e.FirstName).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.LastName).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.AvatarUrl).HasMaxLength(2000);
-                entity.Property(e => e.Bio).HasMaxLength(500);
-                entity.Property(e => e.Location).HasMaxLength(100);
-                entity.Property(e => e.Website).HasMaxLength(200);
             });
 
             builder.Entity<Event>(entity =>

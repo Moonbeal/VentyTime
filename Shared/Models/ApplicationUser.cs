@@ -21,15 +21,6 @@ namespace VentyTime.Shared.Models
         [MaxLength(2000)]
         public string AvatarUrl { get; set; } = "/images/default-profile.png";
 
-        [MaxLength(500)]
-        public string Bio { get; set; } = string.Empty;
-
-        [MaxLength(100)]
-        public string Location { get; set; } = string.Empty;
-
-        [MaxLength(200)]
-        public string Website { get; set; } = string.Empty;
-
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
         public DateTime? LastLoginAt { get; set; }

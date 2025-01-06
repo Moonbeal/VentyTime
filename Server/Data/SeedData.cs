@@ -34,9 +34,7 @@ namespace VentyTime.Server.Data
                         Email = "test@example.com",
                         EmailConfirmed = true,
                         FirstName = "Test",
-                        LastName = "User",
-                        Location = "Kyiv, Ukraine",
-                        Bio = "Event organizer and tech enthusiast"
+                        LastName = "User"
                     };
                     await userManager.CreateAsync(testUser1, "Test123!");
                     await userManager.AddToRoleAsync(testUser1, UserRole.User.ToString());
@@ -51,9 +49,7 @@ namespace VentyTime.Server.Data
                         Email = "organizer@example.com",
                         EmailConfirmed = true,
                         FirstName = "Event",
-                        LastName = "Organizer",
-                        Location = "Lviv, Ukraine",
-                        Bio = "Professional event manager with 5+ years of experience"
+                        LastName = "Organizer"
                     };
                     await userManager.CreateAsync(testUser2, "Test123!");
                     await userManager.AddToRoleAsync(testUser2, UserRole.Organizer.ToString());

@@ -1,0 +1,88 @@
+@using VentyTime.Shared.Models
+@using VentyTime.Shared.Models.Auth
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (User != null)
+        {
+            <MudContainer MaxWidth="MaxWidth.Small">
+                <MudGrid>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="User.FirstName"
+                                    Label="First Name"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="!isEditing" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="User.LastName"
+                                    Label="Last Name"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="!isEditing" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="User.Email"
+                                    Label="Email"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="!isEditing" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="User.PhoneNumber"
+                                    Label="Phone Number"
+                                    Variant="Variant.Outlined"
+                                    ReadOnly="!isEditing" />
+                    </MudItem>
+                </MudGrid>
+            </MudContainer>
+        }
+        else
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (isEditing)
+        {
+            <MudButton OnClick="Cancel" Color="Color.Default">Cancel</MudButton>
+            <MudButton OnClick="Save" Color="Color.Primary">Save</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="ToggleEditMode" Color="Color.Primary"
+                      StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+            <MudButton OnClick="Cancel" Color="Color.Default">Close</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ApplicationUser User { get; set; } = default!;
+
+    private bool isEditing = false;
+
+    private void ToggleEditMode()
+    {
+        isEditing = !isEditing;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        var result = await UserService.UpdateUserProfileAsync(User);
+        if (result)
+        {
+            Snackbar.Add("User profile updated successfully!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add("Failed to update user profile.", Severity.Error);
+        }
+    }
+}

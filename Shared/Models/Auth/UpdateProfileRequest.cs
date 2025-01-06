@@ -22,13 +22,4 @@ public class UpdateProfileRequest
 
     [StringLength(2000)]
     public string? AvatarUrl { get; set; }
-
-    [StringLength(500)]
-    public string? Bio { get; set; }
-
-    [StringLength(100)]
-    public string? Location { get; set; }
-
-    [StringLength(200)]
-    public string? Website { get; set; }
 }

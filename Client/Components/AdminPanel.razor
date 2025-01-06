@@ -72,26 +72,28 @@
                         <MudTable Items="@filteredUsers" Dense="true" Hover="true" Elevation="0"
                                  Loading="@isLoading" LoadingProgressColor="Color.Info">
                             <HeaderContent>
-                                <MudTh>Username</MudTh>
+                                <MudTh>Name</MudTh>
                                 <MudTh>Email</MudTh>
                                 <MudTh>Role</MudTh>
                                 <MudTh>Actions</MudTh>
                             </HeaderContent>
                             <RowTemplate>
-                                <MudTd>
-                                    <MudStack Row="true" AlignItems="AlignItems.Center">
-                                        <MudAvatar Size="Size.Small" Color="Color.Secondary">@(context.UserName.FirstOrDefault())</MudAvatar>
-                                        <MudText>@context.UserName</MudText>
-                                    </MudStack>
-                                </MudTd>
+                                <MudTd>@($"{context.FirstName} {context.LastName}")</MudTd>
                                 <MudTd>@context.Email</MudTd>
                                 <MudTd>
-                                    <MudChip Color="@(GetUserRole(context) == "Admin" ? Color.Error : Color.Default)" 
+                                    <MudChip Color="@(GetUserRole(context) == UserRole.Admin ? Color.Error : GetUserRole(context) == UserRole.Organizer ? Color.Warning : Color.Default)" 
                                             Size="Size.Small">@GetUserRole(context)</MudChip>
                                 </MudTd>
                                 <MudTd>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
-                                                 Size="Size.Small" OnClick="@(() => ViewUserDetails(context))" />
+                                    <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
+                                                     Size="Size.Small" OnClick="@(() => ViewUserDetails(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.ManageAccounts" Color="Color.Primary" 
+                                                     Size="Size.Small" OnClick="@(() => EditUserRole(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" 
+                                                     Size="Size.Small" OnClick="@(() => DeleteUserAsync(context))"
+                                                     Disabled="@(GetUserRole(context) == UserRole.Admin)" />
+                                    </MudButtonGroup>
                                 </MudTd>
                             </RowTemplate>
                         </MudTable>
@@ -151,7 +153,7 @@
         TotalRevenue = 0
     };
 
-    private Dictionary<string, string> userRoles = new();
+    private Dictionary<string, UserRole> userRoles = new();
     private bool isLoading = false;
     private string errorMessage = string.Empty;
     private IDialogReference? dialogRef;
@@ -175,7 +177,14 @@
             foreach (var user in users)
             {
                 var roles = await UserService.GetUserRolesAsync(user.Id);
-                userRoles[user.Id] = roles.FirstOrDefault() ?? "User";
+                var roleStr = roles.FirstOrDefault() ?? "User";
+                userRoles[user.Id] = roleStr switch
+                {
+                    "Admin" => UserRole.Admin,
+                    "Organizer" => UserRole.Organizer,
+                    "Participant" => UserRole.Participant,
+                    _ => UserRole.User
+                };
             }
 
             UpdateStatistics();
@@ -205,7 +214,8 @@
     private IEnumerable<ApplicationUser> filteredUsers =>
         users?.Where(u =>
             string.IsNullOrEmpty(userSearchTerm) ||
-            (u.UserName?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.FirstName?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.LastName?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
             (u.Email?.Contains(userSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<ApplicationUser>();
 
     private IEnumerable<Event> filteredEvents =>
@@ -241,9 +251,79 @@
         }
     }
 
-    private void ViewUserDetails(ApplicationUser user)
+    private async Task UpdateUserRoleAsync(string userId, UserRole newRole)
     {
-        NavigationManager.NavigateTo($"/users/{user.Id}");
+        try
+        {
+            await UserService.UpdateUserRoleAsync(userId, newRole);
+            userRoles[userId] = newRole;
+            Snackbar.Add($"User role updated successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to update user role: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task EditUserRole(ApplicationUser user)
+    {
+        var parameters = new DialogParameters
+        {
+            { "User", user },
+            { "CurrentRole", GetUserRole(user) }
+        };
+
+        var dialog = await DialogService.ShowAsync<UserRoleDialog>("Edit User Role", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var newRole = (UserRole)result.Data;
+            if (newRole != GetUserRole(user))
+            {
+                await UpdateUserRoleAsync(user.Id, newRole);
+            }
+        }
+    }
+
+    private async Task DeleteUserAsync(ApplicationUser user)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete the user '{user.FirstName} {user.LastName}'? This action cannot be undone." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete User", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                await UserService.DeleteUserAsync(user.Id);
+                users.Remove(user);
+                userRoles.Remove(user.Id);
+                UpdateStatistics();
+                Snackbar.Add("User deleted successfully", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to delete user: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ViewUserDetails(ApplicationUser user)
+    {
+        var parameters = new DialogParameters
+        {
+            { "User", user },
+            { "Role", GetUserRole(user) }
+        };
+
+        await DialogService.ShowAsync<UserDetailsDialog>("User Details", parameters);
     }
 
     private void ViewEventDetails(Event eventItem)
@@ -256,9 +336,9 @@
         NavigationManager.NavigateTo($"/event/{eventItem.Id}/edit");
     }
 
-    private string GetUserRole(ApplicationUser user)
+    private UserRole GetUserRole(ApplicationUser user)
     {
-        return userRoles.TryGetValue(user.Id, out var role) ? role : "User";
+        return userRoles.GetValueOrDefault(user.Id, UserRole.User);
     }
 
     private class SystemStatistics

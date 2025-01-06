@@ -140,9 +140,6 @@ public class UserController : ControllerBase
         user.FirstName = request.FirstName ?? user.FirstName;
         user.LastName = request.LastName ?? user.LastName;
         user.PhoneNumber = request.PhoneNumber ?? user.PhoneNumber;
-        user.Location = request.Location ?? user.Location;
-        user.Bio = request.Bio ?? user.Bio;
-        user.Website = request.Website ?? user.Website;
         user.UpdatedAt = DateTime.UtcNow;
 
         try
@@ -329,6 +326,53 @@ public class UserController : ControllerBase
             eventReminders = request.EventReminders,
             message = "Notification settings updated successfully"
         });
+    }
+
+    [HttpPut("{id}/role")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateUserRole(string id, [FromBody] UserRole newRole)
+    {
+        try
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            // Get current roles
+            var currentRoles = await _userManager.GetRolesAsync(user);
+
+            // Remove current roles
+            if (currentRoles.Any())
+            {
+                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                if (!removeResult.Succeeded)
+                {
+                    _logger.LogError("Failed to remove existing roles for user {UserId}. Errors: {Errors}",
+                        id, string.Join(", ", removeResult.Errors.Select(e => e.Description)));
+                    return BadRequest(new { message = "Failed to update user role" });
+                }
+            }
+
+            // Add new role
+            var newRoleName = newRole.ToString();
+            var addResult = await _userManager.AddToRoleAsync(user, newRoleName);
+            if (!addResult.Succeeded)
+            {
+                _logger.LogError("Failed to add role {Role} to user {UserId}. Errors: {Errors}",
+                    newRoleName, id, string.Join(", ", addResult.Errors.Select(e => e.Description)));
+                return BadRequest(new { message = "Failed to update user role" });
+            }
+
+            _logger.LogInformation("Successfully updated role to {Role} for user {UserId}", newRoleName, id);
+            return Ok(new { message = "User role updated successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating role for user {UserId}", id);
+            return StatusCode(500, new { message = "An error occurred while updating the user role" });
+        }
     }
 
     public class ChangePasswordRequest

@@ -70,12 +70,22 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PutAsJsonAsync($"api/users/{userId}/role", role);
-                return response.IsSuccessStatusCode;
+                var response = await _httpClient.PutAsJsonAsync($"api/user/{userId}/role", role);
+                if (response.IsSuccessStatusCode)
+                {
+                    _snackbar.Add("User role updated successfully", Severity.Success);
+                    return true;
+                }
+
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Failed to update user role: {Error}", error);
+                _snackbar.Add(error, Severity.Error);
+                return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating user role");
+                _snackbar.Add("An error occurred while updating user role", Severity.Error);
                 return false;
             }
         }
@@ -118,12 +128,16 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var response = await _httpClient.PutAsJsonAsync($"api/users/{user.Id}", user);
-                return response.IsSuccessStatusCode;
+                return await UpdateProfileAsync(
+                    user.FirstName ?? string.Empty,
+                    user.LastName ?? string.Empty,
+                    user.Email ?? string.Empty,
+                    user.PhoneNumber ?? string.Empty);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating user profile");
+                _snackbar.Add("An error occurred while updating profile", Severity.Error);
                 return false;
             }
         }

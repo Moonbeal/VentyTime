@@ -18,6 +18,7 @@ namespace VentyTime.Server.Services
         Task UpdateUserLastLoginAsync(ApplicationUser user);
         Task<List<ApplicationUser>> GetAllUsersAsync();
         Task<ApplicationUser?> GetUserByIdAsync(string userId);
+        Task<bool> UpdateUserProfileAsync(ApplicationUser user);
     }
 
     public class UserService : IUserService
@@ -211,6 +212,32 @@ namespace VentyTime.Server.Services
         public async Task<ApplicationUser?> GetUserByIdAsync(string userId)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        }
+
+        public async Task<bool> UpdateUserProfileAsync(ApplicationUser user)
+        {
+            try
+            {
+                var existingUser = await _userManager.FindByIdAsync(user.Id);
+                if (existingUser == null)
+                    return false;
+
+                existingUser.FirstName = user.FirstName;
+                existingUser.LastName = user.LastName;
+                existingUser.PhoneNumber = user.PhoneNumber;
+                existingUser.EmailNotifications = user.EmailNotifications;
+                existingUser.PushNotifications = user.PushNotifications;
+                existingUser.EventReminders = user.EventReminders;
+                existingUser.UpdatedAt = DateTime.UtcNow;
+
+                var result = await _userManager.UpdateAsync(existingUser);
+                return result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating user profile for user {UserId}", user.Id);
+                return false;
+            }
         }
     }
 }

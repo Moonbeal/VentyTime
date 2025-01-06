@@ -57,16 +57,6 @@
                             <MudText>@(string.IsNullOrEmpty(currentUser?.PhoneNumber) ? "No phone number" : currentUser.PhoneNumber)</MudText>
                         </div>
                     </div>
-                    @if (!string.IsNullOrEmpty(currentUser?.Website))
-                    {
-                        <div class="d-flex align-center">
-                            <MudIcon Icon="@Icons.Material.Filled.Language" Class="mr-3" Color="Color.Primary" />
-                            <div>
-                                <MudText Typo="Typo.caption" Color="Color.Primary">Website</MudText>
-                                <MudLink Href="@currentUser.Website" Target="_blank">@currentUser.Website</MudLink>
-                            </div>
-                        </div>
-                    }
                 </div>
             </MudPaper>
         </MudItem>

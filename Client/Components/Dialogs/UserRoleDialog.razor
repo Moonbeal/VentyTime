@@ -1,0 +1,35 @@
+@using VentyTime.Shared.Models
+
+<MudDialog>
+    <DialogContent>
+        <MudSelect T="UserRole" Label="Select Role" @bind-Value="selectedRole">
+            <MudSelectItem Value="@(UserRole.User)">User</MudSelectItem>
+            <MudSelectItem Value="@(UserRole.Organizer)">Organizer</MudSelectItem>
+            <MudSelectItem Value="@(UserRole.Admin)">Admin</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Save Changes</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ApplicationUser User { get; set; } = default!;
+    [Parameter] public UserRole CurrentRole { get; set; }
+
+    private UserRole selectedRole;
+
+    protected override void OnInitialized()
+    {
+        selectedRole = CurrentRole;
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(selectedRole));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,139 @@
+@using VentyTime.Shared.Models
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-3" /> @User.UserName
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudContainer Style="max-height: 500px; overflow-y: auto">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Elevation="0">
+                        <MudForm @ref="form">
+                            <MudGrid>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="User.FirstName" Label="First Name"
+                                                Required="true" RequiredError="First name is required"
+                                                Disabled="!isEditing" />
+                                </MudItem>
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="User.LastName" Label="Last Name"
+                                                Required="true" RequiredError="Last name is required"
+                                                Disabled="!isEditing" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="User.Email" Label="Email"
+                                                Required="true" RequiredError="Email is required"
+                                                Disabled="true" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="User.PhoneNumber" Label="Phone Number"
+                                                Variant="Variant.Outlined"
+                                                Disabled="!isEditing" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudDivider Class="my-4" />
+                                    <MudText Typo="Typo.subtitle1"><b>Account Status</b></MudText>
+                                    <MudList Dense="true">
+                                        <MudListItem>
+                                            <MudText>Role: 
+                                                <MudChip Color="@(Role == UserRole.Admin ? Color.Error : Role == UserRole.Organizer ? Color.Warning : Color.Default)" 
+                                                        Size="Size.Small">
+                                                    @Role
+                                                </MudChip>
+                                            </MudText>
+                                        </MudListItem>
+                                        <MudListItem>
+                                            <MudText>Email Confirmed: 
+                                                <MudChip Color="@(User.EmailConfirmed ? Color.Success : Color.Error)" 
+                                                        Size="Size.Small">
+                                                    @(User.EmailConfirmed ? "Yes" : "No")
+                                                </MudChip>
+                                            </MudText>
+                                        </MudListItem>
+                                        <MudListItem>
+                                            <MudText>Created: @User.CreatedAt.ToLocalTime().ToString("g")</MudText>
+                                        </MudListItem>
+                                        @if (User.LastLoginAt.HasValue)
+                                        {
+                                            <MudListItem>
+                                                <MudText>Last Login: @User.LastLoginAt.Value.ToLocalTime().ToString("g")</MudText>
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+                                </MudItem>
+                            </MudGrid>
+                        </MudForm>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        @if (!isEditing)
+        {
+            <MudButton OnClick="ToggleEditMode" Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Edit">Edit</MudButton>
+            <MudButton OnClick="Cancel" Color="Color.Default" 
+                      StartIcon="@Icons.Material.Filled.Close">Close</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="Cancel" Color="Color.Default" 
+                      StartIcon="@Icons.Material.Filled.Cancel">Cancel</MudButton>
+            <MudButton OnClick="Save" Color="Color.Primary" 
+                      StartIcon="@Icons.Material.Filled.Save" 
+                      Disabled="isSaving">Save</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public ApplicationUser User { get; set; } = default!;
+    [Parameter] public UserRole Role { get; set; }
+    
+    private MudForm form = null!;
+    private bool isEditing = false;
+    private bool isSaving = false;
+
+    private void ToggleEditMode()
+    {
+        isEditing = !isEditing;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            isSaving = true;
+            var result = await UserService.UpdateUserAsync(User);
+            if (result)
+            {
+                Snackbar.Add("User details updated successfully!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add("Failed to update user details.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}
