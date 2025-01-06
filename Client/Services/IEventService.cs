@@ -15,7 +15,6 @@ namespace VentyTime.Client.Services
         Task<List<Event>> GetUpcomingEventsAsync();
         Task<List<Event>> GetPopularEventsAsync();
         Task<bool> IsEventFullAsync(int eventId);
-        Task<bool> CancelEventAsync(int eventId);
         Task<byte[]> GenerateReportAsync(int eventId);
         Task<string> UploadEventImage(MultipartFormDataContent content);
         Task<List<string>> GetCategoriesAsync();

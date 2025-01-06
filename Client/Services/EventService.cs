@@ -166,28 +166,19 @@ namespace VentyTime.Client.Services
                 var client = await CreateClientAsync();
                 var response = await client.DeleteAsync($"api/events/{id}");
                 
-                if (response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode)
                 {
-                    return (true, null);
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Failed to delete event: {error}");
+                    return (false, error);
                 }
                 
-                var errorContent = await response.Content.ReadAsStringAsync();
-                var error = response.StatusCode switch
-                {
-                    System.Net.HttpStatusCode.BadRequest => errorContent,
-                    System.Net.HttpStatusCode.Unauthorized => "You are not authorized to delete this event",
-                    System.Net.HttpStatusCode.Forbidden => "You do not have permission to delete this event",
-                    System.Net.HttpStatusCode.NotFound => "Event not found",
-                    _ => "Failed to delete event"
-                };
-                
-                Console.WriteLine($"Error deleting event: {error}");
-                return (false, error);
+                return (true, null);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error deleting event: {ex.Message}");
-                return (false, "An unexpected error occurred while deleting the event");
+                return (false, ex.Message);
             }
         }
 
@@ -423,20 +414,6 @@ namespace VentyTime.Client.Services
                 var client = await CreateClientAsync();
                 var @event = await client.GetFromJsonAsync<Event>($"api/events/{eventId}");
                 return @event?.IsFull ?? false;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
-        public async Task<bool> CancelEventAsync(int eventId)
-        {
-            try
-            {
-                var client = await CreateClientAsync();
-                var response = await client.PostAsync($"api/events/{eventId}/cancel", null);
-                return response.IsSuccessStatusCode;
             }
             catch (Exception)
             {

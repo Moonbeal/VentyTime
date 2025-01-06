@@ -235,7 +235,10 @@
             }
 
             var userId = await UserService.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId) || userId != eventModel.OrganizerId)
+            var userRoles = await UserService.GetUserRolesAsync(userId);
+            var isAdmin = userRoles.Contains("Admin");
+
+            if (string.IsNullOrEmpty(userId) || (!isAdmin && userId != eventModel.OrganizerId))
             {
                 Snackbar.Add("You don't have permission to edit this event", Severity.Error);
                 NavigationManager.NavigateTo($"/event/{Id}");

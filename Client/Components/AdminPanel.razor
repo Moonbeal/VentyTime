@@ -44,9 +44,9 @@
         <MudItem xs="12" sm="6" md="3">
             <MudPaper Elevation="2" Class="pa-4" Style="height: 100%;">
                 <MudStack>
-                    <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Color="Color.Success" Size="Size.Large" />
-                    <MudText Typo="Typo.h5" Align="Align.Center">$@statistics.TotalRevenue.ToString("F2")</MudText>
-                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Total Revenue</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Align="Align.Center">@events.Count</MudText>
+                    <MudText Typo="Typo.subtitle1" Align="Align.Center">Total Events</MudText>
                 </MudStack>
             </MudPaper>
         </MudItem>
@@ -106,37 +106,28 @@
                                  Loading="@isLoading" LoadingProgressColor="Color.Info">
                             <HeaderContent>
                                 <MudTh>Title</MudTh>
-                                <MudTh>Date & Time</MudTh>
+                                <MudTh>Date</MudTh>
                                 <MudTh>Status</MudTh>
                                 <MudTh>Actions</MudTh>
                             </HeaderContent>
                             <RowTemplate>
                                 <MudTd>@context.Title</MudTd>
-                                <MudTd>@context.StartDate.ToLocalTime().ToString("f")</MudTd>
+                                <MudTd>@context.StartDate.ToShortDateString()</MudTd>
                                 <MudTd>
-                                    @if (context.IsFull)
-                                    {
-                                        <MudChip Color="Color.Error" Size="Size.Small">Full</MudChip>
-                                    }
-                                    else if (context.IsFinished())
-                                    {
-                                        <MudChip Color="Color.Default" Size="Size.Small">Finished</MudChip>
-                                    }
-                                    else if (context.HasStarted())
-                                    {
-                                        <MudChip Color="Color.Warning" Size="Size.Small">In Progress</MudChip>
-                                    }
-                                    else
-                                    {
-                                        <MudChip Color="Color.Success" Size="Size.Small">Open</MudChip>
-                                    }
+                                    <MudChip Color="@(context.IsActive ? Color.Success : Color.Error)" 
+                                            Size="Size.Small">
+                                        @(context.IsActive ? "Active" : "Cancelled")
+                                    </MudChip>
                                 </MudTd>
                                 <MudTd>
-                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
-                                                 Size="Size.Small" OnClick="@(() => ViewEventDetails(context.Id))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
-                                                 Size="Size.Small" OnClick="@(() => CancelEvent(context))"
-                                                 Disabled="@(context.HasStarted() || context.IsFinished())" />
+                                    <MudButtonGroup>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
+                                                     Size="Size.Small" OnClick="@(() => ViewEventDetails(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" 
+                                                     Size="Size.Small" OnClick="@(() => EditEventDetails(context))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" 
+                                                     Size="Size.Small" OnClick="@(() => DeleteEventAsync(context))" />
+                                    </MudButtonGroup>
                                 </MudTd>
                             </RowTemplate>
                         </MudTable>
@@ -167,10 +158,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        await LoadDataAsync();
     }
 
-    private async Task LoadData()
+    private async Task LoadDataAsync()
     {
         try
         {
@@ -206,7 +197,7 @@
         statistics = new SystemStatistics
         {
             TotalUsers = users.Count,
-            ActiveEvents = events.Count(e => !e.IsFinished()),
+            ActiveEvents = events.Count(e => e.IsActive && !e.IsFinished()),
             TotalRevenue = events.Sum(e => e.Price * e.CurrentParticipants)
         };
     }
@@ -219,32 +210,33 @@
 
     private IEnumerable<Event> filteredEvents =>
         events?.Where(e =>
-            string.IsNullOrEmpty(eventSearchTerm) ||
-            (e.Title?.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<Event>();
+            e.IsActive && // Show only active events
+            (string.IsNullOrEmpty(eventSearchTerm) ||
+            (e.Title?.Contains(eventSearchTerm, StringComparison.OrdinalIgnoreCase) ?? false))) ?? Enumerable.Empty<Event>();
 
-    private async Task CancelEvent(Event evt)
+    private async Task DeleteEventAsync(Event eventItem)
     {
         var parameters = new DialogParameters
         {
-            { "ContentText", $"Are you sure you want to cancel the event '{evt.Title}'?" },
-            { "ButtonText", "Cancel Event" },
+            { "ContentText", $"Are you sure you want to delete the event '{eventItem.Title}'? This action cannot be undone." },
+            { "ButtonText", "Delete Event" },
             { "Color", Color.Error }
         };
 
-        dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Action", parameters);
-        var result = await dialogRef.Result;
-
-        if (!result.Canceled)
+        var dialog = await DialogService.Show<ConfirmDialog>("Confirm Event Deletion", parameters).Result;
+        if (!dialog.Cancelled)
         {
-            try 
+            var (success, error) = await EventService.DeleteEventAsync(eventItem.Id);
+            if (success)
             {
-                await EventService.CancelEventAsync(evt.Id);
-                Snackbar.Add("Event cancelled successfully", Severity.Success);
-                await LoadData();
+                events.RemoveAll(e => e.Id == eventItem.Id);
+                UpdateStatistics();
+                StateHasChanged();
+                Snackbar.Add("Event deleted successfully", Severity.Success);
             }
-            catch (Exception ex)
+            else
             {
-                Snackbar.Add($"Failed to cancel event: {ex.Message}", Severity.Error);
+                Snackbar.Add($"Failed to delete event: {error ?? "Unknown error"}", Severity.Error);
             }
         }
     }
@@ -254,9 +246,14 @@
         NavigationManager.NavigateTo($"/users/{user.Id}");
     }
 
-    private void ViewEventDetails(int eventId)
+    private void ViewEventDetails(Event eventItem)
     {
-        NavigationManager.NavigateTo($"/events/{eventId}");
+        NavigationManager.NavigateTo($"/event/{eventItem.Id}");
+    }
+
+    private void EditEventDetails(Event eventItem)
+    {
+        NavigationManager.NavigateTo($"/event/{eventItem.Id}/edit");
     }
 
     private string GetUserRole(ApplicationUser user)

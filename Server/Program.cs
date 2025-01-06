@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -150,16 +151,11 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(
-                "https://localhost:7242",
-                "http://localhost:5242",
-                "https://localhost:7241",
-                "http://localhost:5241",
-                "https://localhost:5001"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        policy.WithOrigins("https://localhost:7242", "http://localhost:5242")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials()
+              .WithExposedHeaders("content-disposition");
     });
 });
 
@@ -232,122 +228,44 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
-// Ensure wwwroot/uploads directory exists
+// Ensure required directories exist
 var uploadsPath = Path.Combine(app.Environment.WebRootPath, "uploads");
 if (!Directory.Exists(uploadsPath))
 {
     Directory.CreateDirectory(uploadsPath);
 }
 
-app.UseHttpsRedirection();
-
-// Configure development-specific middleware
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path == "/_framework/aspnetcore-browser-refresh.js")
-    {
-        context.Response.ContentType = "application/javascript";
-        await context.Response.WriteAsync(@"// <![CDATA[
-            (function() {
-                const eventSource = new EventSource('/_framework/aspnetcore-browser-refresh');
-                eventSource.onmessage = function(event) {
-                    if (event.data === 'reload') {
-                        window.location.reload();
-                    }
-                };
-            })();
-        // ]]>//");
-        return;
-    }
-    await next();
-});
-
-// Add detailed error handling in development
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Exception ex)
-    {
-        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Unhandled exception occurred: {Error}", ex.ToString());
-        
-        if (!context.Response.HasStarted)
-        {
-            context.Response.StatusCode = 500;
-            context.Response.ContentType = "application/json";
-            
-            var error = new
-            {
-                message = "An error occurred while processing your request",
-                error = ex.Message,
-                stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
-                innerError = ex.InnerException?.Message
-            };
-            
-            await context.Response.WriteAsJsonAsync(error);
-        }
-    }
-});
-
-app.UseBlazorFrameworkFiles();
-
-// Configure static files
-app.UseStaticFiles(); // Serve files from wwwroot
-
-// Create and configure images directory
-var imagesPath = Path.Combine(builder.Environment.WebRootPath, "images", "events");
+var imagesPath = Path.Combine(app.Environment.WebRootPath, "images", "events");
 if (!Directory.Exists(imagesPath))
 {
     Directory.CreateDirectory(imagesPath);
 }
 
+app.UseHttpsRedirection();
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 // Serve files from the images directory
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(builder.Environment.WebRootPath, "images")),
+    FileProvider = new PhysicalFileProvider(Path.Combine(app.Environment.WebRootPath, "images")),
     RequestPath = "/images"
 });
 
 // Serve files from the uploads directory
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(builder.Environment.WebRootPath, "uploads")),
+    FileProvider = new PhysicalFileProvider(Path.Combine(app.Environment.WebRootPath, "uploads")),
     RequestPath = "/uploads"
 });
 
-// Configure CORS
-app.UseCors(policy =>
-    policy.WithOrigins(
-        "https://localhost:7241",
-        "http://localhost:5241",
-        "https://localhost:7242",
-        "http://localhost:5242")
-          .AllowAnyMethod()
-          .AllowAnyHeader()
-          .AllowCredentials());
-
-// Ensure wwwroot exists
-if (!Directory.Exists(builder.Environment.WebRootPath))
-{
-    Directory.CreateDirectory(builder.Environment.WebRootPath);
-}
-
-// Create thumbnails directory if it doesn't exist
-var thumbnailsDirectory = Path.Combine(builder.Environment.WebRootPath, "thumbnails");
-if (!Directory.Exists(thumbnailsDirectory))
-{
-    Directory.CreateDirectory(thumbnailsDirectory);
-}
-
 app.UseRouting();
+
+app.UseCors();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -23,8 +23,12 @@ builder.Services.AddScoped<CultureService>();
 
 // Add HTTP client with auth header handler
 builder.Services.AddScoped<AuthenticationHeaderHandler>();
+
+// Get the API base URL from configuration
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7241";
+
 builder.Services.AddHttpClient("VentyTime.ServerAPI", 
-    client => client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress))
+    client => client.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthenticationHeaderHandler>();
 
 builder.Services.AddScoped(sp => 

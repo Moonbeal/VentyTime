@@ -293,6 +293,46 @@ namespace VentyTime.Server.Controllers
             }
         }
 
+        [HttpPut("{id}/cancel")]
+        [Authorize(Roles = "Admin,Organizer")]
+        public async Task<IActionResult> CancelEvent(int id)
+        {
+            try
+            {
+                var userId = User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" && c.Value.Contains('-'))?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized(new { message = "User not authenticated" });
+                }
+
+                var @event = await _eventService.GetEventByIdAsync(id);
+                if (@event == null)
+                {
+                    return NotFound(new { message = $"Event with ID {id} not found" });
+                }
+
+                if (!@event.IsActive)
+                {
+                    return BadRequest(new { message = "Event is already cancelled" });
+                }
+
+                @event.IsActive = false;
+                @event.UpdatedAt = DateTime.UtcNow;
+
+                await _eventService.UpdateEventAsync(@event, userId);
+                return Ok(new { message = "Event cancelled successfully" });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error cancelling event {EventId}", id);
+                return StatusCode(500, new { message = "An error occurred while cancelling the event" });
+            }
+        }
+
         [HttpPost("{eventId}/register")]
         [Authorize]
         public async Task<ActionResult<Registration>> RegisterForEvent(int eventId)
