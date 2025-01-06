@@ -120,7 +120,7 @@ namespace VentyTime.Shared.Models
 
         // Computed properties
         public bool IsFull => MaxAttendees > 0 && CurrentParticipants >= MaxAttendees;
-        public int CurrentParticipants => Registrations?.Count ?? 0;
+        public int CurrentParticipants => Registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0;
         public string OrganizerName => Organizer?.UserName ?? "Unknown";
         public bool IsRegistrationOpen => MaxAttendees == 0 || CurrentParticipants < MaxAttendees;
 

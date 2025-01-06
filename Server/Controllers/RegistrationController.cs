@@ -261,7 +261,7 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.Claims.LastOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
                     _logger.LogWarning("Unauthorized registration attempt for event {EventId}", eventId);
@@ -384,9 +384,10 @@ namespace VentyTime.Server.Controllers
         {
             try
             {
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var userId = User.Claims.LastOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userId))
                 {
+                    _logger.LogWarning("Unauthorized cancellation attempt for registration {RegistrationId}", id);
                     return Unauthorized();
                 }
 
@@ -395,16 +396,20 @@ namespace VentyTime.Server.Controllers
 
                 if (registration == null)
                 {
+                    _logger.LogWarning("Registration {RegistrationId} not found", id);
                     return NotFound();
                 }
 
                 if (registration.UserId != userId)
                 {
+                    _logger.LogWarning("User {UserId} attempted to cancel registration {RegistrationId} belonging to user {RegistrationUserId}", 
+                        userId, id, registration.UserId);
                     return Forbid();
                 }
 
                 if (registration.Status == RegistrationStatus.Cancelled)
                 {
+                    _logger.LogWarning("Attempted to cancel already cancelled registration {RegistrationId}", id);
                     return BadRequest(new { message = "Registration is already cancelled" });
                 }
 
@@ -413,6 +418,7 @@ namespace VentyTime.Server.Controllers
 
                 await _context.SaveChangesAsync();
 
+                _logger.LogInformation("Registration {RegistrationId} cancelled successfully by user {UserId}", id, userId);
                 return Ok(registration);
             }
             catch (Exception ex)

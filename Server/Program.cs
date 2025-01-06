@@ -32,6 +32,7 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(System.Text.Unicode.UnicodeRanges.All);
     });
 
 // Configure database
@@ -259,7 +260,7 @@ app.Use(async (context, next) =>
                     }
                 };
             })();
-        // ]]>");
+        // ]]>//");
         return;
     }
     await next();

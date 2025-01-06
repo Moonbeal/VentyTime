@@ -38,9 +38,8 @@ namespace VentyTime.Server.Services
 
                 var claims = new List<Claim>
                 {
-                    new(JwtRegisteredClaimNames.Sub, user.Email!),
-                    new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                     new(ClaimTypes.NameIdentifier, user.Id),
+                    new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                     new(ClaimTypes.Name, user.Email!),
                     new(ClaimTypes.Email, user.Email!),
                     new("firstName", user.FirstName),

@@ -7,6 +7,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     @if (isLoading)
@@ -37,7 +38,7 @@
                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" />
                             }
                         </MudAvatar>
-                        <MudText Typo="Typo.h5" Class="mt-4">@currentUser?.UserName</MudText>
+                        <MudText Typo="Typo.h5" Class="mt-4">@currentUser?.Username</MudText>
                         @if (!string.IsNullOrEmpty(currentUser?.FirstName) || !string.IsNullOrEmpty(currentUser?.LastName))
                         {
                             <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-1">
@@ -315,22 +316,33 @@
                                                     </div>
                                                 </div>
                                             </MudCardContent>
-                                            <MudCardActions Class="d-flex justify-end gap-2">
-                                                <MudButton Variant="Variant.Text"
-                                                          Color="Color.Primary"
-                                                          OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
-                                                    View Details
-                                                </MudButton>
-                                                <MudButton Variant="Variant.Text"
-                                                          Color="Color.Secondary"
-                                                          OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}/edit"))">
-                                                    Edit
-                                                </MudButton>
-                                                <MudButton Variant="Variant.Text"
-                                                          Color="Color.Error"
-                                                          OnClick="@(() => DeleteEventAsync(evt.Id))">
-                                                    Delete
-                                                </MudButton>
+                                            <MudCardActions Class="d-flex justify-space-between align-center pa-2">
+                                                <div class="d-flex gap-2 mt-2">
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Primary"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
+                                                        VIEW DETAILS
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Secondary"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}/registrations"))">
+                                                        REGISTRATIONS
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Info"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}/edit"))">
+                                                        EDIT
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Error"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => ShowDeleteConfirmation(evt))">
+                                                        DELETE
+                                                    </MudButton>
+                                                </div>
                                             </MudCardActions>
                                         </MudCard>
                                     </MudItem>
@@ -345,7 +357,7 @@
 </MudContainer>
 
 @code {
-    private ApplicationUser? currentUser;
+    private User? currentUser;
     private List<Event> userEvents = new();
     private List<Event> registeredEvents = new();
     private List<string> userRoles = new();
@@ -354,27 +366,28 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadUserData();
-    }
-
-    private async Task LoadUserData()
-    {
         try
         {
             isLoading = true;
-            var userId = await UserService.GetCurrentUserIdAsync();
-            if (!string.IsNullOrEmpty(userId))
+            errorMessage = null;
+
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
             {
-                currentUser = await UserService.GetUserByIdAsync(userId);
-                userEvents = await EventService.GetEventsByOrganizerIdAsync(userId);
-                registeredEvents = await EventService.GetRegisteredEventsAsync();
-                userRoles = (await UserService.GetUserRolesAsync(userId)).ToList();
+                currentUser = await UserService.GetCurrentUserAsync();
+                userRoles = user.Claims
+                    .Where(c => c.Type == "role")
+                    .Select(c => c.Value)
+                    .ToList();
+
+                await LoadEvents();
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            errorMessage = "Error loading user data";
-            Snackbar.Add(errorMessage, Severity.Error);
+            errorMessage = ex.Message;
         }
         finally
         {
@@ -382,11 +395,27 @@
         }
     }
 
-    private async Task DeleteEventAsync(int eventId)
+    private async Task LoadEvents()
+    {
+        userEvents = await EventService.GetEventsByOrganizerIdAsync(currentUser.Id);
+        registeredEvents = await EventService.GetRegisteredEventsAsync();
+    }
+
+    private void NavigateToEventDetails(int eventId)
+    {
+        NavigationManager.NavigateTo($"/event/{eventId}");
+    }
+
+    private void NavigateToEventEdit(int eventId)
+    {
+        NavigationManager.NavigateTo($"/event/{eventId}/edit");
+    }
+
+    private async Task DeleteEvent(Event evt)
     {
         var parameters = new DialogParameters
         {
-            { "ContentText", "Are you sure you want to delete this event? This action cannot be undone." },
+            { "ContentText", $"Are you sure you want to delete event '{evt.Title}'? This action cannot be undone." },
             { "ButtonText", "Delete" },
             { "Color", Color.Error }
         };
@@ -398,11 +427,11 @@
         {
             try
             {
-                var (success, error) = await EventService.DeleteEventAsync(eventId);
+                var (success, error) = await EventService.DeleteEventAsync(evt.Id);
                 if (success)
                 {
                     Snackbar.Add("Event deleted successfully", Severity.Success);
-                    await LoadUserData(); // Перезавантажуємо дані
+                    await LoadEvents();
                 }
                 else
                 {
@@ -411,7 +440,41 @@
             }
             catch (Exception ex)
             {
-                Snackbar.Add($"Error deleting event: {ex.Message}", Severity.Error);
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ShowDeleteConfirmation(Event evt)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete event '{evt.Title}'? This action cannot be undone." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<DeleteConfirmationDialog>("Delete Event", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            try
+            {
+                var (success, error) = await EventService.DeleteEventAsync(evt.Id);
+                if (success)
+                {
+                    Snackbar.Add("Event deleted successfully", Severity.Success);
+                    await LoadEvents();
+                }
+                else
+                {
+                    Snackbar.Add(error ?? "Failed to delete event", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
             }
         }
     }

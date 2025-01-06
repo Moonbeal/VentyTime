@@ -1,0 +1,195 @@
+@page "/event/{EventId:int}/registrations"
+@using VentyTime.Shared.Models
+@using VentyTime.Client.Services
+@inject IEventService EventService
+@inject IRegistrationService RegistrationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@attribute [Authorize(Roles = "Admin,Organizer")]
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+    @if (isLoading)
+    {
+        <div class="d-flex justify-center">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="my-4">
+            @errorMessage
+        </MudAlert>
+    }
+    else if (_event != null)
+    {
+        <MudPaper Class="pa-4 mb-4">
+            <MudText Typo="Typo.h4" Class="mb-4">Registrations for "@_event.Title"</MudText>
+            
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="d-flex flex-column align-center pa-4" Style="background-color: var(--mud-palette-background-grey)">
+                        <MudText Typo="Typo.h3" Color="Color.Primary">@(_registrations?.Count ?? 0)</MudText>
+                        <MudText Typo="Typo.subtitle1">Total Registrations</MudText>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="d-flex flex-column align-center pa-4" Style="background-color: var(--mud-palette-background-grey)">
+                        <MudText Typo="Typo.h3" Color="Color.Success">
+                            @(_registrations?.Count(r => r.Status == RegistrationStatus.Confirmed) ?? 0)
+                        </MudText>
+                        <MudText Typo="Typo.subtitle1">Confirmed</MudText>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="d-flex flex-column align-center pa-4" Style="background-color: var(--mud-palette-background-grey)">
+                        <MudText Typo="Typo.h3" Color="Color.Warning">
+                            @(_registrations?.Count(r => r.Status == RegistrationStatus.Pending) ?? 0)
+                        </MudText>
+                        <MudText Typo="Typo.subtitle1">Pending</MudText>
+                    </MudPaper>
+                </MudItem>
+                
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Elevation="0" Class="d-flex flex-column align-center pa-4" Style="background-color: var(--mud-palette-background-grey)">
+                        <MudText Typo="Typo.h3" Color="Color.Error">
+                            @(_registrations?.Count(r => r.Status == RegistrationStatus.Cancelled) ?? 0)
+                        </MudText>
+                        <MudText Typo="Typo.subtitle1">Cancelled</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (_registrations == null || !_registrations.Any())
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="my-4">
+                No registrations found for this event.
+            </MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_registrations" Dense="true" Hover="true" Elevation="0" Class="mt-4">
+                <HeaderContent>
+                    <MudTh>User</MudTh>
+                    <MudTh>Registration Date</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="User">
+                        <div class="d-flex align-center">
+                            <MudAvatar Class="mr-2" Style="background-color: var(--mud-palette-primary)">
+                                @(context.User?.UserName?.Substring(0, 1).ToUpper() ?? "?")
+                            </MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.body1">@context.User?.UserName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.User?.Email</MudText>
+                            </div>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="Registration Date">
+                        @context.CreatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
+                    </MudTd>
+                    <MudTd DataLabel="Status">
+                        @if (context.Status == RegistrationStatus.Cancelled)
+                        {
+                            <MudChip Color="Color.Error" Size="Size.Small">Cancelled</MudChip>
+                        }
+                        else if (context.Status == RegistrationStatus.Confirmed)
+                        {
+                            <MudChip Color="Color.Success" Size="Size.Small">Confirmed</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip Color="Color.Warning" Size="Size.Small">Pending</MudChip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Actions">
+                        @if (context.Status != RegistrationStatus.Cancelled)
+                        {
+                            <MudButton Color="Color.Error"
+                                      Variant="Variant.Text"
+                                      Size="Size.Small"
+                                      OnClick="@(() => CancelRegistration(context))">
+                                Cancel
+                            </MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Default"
+                      StartIcon="@Icons.Material.Filled.ArrowBack"
+                      OnClick="@(() => NavigationManager.NavigateTo("/dashboard"))">
+                Back to Dashboard
+            </MudButton>
+        </div>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int EventId { get; set; }
+
+    private Event? _event;
+    private List<Registration>? _registrations;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+
+            _event = await EventService.GetEventByIdAsync(EventId);
+            if (_event == null)
+            {
+                errorMessage = "Event not found";
+                return;
+            }
+
+            _registrations = await RegistrationService.GetEventRegistrationsAsync(EventId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error loading event data: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CancelRegistration(Registration registration)
+    {
+        try
+        {
+            var result = await RegistrationService.CancelRegistrationAsync(registration.Id);
+            if (result)
+            {
+                Snackbar.Add("Registration cancelled successfully", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Failed to cancel registration", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

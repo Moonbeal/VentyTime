@@ -33,6 +33,21 @@ namespace VentyTime.Server.Data
             {
                 entity.HasKey(e => e.Id);
 
+                entity.Property(e => e.Title)
+                    .IsRequired()
+                    .IsUnicode(true)
+                    .HasMaxLength(100);
+
+                entity.Property(e => e.Description)
+                    .IsRequired()
+                    .IsUnicode(true)
+                    .HasMaxLength(1000);
+
+                entity.Property(e => e.Location)
+                    .IsRequired()
+                    .IsUnicode(true)
+                    .HasMaxLength(200);
+
                 entity.HasOne(e => e.Creator)
                     .WithMany()
                     .HasForeignKey(e => e.CreatorId)
@@ -52,18 +67,6 @@ namespace VentyTime.Server.Data
                     .WithOne(c => c.Event)
                     .HasForeignKey(c => c.EventId)
                     .OnDelete(DeleteBehavior.Cascade);
-
-                entity.Property(e => e.Title)
-                    .HasMaxLength(100)
-                    .IsRequired();
-
-                entity.Property(e => e.Description)
-                    .HasMaxLength(500)
-                    .IsRequired();
-
-                entity.Property(e => e.Location)
-                    .HasMaxLength(200)
-                    .IsRequired();
 
                 entity.Property(e => e.ImageUrl)
                     .HasMaxLength(2000);

@@ -22,6 +22,7 @@ namespace VentyTime.Server.Services
         Task<IEnumerable<Event>> GetRegisteredEventsAsync(string userId);
         Task<IEnumerable<Event>> GetPopularEventsAsync();
         Task SeedTestEventsAsync();
+        Task<IEnumerable<Registration>> GetEventRegistrationsAsync(int eventId);
     }
 
     public class EventService : IEventService
@@ -329,15 +330,11 @@ namespace VentyTime.Server.Services
                     throw new UnauthorizedAccessException("User is not authorized to delete this event");
                 }
 
-                if (@event.Registrations?.Any(r => r.Status == RegistrationStatus.Confirmed) == true)
-                {
-                    throw new InvalidOperationException("Cannot delete event with confirmed registrations");
-                }
-
                 using var transaction = await _context.Database.BeginTransactionAsync();
                 try
                 {
-                    if (@event.Registrations != null)
+                    // Видаляємо всі реєстрації, якщо вони є
+                    if (@event.Registrations != null && @event.Registrations.Any())
                     {
                         _context.Registrations.RemoveRange(@event.Registrations);
                     }
@@ -347,7 +344,7 @@ namespace VentyTime.Server.Services
                     await transaction.CommitAsync();
 
                     InvalidateEventCache(id);
-                    _logger.LogInformation("Successfully deleted event {EventId}", id);
+                    _logger.LogInformation("Successfully deleted event {EventId} and all its registrations", id);
                 }
                 catch (Exception ex)
                 {
@@ -722,6 +719,26 @@ namespace VentyTime.Server.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error seeding test events");
+                throw;
+            }
+        }
+
+        public async Task<IEnumerable<Registration>> GetEventRegistrationsAsync(int eventId)
+        {
+            try
+            {
+                var registrations = await _context.Registrations
+                    .Include(r => r.User)
+                    .Include(r => r.Event)
+                    .Where(r => r.EventId == eventId)
+                    .OrderByDescending(r => r.CreatedAt)
+                    .ToListAsync();
+
+                return registrations;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving registrations for event {EventId}", eventId);
                 throw;
             }
         }

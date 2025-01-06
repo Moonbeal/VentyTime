@@ -110,7 +110,7 @@ namespace VentyTime.Client.Services
             }
         }
 
-        public async Task<bool> CancelRegistrationAsync(int eventId)
+        public async Task<bool> CancelRegistrationAsync(int registrationId)
         {
             try
             {
@@ -121,7 +121,7 @@ namespace VentyTime.Client.Services
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var response = await _httpClient.PostAsync($"api/registrations/{eventId}/cancel", null);
+                var response = await _httpClient.PostAsync($"api/registration/{registrationId}/cancel", null);
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Successfully cancelled registration!", Severity.Success);
@@ -195,18 +195,65 @@ namespace VentyTime.Client.Services
             {
                 var token = await _localStorage.GetItemAsync<string>("authToken");
                 if (string.IsNullOrEmpty(token))
+                {
+                    _snackbar.Add("You must be logged in to view registrations", Severity.Warning);
                     return new List<Registration>();
+                }
 
                 _httpClient.DefaultRequestHeaders.Authorization = 
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-                var registrations = await _httpClient.GetFromJsonAsync<List<Registration>>($"api/registrations/event/{eventId}");
-                return registrations ?? new List<Registration>();
+                var response = await _httpClient.GetAsync($"api/events/{eventId}/registrations");
+                if (response.IsSuccessStatusCode)
+                {
+                    var registrations = await response.Content.ReadFromJsonAsync<List<Registration>>();
+                    return registrations ?? new List<Registration>();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _snackbar.Add($"Error getting registrations: {error}", Severity.Error);
+                    return new List<Registration>();
+                }
             }
             catch (Exception ex)
             {
                 _snackbar.Add($"Error: {ex.Message}", Severity.Error);
                 return new List<Registration>();
+            }
+        }
+
+        public async Task<bool> UpdateRegistrationStatusAsync(int registrationId, RegistrationStatus newStatus)
+        {
+            try
+            {
+                var token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrEmpty(token))
+                {
+                    _snackbar.Add("You must be logged in to update registration status", Severity.Warning);
+                    return false;
+                }
+
+                _httpClient.DefaultRequestHeaders.Authorization = 
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+                var response = await _httpClient.PutAsJsonAsync($"api/registrations/{registrationId}/status", newStatus);
+                if (response.IsSuccessStatusCode)
+                {
+                    _snackbar.Add("Registration status updated successfully", Severity.Success);
+                    return true;
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _snackbar.Add($"Error updating registration status: {error}", Severity.Error);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _snackbar.Add($"Error: {ex.Message}", Severity.Error);
+                return false;
             }
         }
 

@@ -10,5 +10,7 @@ namespace VentyTime.Client.Services
         Task<int> GetRegisteredUsersCountAsync(int eventId);
         Task<List<Registration>> GetUserRegistrationsAsync();
         Task<bool> CancelRegistrationAsync(int eventId);
+        Task<List<Registration>> GetEventRegistrationsAsync(int eventId);
+        Task<bool> UpdateRegistrationStatusAsync(int registrationId, RegistrationStatus newStatus);
     }
 }

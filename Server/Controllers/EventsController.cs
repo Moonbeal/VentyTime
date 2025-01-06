@@ -379,5 +379,29 @@ namespace VentyTime.Server.Controllers
                 return StatusCode(500, new { message = "An error occurred while retrieving popular events" });
             }
         }
+
+        [HttpGet("{eventId}/registrations")]
+        [Authorize(Roles = "Admin,Organizer")]
+        public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
+                        User.Claims.Select(c => new { c.Type, c.Value }));
+                    return Unauthorized(new { message = "User not authenticated" });
+                }
+
+                var registrations = await _eventService.GetEventRegistrationsAsync(eventId);
+                return Ok(registrations);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving event registrations for event {EventId}", eventId);
+                return StatusCode(500, new { message = "An error occurred while retrieving event registrations" });
+            }
+        }
     }
 }
