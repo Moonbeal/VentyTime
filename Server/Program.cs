@@ -183,6 +183,14 @@ using (var scope = app.Services.CreateScope())
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
         var logger = services.GetRequiredService<ILogger<Program>>();
         
+        logger.LogInformation("Checking database...");
+        if (await context.Database.CanConnectAsync())
+        {
+            // Delete and recreate the database for testing
+            await context.Database.EnsureDeletedAsync();
+            logger.LogInformation("Existing database deleted");
+        }
+        
         logger.LogInformation("Running database migrations...");
         await context.Database.MigrateAsync();
 
@@ -244,7 +252,6 @@ if (!Directory.Exists(imagesPath))
     Directory.CreateDirectory(imagesPath);
 }
 
-app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 

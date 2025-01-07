@@ -1,4 +1,6 @@
 @using VentyTime.Client.Theme
+@using MudBlazor
+@using VentyTime.Client.Shared
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
@@ -8,24 +10,12 @@
 <MudSnackbarProvider/>
 
 <MudLayout>
-    <NavBar />
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-16">
+            <NavBar />
             @Body
         </MudContainer>
     </MudMainContent>
-
-    <AuthorizeView>
-        <Authorized>
-            <!-- Chat Button -->
-            <div class="chat-button">
-                <MudFab Color="Color.Secondary" 
-                        StartIcon="@Icons.Material.Filled.Chat"
-                        Size="Size.Large"
-                        OnClick="@(() => NavigationManager.NavigateTo("/chat"))" />
-            </div>
-        </Authorized>
-    </AuthorizeView>
 </MudLayout>
 
 <style>
@@ -33,19 +23,8 @@
         margin-top: 1rem;
         margin-bottom: 1rem;
     }
-
-    .chat-button {
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        z-index: 1000;
-    }
 </style>
 
 @code {
-    private async Task Logout()
-    {
-        await AuthService.LogoutAsync();
-        NavigationManager.NavigateTo("/");
-    }
+    
 }

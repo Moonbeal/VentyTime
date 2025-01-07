@@ -25,11 +25,16 @@ builder.Services.AddScoped<CultureService>();
 builder.Services.AddScoped<AuthenticationHeaderHandler>();
 
 // Get the API base URL from configuration
-var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7241";
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5242";
 
+// Client with auth header handler
 builder.Services.AddHttpClient("VentyTime.ServerAPI", 
     client => client.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler<AuthenticationHeaderHandler>();
+
+// Client without auth header handler for login/register
+builder.Services.AddHttpClient("VentyTime.ServerAPI.NoAuth", 
+    client => client.BaseAddress = new Uri(apiBaseUrl));
 
 builder.Services.AddScoped(sp => 
     sp.GetRequiredService<IHttpClientFactory>()

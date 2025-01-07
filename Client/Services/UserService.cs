@@ -21,13 +21,13 @@ namespace VentyTime.Client.Services
         private readonly ILogger<UserService> _logger;
 
         public UserService(
-            HttpClient httpClient,
+            IHttpClientFactory httpClientFactory,
             Blazored.LocalStorage.ILocalStorageService localStorage,
             AuthenticationStateProvider authStateProvider,
             ISnackbar snackbar,
             ILogger<UserService> logger)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
             _localStorage = localStorage;
             _authStateProvider = (CustomAuthStateProvider)authStateProvider;
             _snackbar = snackbar;

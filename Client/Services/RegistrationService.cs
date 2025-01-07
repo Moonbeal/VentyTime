@@ -15,12 +15,12 @@ namespace VentyTime.Client.Services
         private readonly IAuthService _authService;
 
         public RegistrationService(
-            HttpClient httpClient,
+            IHttpClientFactory httpClientFactory,
             ISnackbar snackbar,
             ILocalStorageService localStorage,
             IAuthService authService)
         {
-            _httpClient = httpClient;
+            _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
             _snackbar = snackbar;
             _localStorage = localStorage;
             _authService = authService;

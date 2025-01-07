@@ -52,11 +52,7 @@ namespace VentyTime.Server.Services
         {
             try
             {
-                if (_cache.TryGetValue(EventsCacheKey, out List<Event>? cachedEvents) && cachedEvents != null)
-                {
-                    return cachedEvents;
-                }
-
+                // Temporarily disable caching for debugging
                 var events = await _context.Events
                     .Include(e => e.Organizer)
                     .Include(e => e.Registrations)
@@ -64,13 +60,7 @@ namespace VentyTime.Server.Services
                     .AsNoTracking()
                     .ToListAsync();
 
-                _logger.LogInformation("Retrieved {Count} events", events.Count);
-
-                var cacheOptions = new MemoryCacheEntryOptions()
-                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(CacheExpirationMinutes));
-                
-                _cache.Set(EventsCacheKey, events, cacheOptions);
-
+                _logger.LogInformation("Retrieved {Count} events from database", events.Count);
                 return events;
             }
             catch (Exception ex)
