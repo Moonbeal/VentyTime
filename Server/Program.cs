@@ -186,9 +186,7 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Checking database...");
         if (await context.Database.CanConnectAsync())
         {
-            // Delete and recreate the database for testing
-            await context.Database.EnsureDeletedAsync();
-            logger.LogInformation("Existing database deleted");
+            logger.LogInformation("Database exists");
         }
         
         logger.LogInformation("Running database migrations...");

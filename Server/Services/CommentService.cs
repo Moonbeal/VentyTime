@@ -43,12 +43,12 @@ namespace VentyTime.Server.Services
                     comment.EventId, userId, comment);
 
                 // Verify user exists
-                _logger.LogInformation("Looking for user with email: {UserId}", userId);
-                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                _logger.LogInformation("Looking for user with ID: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
                 if (user == null)
                 {
                     _logger.LogWarning("User {UserId} not found", userId);
-                    throw new KeyNotFoundException($"User with email {userId} not found");
+                    throw new KeyNotFoundException($"User with ID {userId} not found");
                 }
                 _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
 
@@ -126,12 +126,12 @@ namespace VentyTime.Server.Services
 
             try
             {
-                _logger.LogInformation("Looking for user with email: {UserId}", userId);
-                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                _logger.LogInformation("Looking for user with ID: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
                 if (user == null)
                 {
                     _logger.LogWarning("User {UserId} not found", userId);
-                    throw new KeyNotFoundException($"User with email {userId} not found");
+                    throw new KeyNotFoundException($"User with ID {userId} not found");
                 }
                 _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
 
@@ -196,12 +196,12 @@ namespace VentyTime.Server.Services
 
             try
             {
-                _logger.LogInformation("Looking for user with email: {UserId}", userId);
-                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == userId);
+                _logger.LogInformation("Looking for user with ID: {UserId}", userId);
+                var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
                 if (user == null)
                 {
                     _logger.LogWarning("User {UserId} not found", userId);
-                    throw new KeyNotFoundException($"User with email {userId} not found");
+                    throw new KeyNotFoundException($"User with ID {userId} not found");
                 }
                 _logger.LogInformation("Found user: {UserName} ({UserId})", user.UserName, user.Id);
 

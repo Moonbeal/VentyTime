@@ -1,10 +1,14 @@
 @page "/event/{Id:int}/edit"
 @using VentyTime.Shared.Models
 @using System.ComponentModel.DataAnnotations
+@using System.Net.Http
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Forms
 @inject IEventService EventService
 @inject IUserService UserService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     @if (loading)
@@ -52,6 +56,43 @@
                                                 Lines="3"
                                                 Variant="Variant.Outlined" />
                                     <ValidationMessage For="@(() => eventModel.Description)" />
+                                </MudItem>
+
+                                <MudItem xs="12">
+                                    <MudCard Class="mb-4">
+                                        <MudCardContent>
+                                            <MudText Typo="Typo.h6" Class="mb-4">Event Image</MudText>
+                                            <InputFile id="fileInput" OnChange="@OnInputFileChanged" hidden />
+                                            <div class="d-flex flex-column gap-4 align-center justify-center py-4">
+                                                @if (!string.IsNullOrEmpty(eventModel.ImageUrl))
+                                                {
+                                                    <div class="d-flex flex-column gap-2">
+                                                        <MudImage Src="@eventModel.ImageUrl" Alt="Event image" Width="100" Height="200" Class="rounded-lg" />
+                                                        <MudButton OnClick="@HandleClearImage" 
+                                                                 Color="Color.Error" 
+                                                                 Variant="Variant.Text" 
+                                                                 StartIcon="@Icons.Material.Filled.Delete" 
+                                                                 Size="Size.Small">
+                                                            Remove Image
+                                                        </MudButton>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <MudPaper Height="200px" Width="100%" Class="d-flex flex-column align-center justify-center">
+                                                        <MudIcon Icon="@Icons.Material.Filled.AddPhotoAlternate" Size="Size.Large" Class="mb-2" />
+                                                        <MudButton HtmlTag="label"
+                                                                 For="fileInput"
+                                                                 Variant="Variant.Filled"
+                                                                 Color="Color.Primary"
+                                                                 StartIcon="@Icons.Material.Filled.CloudUpload">
+                                                            Upload Image
+                                                        </MudButton>
+                                                    </MudPaper>
+                                                }
+                                            </div>
+                                        </MudCardContent>
+                                    </MudCard>
                                 </MudItem>
 
                                 <MudItem xs="12" sm="6">
@@ -139,12 +180,20 @@
                                     <ValidationMessage For="@(() => eventModel.Price)" />
                                 </MudItem>
 
-                                <MudItem xs="12" Class="d-flex justify-center mt-4">
-                                    <MudButton ButtonType="ButtonType.Submit"
+                                <MudItem xs="12" Class="d-flex justify-end gap-3">
+                                    <MudButton OnClick="@(() => NavigationManager.NavigateTo($"/event/{Id}"))"
+                                             Variant="Variant.Outlined"
+                                             Color="Color.Secondary"
+                                             Size="Size.Large"
+                                             Class="mt-4">
+                                        Cancel
+                                    </MudButton>
+                                    <MudButton OnClick="SaveChangesAsync"
                                              Variant="Variant.Filled"
                                              Color="Color.Primary"
                                              Size="Size.Large"
-                                             Disabled="!success">
+                                             Disabled="@(!success)"
+                                             Class="mt-4">
                                         Save Changes
                                     </MudButton>
                                 </MudItem>
@@ -204,23 +253,7 @@
     private bool loading = true;
     private bool success;
     private MudForm? form;
-
-    private void UpdateEventDate(DateTime? date)
-    {
-        if (eventModel != null && date.HasValue)
-        {
-            var time = eventModel.StartDate.TimeOfDay;
-            eventModel.StartDate = date.Value.Date.Add(time);
-        }
-    }
-
-    private void UpdateEventTime(TimeSpan? time)
-    {
-        if (eventModel != null && time.HasValue)
-        {
-            eventModel.StartDate = eventModel.StartDate.Date.Add(time.Value);
-        }
-    }
+    private bool hasChanges = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,25 +262,14 @@
             eventModel = await EventService.GetEventByIdAsync(Id);
             if (eventModel == null)
             {
-                Snackbar.Add("Event not found", Severity.Error);
-                NavigationManager.NavigateTo("/");
+                NavigationManager.NavigateTo("/events");
                 return;
             }
-
-            var userId = await UserService.GetCurrentUserIdAsync();
-            var userRoles = await UserService.GetUserRolesAsync(userId);
-            var isAdmin = userRoles.Contains("Admin");
-
-            if (string.IsNullOrEmpty(userId) || (!isAdmin && userId != eventModel.OrganizerId))
-            {
-                Snackbar.Add("You don't have permission to edit this event", Severity.Error);
-                NavigationManager.NavigateTo($"/event/{Id}");
-                return;
-            }
+            hasChanges = false;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error loading event: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -255,26 +277,89 @@
         }
     }
 
-    private async Task SaveChangesAsync()
+    private void UpdateEventDate(DateTime? date)
+    {
+        if (date.HasValue)
+        {
+            eventModel.StartDate = date.Value;
+            hasChanges = true;
+        }
+    }
+
+    private void UpdateEventTime(TimeSpan? time)
+    {
+        if (eventModel != null && time.HasValue)
+        {
+            eventModel.StartDate = eventModel.StartDate.Date.Add(time.Value);
+            hasChanges = true;
+        }
+    }
+
+    private async Task OnInputFileChanged(InputFileChangeEventArgs e)
     {
         try
         {
-            if (eventModel == null) return;
+            var file = e.File;
+            if (file == null)
+                return;
 
-            var result = await EventService.UpdateEventAsync(eventModel);
-            if (result != null)
+            if (file.Size > 5 * 1024 * 1024) // 5MB limit
             {
-                Snackbar.Add("Event updated successfully!", Severity.Success);
-                NavigationManager.NavigateTo($"/event/{result.Id}");
+                Snackbar.Add("File is too large. Maximum size is 5MB.", Severity.Error);
+                return;
             }
-            else
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
             {
-                Snackbar.Add("Failed to update event", Severity.Error);
+                Snackbar.Add($"Invalid file format. Allowed formats are: {string.Join(", ", allowedExtensions)}", Severity.Error);
+                return;
+            }
+
+            var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+
+            var imageUrl = await EventService.UploadEventImage(content);
+            if (!string.IsNullOrEmpty(imageUrl))
+            {
+                eventModel.ImageUrl = imageUrl;
+                hasChanges = true;
+                await SaveChangesAsync();
+                Snackbar.Add("Image uploaded and saved successfully!", Severity.Success);
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error uploading image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task HandleClearImage()
+    {
+        eventModel.ImageUrl = null;
+        hasChanges = true;
+        await SaveChangesAsync();
+        Snackbar.Add("Image removed and changes saved successfully!", Severity.Success);
+        StateHasChanged();
+    }
+
+    private async Task SaveChangesAsync()
+    {
+        if (eventModel == null) return;
+
+        try
+        {
+            await EventService.UpdateEventAsync(eventModel);
+            hasChanges = false;
+            Snackbar.Add("Event updated successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating event: {ex.Message}", Severity.Error);
         }
     }
 }
