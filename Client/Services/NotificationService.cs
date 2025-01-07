@@ -261,6 +261,38 @@ namespace VentyTime.Client.Services
             }
         }
 
+        private async Task SaveNotificationsAsync(Notification notification)
+        {
+            try
+            {
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                
+                if (string.IsNullOrEmpty(userId))
+                {
+                    _logger.LogWarning("Cannot save notifications: user not authenticated");
+                    return;
+                }
+
+                var key = $"notifications_{userId}";
+                _logger.LogInformation("Saving notification to storage for user {UserId}", userId);
+                
+                var storedNotifications = await _localStorage.GetItemAsync<List<Notification>>(key);
+                if (storedNotifications == null)
+                {
+                    storedNotifications = new List<Notification>();
+                }
+                storedNotifications.Add(notification);
+                await _localStorage.SetItemAsync(key, storedNotifications);
+                _logger.LogInformation("Notification saved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error saving notifications");
+                _snackbar.Add("Error saving notifications", Severity.Error);
+            }
+        }
+
         public async Task CheckForEventNotifications()
         {
             try
@@ -374,6 +406,34 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogError(ex, "Error checking for event notifications");
                 _snackbar.Add("Error checking for notifications", Severity.Error);
+            }
+        }
+
+        public async Task SendEventNotificationAsync(Notification notification)
+        {
+            try
+            {
+                var registrations = await _eventService.GetEventRegistrationsAsync(notification.EventId ?? 0);
+                foreach (var registration in registrations)
+                {
+                    var userNotification = new Notification
+                    {
+                        UserId = registration.UserId,
+                        Title = notification.Title,
+                        Message = notification.Message,
+                        EventId = notification.EventId,
+                        Link = notification.Link,
+                        CreatedAt = DateTime.Now,
+                        IsRead = false
+                    };
+                    await SaveNotificationsAsync(userNotification);
+                }
+                OnNotificationsChanged?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending event notifications");
+                throw;
             }
         }
 

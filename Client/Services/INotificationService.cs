@@ -13,5 +13,6 @@ namespace VentyTime.Client.Services
         Task MarkAsReadAsync(int notificationId);
         Task MarkAllAsReadAsync();
         Task CheckForEventNotifications();
+        Task SendEventNotificationAsync(Notification notification);
     }
 }

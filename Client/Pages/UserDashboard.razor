@@ -1,6 +1,7 @@
 @page "/dashboard"
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
+@using VentyTime.Client.Shared
 @inject IUserService UserService
 @inject IEventService EventService
 @inject IRegistrationService RegistrationService
@@ -8,6 +9,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject INotificationService NotificationService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     @if (isLoading)
@@ -59,8 +61,8 @@
                                 @currentUser.Email
                             </MudText>
                         }
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                            Member since @currentUser?.CreatedAt.ToString("MMMM yyyy")
+                        <MudText Typo="Typo.body2" Color="Color.Primary" Class="mb-n1">
+                            Member since @(GetFormattedMemberSince())
                         </MudText>
                         
                         <MudDivider Class="mb-4 mt-2" />
@@ -86,7 +88,7 @@
             </MudItem>
 
             <MudItem xs="12" sm="12" md="8" lg="9">
-                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mud-elevation-4">
+                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mud-elevation-4" @bind-SelectedIndex="selectedTab">
                     <MudTabPanel Text="Upcoming Events" Icon="@Icons.Material.Filled.Event">
                         @if (!registeredEvents.Where(e => e.StartDate > DateTime.Now).Any())
                         {
@@ -139,27 +141,32 @@
                                                 </CardHeaderActions>
                                             </MudCardHeader>
                                             <MudCardContent>
-                                                <div class="d-flex flex-column gap-2">
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2">
-                                                            @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
-                                                        </MudText>
-                                                    </div>
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                                            @evt.Location
-                                                        </MudText>
-                                                    </div>
+                                                <div class="d-flex align-center mb-2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                                                    <MudText>@evt.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                                                </div>
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                                    <MudText>@evt.Location</MudText>
                                                 </div>
                                             </MudCardContent>
-                                            <MudCardActions Class="d-flex justify-end">
-                                                <MudButton Variant="Variant.Text"
-                                                          Color="Color.Primary"
-                                                          OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
-                                                    View Details
-                                                </MudButton>
+                                            <MudDivider />
+                                            <MudCardActions Class="pa-3">
+                                                @if (selectedTab == 2) // My Events
+                                                {
+                                                    <ButtonCarousel Buttons="@GetEventButtons(evt)" />
+                                                }
+                                                else // Upcoming Events or All Registered Events
+                                                {
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Primary"
+                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))"
+                                                              StartIcon="@Icons.Material.Filled.Visibility"
+                                                              Size="Size.Small"
+                                                              Class="custom-view-button">
+                                                        VIEW DETAILS
+                                                    </MudButton>
+                                                }
                                             </MudCardActions>
                                         </MudCard>
                                     </MudItem>
@@ -220,27 +227,32 @@
                                                 </CardHeaderActions>
                                             </MudCardHeader>
                                             <MudCardContent>
-                                                <div class="d-flex flex-column gap-2">
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2">
-                                                            @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
-                                                        </MudText>
-                                                    </div>
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                                            @evt.Location
-                                                        </MudText>
-                                                    </div>
+                                                <div class="d-flex align-center mb-2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                                                    <MudText>@evt.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                                                </div>
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                                    <MudText>@evt.Location</MudText>
                                                 </div>
                                             </MudCardContent>
-                                            <MudCardActions Class="d-flex justify-end">
-                                                <MudButton Variant="Variant.Text"
-                                                          Color="Color.Primary"
-                                                          OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
-                                                    View Details
-                                                </MudButton>
+                                            <MudDivider />
+                                            <MudCardActions Class="pa-3">
+                                                @if (selectedTab == 2) // My Events
+                                                {
+                                                    <ButtonCarousel Buttons="@GetEventButtons(evt)" />
+                                                }
+                                                else // Upcoming Events or All Registered Events
+                                                {
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Primary"
+                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))"
+                                                              StartIcon="@Icons.Material.Filled.Visibility"
+                                                              Size="Size.Small"
+                                                              Class="custom-view-button">
+                                                        VIEW DETAILS
+                                                    </MudButton>
+                                                }
                                             </MudCardActions>
                                         </MudCard>
                                     </MudItem>
@@ -301,48 +313,18 @@
                                                 </CardHeaderActions>
                                             </MudCardHeader>
                                             <MudCardContent>
-                                                <div class="d-flex flex-column gap-2">
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2">
-                                                            @evt.StartDate.ToLocalTime().ToString("MMM dd, yyyy HH:mm")
-                                                        </MudText>
-                                                    </div>
-                                                    <div class="d-flex align-center">
-                                                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />
-                                                        <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                                            @evt.Location
-                                                        </MudText>
-                                                    </div>
+                                                <div class="d-flex align-center mb-2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                                                    <MudText>@evt.StartDate.ToString("MMM dd, yyyy HH:mm")</MudText>
+                                                </div>
+                                                <div class="d-flex align-center">
+                                                    <MudIcon Icon="@Icons.Material.Filled.LocationOn" Class="mr-2" />
+                                                    <MudText>@evt.Location</MudText>
                                                 </div>
                                             </MudCardContent>
-                                            <MudCardActions Class="d-flex justify-space-between align-center pa-2">
-                                                <div class="d-flex gap-2 mt-2">
-                                                    <MudButton Variant="Variant.Text"
-                                                              Color="Color.Primary"
-                                                              Size="Size.Small"
-                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}"))">
-                                                        VIEW DETAILS
-                                                    </MudButton>
-                                                    <MudButton Variant="Variant.Text"
-                                                              Color="Color.Secondary"
-                                                              Size="Size.Small"
-                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}/registrations"))">
-                                                        REGISTRATIONS
-                                                    </MudButton>
-                                                    <MudButton Variant="Variant.Text"
-                                                              Color="Color.Info"
-                                                              Size="Size.Small"
-                                                              OnClick="@(() => NavigationManager.NavigateTo($"/event/{evt.Id}/edit"))">
-                                                        EDIT
-                                                    </MudButton>
-                                                    <MudButton Variant="Variant.Text"
-                                                              Color="Color.Error"
-                                                              Size="Size.Small"
-                                                              OnClick="@(() => ShowDeleteConfirmation(evt))">
-                                                        DELETE
-                                                    </MudButton>
-                                                </div>
+                                            <MudDivider />
+                                            <MudCardActions Class="pa-3">
+                                                <ButtonCarousel Buttons="@GetEventButtons(evt)" />
                                             </MudCardActions>
                                         </MudCard>
                                     </MudItem>
@@ -356,6 +338,14 @@
     }
 </MudContainer>
 
+<style>
+    .custom-view-button {
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+
 @code {
     private User? currentUser;
     private List<Event> userEvents = new();
@@ -363,6 +353,7 @@
     private List<string> userRoles = new();
     private bool isLoading = true;
     private string? errorMessage;
+    private int selectedTab = 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -399,6 +390,36 @@
     {
         userEvents = await EventService.GetEventsByOrganizerIdAsync(currentUser.Id);
         registeredEvents = await EventService.GetRegisteredEventsAsync();
+    }
+
+    private async Task OpenNotificationDialog(Event evt)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Title"] = "Send Notification to Event Participants",
+            ["ContentText"] = "Enter your message to send to all participants:",
+        };
+
+        var dialog = await DialogService.ShowAsync<NotificationDialog>("Send Notification", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var message = result.Data.ToString();
+            if (!string.IsNullOrEmpty(message))
+            {
+                var notification = new Notification
+                {
+                    Title = $"Message from {evt.Title} organizer",
+                    Message = message,
+                    EventId = evt.Id,
+                    Link = $"/event/{evt.Id}"
+                };
+
+                await NotificationService.SendEventNotificationAsync(notification);
+                Snackbar.Add("Notification sent successfully!", Severity.Success);
+            }
+        }
     }
 
     private void NavigateToEventDetails(int eventId)
@@ -477,5 +498,66 @@
                 Snackbar.Add($"Error: {ex.Message}", Severity.Error);
             }
         }
+    }
+
+    private List<ButtonCarousel.ButtonInfo> GetEventButtons(Event evt)
+    {
+        return new List<ButtonCarousel.ButtonInfo>
+        {
+            new ButtonCarousel.ButtonInfo
+            {
+                Text = "VIEW DETAILS",
+                Icon = Icons.Material.Filled.Visibility,
+                Color = Color.Primary,
+                Variant = Variant.Text,
+                OnClick = EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo($"/event/{evt.Id}"))
+            },
+            new ButtonCarousel.ButtonInfo
+            {
+                Text = "EDIT",
+                Icon = Icons.Material.Filled.Edit,
+                Color = Color.Secondary,
+                Variant = Variant.Text,
+                OnClick = EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo($"/event/{evt.Id}/edit"))
+            },
+            new ButtonCarousel.ButtonInfo
+            {
+                Text = "SEND",
+                Icon = Icons.Material.Filled.Notifications,
+                Color = Color.Info,
+                Variant = Variant.Text,
+                OnClick = EventCallback.Factory.Create(this, () => OpenNotificationDialog(evt))
+            },
+            new ButtonCarousel.ButtonInfo
+            {
+                Text = "PARTICIPANTS",
+                Icon = Icons.Material.Filled.Group,
+                Color = Color.Info,
+                Variant = Variant.Text,
+                OnClick = EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo($"/event/{evt.Id}/registrations"))
+            },
+            new ButtonCarousel.ButtonInfo
+            {
+                Text = "DELETE",
+                Icon = Icons.Material.Filled.Delete,
+                Color = Color.Error,
+                Variant = Variant.Text,
+                OnClick = EventCallback.Factory.Create(this, () => ShowDeleteConfirmation(evt))
+            }
+        };
+    }
+
+    private string GetFormattedMemberSince()
+    {
+        if (currentUser == null) return string.Empty;
+        
+        // Якщо дата створення дорівнює мінімальній даті (01.01.0001) або майбутній даті,
+        // використовуємо поточну дату
+        if (currentUser.CreatedAt <= DateTime.MinValue || currentUser.CreatedAt > DateTime.Now)
+        {
+            return DateTime.Now.ToString("MMMM yyyy");
+        }
+        
+        return currentUser.CreatedAt.ToLocalTime().ToString("MMMM yyyy");
     }
 }

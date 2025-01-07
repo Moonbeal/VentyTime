@@ -23,5 +23,6 @@ namespace VentyTime.Client.Services
         Task<List<Event>> GetOrganizedEventsAsync();
         Task<bool> UnregisterFromEventAsync(int eventId);
         Task<bool> CheckRegistrationStatusAsync(int eventId);
+        Task<List<Registration>> GetEventRegistrationsAsync(int eventId);
     }
 }

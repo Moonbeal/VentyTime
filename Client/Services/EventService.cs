@@ -454,5 +454,21 @@ namespace VentyTime.Client.Services
                 return false;
             }
         }
+
+        public async Task<List<Registration>> GetEventRegistrationsAsync(int eventId)
+        {
+            try
+            {
+                var client = await CreateClientAsync();
+                var response = await client.GetAsync($"api/events/{eventId}/registrations");
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<List<Registration>>() ?? new List<Registration>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting event registrations: {ex.Message}");
+                return new List<Registration>();
+            }
+        }
     }
 }

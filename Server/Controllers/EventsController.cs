@@ -421,7 +421,7 @@ namespace VentyTime.Server.Controllers
         }
 
         [HttpGet("{eventId}/registrations")]
-        [Authorize(Roles = "Admin,Organizer")]
+        [Authorize]
         public async Task<ActionResult<IEnumerable<Registration>>> GetEventRegistrations(int eventId)
         {
             try
@@ -429,9 +429,19 @@ namespace VentyTime.Server.Controllers
                 var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (string.IsNullOrEmpty(userId))
                 {
-                    _logger.LogWarning("User ID not found in claims. Available claims: {@Claims}", 
-                        User.Claims.Select(c => new { c.Type, c.Value }));
-                    return Unauthorized(new { message = "User not authenticated" });
+                    return Unauthorized();
+                }
+
+                var eventItem = await _eventService.GetEventByIdAsync(eventId);
+                if (eventItem == null)
+                {
+                    return NotFound();
+                }
+
+                // Перевіряємо, чи є користувач організатором події
+                if (eventItem.OrganizerId != userId)
+                {
+                    return Forbid();
                 }
 
                 var registrations = await _eventService.GetEventRegistrationsAsync(eventId);
@@ -439,7 +449,7 @@ namespace VentyTime.Server.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error retrieving event registrations for event {EventId}", eventId);
+                _logger.LogError(ex, "Error retrieving event registrations");
                 return StatusCode(500, new { message = "An error occurred while retrieving event registrations" });
             }
         }

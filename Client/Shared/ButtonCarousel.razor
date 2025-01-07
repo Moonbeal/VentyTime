@@ -1,0 +1,170 @@
+@using MudBlazor
+
+<div class="button-carousel">
+    <div class="carousel-container d-flex align-center">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" 
+                      Color="Color.Default" 
+                      OnClick="ScrollLeft"
+                      Size="Size.Small"
+                      Class="scroll-button" />
+        
+        <div class="buttons-container d-flex gap-2" @ref="containerRef">
+            <div class="buttons-slider d-flex gap-3">
+                @foreach (var button in Buttons)
+                {
+                    <div class="button-wrapper">
+                        <MudButton Variant="Variant.Text"
+                                 Color="@button.Color"
+                                 OnClick="@button.OnClick"
+                                 Size="Size.Small"
+                                 Class="custom-button">
+                            <MudIcon Icon="@button.Icon" Class="mr-2 custom-icon" Style="@GetIconStyle(button.Icon)" />
+                            <span class="custom-text" style="@GetTextStyle(button.Icon)">@button.Text</span>
+                        </MudButton>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" 
+                      Color="Color.Default" 
+                      OnClick="ScrollRight"
+                      Size="Size.Small"
+                      Class="scroll-button" />
+    </div>
+</div>
+
+<style>
+    .button-carousel {
+        position: relative;
+        width: 100%;
+    }
+
+    .carousel-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .buttons-container {
+        flex: 1;
+        overflow-x: hidden;
+        scroll-behavior: smooth;
+        margin: 0 8px;
+    }
+
+    .buttons-slider {
+        display: flex;
+        gap: 16px;
+        padding: 4px 0;
+        width: max-content;
+    }
+
+    .button-wrapper {
+        flex-shrink: 0;
+    }
+
+    .scroll-button {
+        z-index: 1;
+        background-color: white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin: 0 4px;
+    }
+
+    ::deep .custom-button {
+        padding: 6px 16px;
+        min-width: 0;
+        height: 36px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+
+    ::deep .custom-button:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+    }
+
+    ::deep .custom-icon {
+        font-size: 1.1rem;
+    }
+
+    ::deep .custom-text {
+        font-size: 0.813rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public List<ButtonInfo> Buttons { get; set; } = new();
+
+    private ElementReference containerRef;
+
+    [Inject]
+    public required IJSRuntime JS { get; set; }
+
+    private string GetIconStyle(string icon)
+    {
+        return icon switch
+        {
+            var i when i == Icons.Material.Filled.Visibility => "color: var(--mud-palette-primary)",
+            var i when i == Icons.Material.Filled.Edit => "color: #E91E63",
+            var i when i == Icons.Material.Filled.Notifications => "color: #2196F3",
+            var i when i == Icons.Material.Filled.Group => "color: #4CAF50",
+            var i when i == Icons.Material.Filled.Delete => "color: #F44336",
+            _ => ""
+        };
+    }
+
+    private string GetTextStyle(string icon)
+    {
+        return icon switch
+        {
+            var i when i == Icons.Material.Filled.Visibility => "color: var(--mud-palette-primary)",
+            var i when i == Icons.Material.Filled.Edit => "color: #E91E63",
+            var i when i == Icons.Material.Filled.Notifications => "color: #2196F3",
+            var i when i == Icons.Material.Filled.Group => "color: #4CAF50",
+            var i when i == Icons.Material.Filled.Delete => "color: #F44336",
+            _ => ""
+        };
+    }
+
+    private async Task ScrollLeft()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollHorizontally", containerRef, -200);
+        }
+        catch { }
+    }
+
+    private async Task ScrollRight()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("scrollHorizontally", containerRef, 200);
+        }
+        catch { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                window.scrollHorizontally = function(element, amount) {
+                    element.scrollLeft += amount;
+                }
+            ");
+        }
+    }
+
+    public class ButtonInfo
+    {
+        public string Text { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public Color Color { get; set; }
+        public Variant Variant { get; set; }
+        public EventCallback OnClick { get; set; }
+    }
+}

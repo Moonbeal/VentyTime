@@ -1,0 +1,30 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="message"
+                     Label="Message"
+                     Variant="Variant.Outlined"
+                     Lines="3"
+                     Class="mt-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Send</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string ContentText { get; set; } = string.Empty;
+
+    private string message = string.Empty;
+
+    void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(message));
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}
