@@ -20,6 +20,7 @@ builder.Services.AddScoped<IRegistrationService, RegistrationService>();
 builder.Services.AddScoped<ICommentService, CommentService>();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped<CultureService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // Add HTTP client with auth header handler
 builder.Services.AddScoped<AuthenticationHeaderHandler>();

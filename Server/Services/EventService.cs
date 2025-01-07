@@ -642,7 +642,67 @@ namespace VentyTime.Server.Services
                     "IQ Business Center"
                 };
 
-                // Генеруємо 100 подій
+                // Create test user if not exists
+                var testUser = await _userManager.FindByEmailAsync("test@example.com");
+                if (testUser == null)
+                {
+                    testUser = new ApplicationUser
+                    {
+                        UserName = "test@example.com",
+                        Email = "test@example.com",
+                        FirstName = "Test",
+                        LastName = "User",
+                        AvatarUrl = "https://example.com/avatar.jpg",
+                        CreatedAt = DateTime.UtcNow,
+                        IsActive = true,
+                        EmailConfirmed = true
+                    };
+                    var result = await _userManager.CreateAsync(testUser, "Test123!");
+                    if (!result.Succeeded)
+                    {
+                        throw new Exception($"Failed to create test user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                    }
+                }
+
+                // Create event for tomorrow
+                var tomorrowEvent = new Event
+                {
+                    Title = "Special Test Event Tomorrow",
+                    Description = "This is a test event scheduled for tomorrow",
+                    StartDate = DateTime.Parse("2025-01-08T10:00:00Z"), // UTC time
+                    EndDate = DateTime.Parse("2025-01-08T12:00:00Z"), // UTC time
+                    StartTime = TimeSpan.FromHours(10),
+                    Location = "Test Location",
+                    MaxAttendees = 100,
+                    CurrentCapacity = 0,
+                    Category = EventCategories.Technology,
+                    Type = EventType.Conference,
+                    Price = 0,
+                    ImageUrl = imageUrls[0],
+                    IsActive = true,
+                    IsFeatured = true,
+                    CreatedAt = DateTime.UtcNow,
+                    CreatorId = testUser.Id,
+                    OrganizerId = testUser.Id
+                };
+
+                await _context.Events.AddAsync(tomorrowEvent);
+                await _context.SaveChangesAsync();
+
+                // Register test user for the event
+                var registration = new Registration
+                {
+                    EventId = tomorrowEvent.Id,
+                    UserId = testUser.Id,
+                    Status = RegistrationStatus.Confirmed,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Registrations.Add(registration);
+                await _context.SaveChangesAsync();
+
+                // Generate other random events
                 for (int i = 0; i < 100; i++)
                 {
                     var category = EventCategories.All[random.Next(EventCategories.All.Length)];
@@ -667,10 +727,10 @@ namespace VentyTime.Server.Services
                         Price = price,
                         ImageUrl = imageUrls[random.Next(imageUrls.Length)],
                         IsActive = true,
-                        IsFeatured = random.Next(100) < 20, // 20% шанс бути featured
+                        IsFeatured = random.Next(100) < 20,
                         CreatedAt = DateTime.UtcNow,
-                        CreatorId = "1",
-                        OrganizerId = "1"
+                        CreatorId = testUser.Id,
+                        OrganizerId = testUser.Id
                     };
 
                     await _context.Events.AddAsync(newEvent);

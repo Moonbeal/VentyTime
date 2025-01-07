@@ -1,10 +1,12 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using VentyTime.Shared.Models
+@using VentyTime.Client.Components
 @inject NavigationManager NavigationManager
 @inject IAuthService AuthService
 @inject IUserService UserService
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject INotificationService NotificationService
 
 <MudAppBar Elevation="1">
     <MudContainer MaxWidth="MaxWidth.ExtraLarge">
@@ -23,11 +25,7 @@
             <AuthorizeView>
                 <Authorized>
                     <div class="d-flex align-center">
-                        <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
-                                     Color="Color.Inherit" 
-                                     Class="mx-2">
-                            <MudBadge Color="Color.Secondary" Content="3" Overlap="true" />
-                        </MudIconButton>
+                        <NotificationList />
                         
                         <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                             <ActivatorContent>
@@ -96,6 +94,7 @@
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error loading user data: {ex.Message}");
             Snackbar.Add("Error loading user data", Severity.Error);
         }
     }

@@ -245,6 +245,25 @@ namespace VentyTime.Client.Services
             {
                 Console.WriteLine("Getting registered events...");
                 var client = await CreateClientAsync();
+
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                
+                if (!user.Identity?.IsAuthenticated ?? true)
+                {
+                    Console.WriteLine("User not authenticated");
+                    return new List<Event>();
+                }
+
+                var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    Console.WriteLine("User ID not found");
+                    Console.WriteLine("Available claims: " + string.Join(", ", user.Claims.Select(c => $"{c.Type}: {c.Value}")));
+                    return new List<Event>();
+                }
+
+                Console.WriteLine($"Getting registered events for user: {userId}");
                 var response = await client.GetAsync("api/events/registered");
                 
                 if (!response.IsSuccessStatusCode)
@@ -256,6 +275,21 @@ namespace VentyTime.Client.Services
 
                 var events = await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
                 Console.WriteLine($"Retrieved {events.Count} registered events");
+                
+                foreach (var evt in events)
+                {
+                    var eventStartLocal = DateTime.SpecifyKind(evt.StartDate, DateTimeKind.Utc).ToLocalTime();
+                    var eventEndLocal = DateTime.SpecifyKind(evt.EndDate, DateTimeKind.Utc).ToLocalTime();
+                    
+                    Console.WriteLine($"Event: {evt.Title}");
+                    Console.WriteLine($"  ID: {evt.Id}");
+                    Console.WriteLine($"  Start (UTC): {evt.StartDate:yyyy-MM-dd HH:mm:ss}");
+                    Console.WriteLine($"  End (UTC): {evt.EndDate:yyyy-MM-dd HH:mm:ss}");
+                    Console.WriteLine($"  Start (Local): {eventStartLocal:yyyy-MM-dd HH:mm:ss zzz}");
+                    Console.WriteLine($"  End (Local): {eventEndLocal:yyyy-MM-dd HH:mm:ss zzz}");
+                    Console.WriteLine($"  Location: {evt.Location}");
+                }
+                
                 return events;
             }
             catch (Exception ex)

@@ -1,79 +1,167 @@
 @using VentyTime.Client.Services
 @using VentyTime.Shared.Models
-@inject NotificationService NotificationService
+@using MudBlazor
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject ILogger<NotificationList> _logger
 @implements IDisposable
 
-<div class="notification-container @(notifications.Any() ? "show" : "")">
-    @foreach (var notification in notifications.OrderByDescending(n => n.Timestamp))
-    {
-        <div class="notification-item @notification.Type.ToString().ToLowerInvariant()" @key="notification.Id">
-            <div class="notification-icon">
-                @switch (notification.Type)
+<MudMenu Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+    <ActivatorContent>
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications" 
+                      Color="@(unreadCount > 0 ? Color.Secondary : Color.Inherit)"
+                      Class="@(unreadCount > 0 ? "notification-bell-active" : "")">
+            @if (unreadCount > 0)
+            {
+                <MudBadge Color="Color.Secondary" Content="@unreadCount" Overlap="true" />
+            }
+        </MudIconButton>
+    </ActivatorContent>
+    <ChildContent>
+        <MudList Dense="true" Class="pa-0" Style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+            @if (!notifications.Any())
+            {
+                <MudListItem>
+                    <MudText Typo="Typo.body2">No notifications</MudText>
+                </MudListItem>
+            }
+            else
+            {
+                <MudListItem>
+                    <div class="d-flex justify-space-between align-center w-100">
+                        <MudText Typo="Typo.subtitle1" Class="mr-2">Notifications</MudText>
+                        @if (notifications.Any(n => !n.IsRead))
+                        {
+                            <MudButton Size="Size.Small"
+                                      Color="Color.Primary" 
+                                      Variant="Variant.Text" 
+                                      OnClick="MarkAllAsRead">
+                                Mark all as read
+                            </MudButton>
+                        }
+                    </div>
+                </MudListItem>
+                <MudDivider />
+                @foreach (var notification in notifications.OrderByDescending(n => n.CreatedAt))
                 {
-                    case NotificationType.Success:
-                        <i class="fas fa-check-circle"></i>
-                        break;
-                    case NotificationType.Warning:
-                        <i class="fas fa-exclamation-triangle"></i>
-                        break;
-                    case NotificationType.Error:
-                        <i class="fas fa-times-circle"></i>
-                        break;
-                    default:
-                        <i class="fas fa-info-circle"></i>
-                        break;
+                    <MudListItem @key="notification.Id" Class="@(!notification.IsRead ? "unread" : "")" OnClick="@(() => HandleNotificationClick(notification))">
+                        <div class="d-flex flex-column">
+                            <MudText Typo="Typo.subtitle2">@notification.Title</MudText>
+                            <MudText Typo="Typo.body2">@notification.Message</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@GetTimeAgo(notification.CreatedAt)</MudText>
+                        </div>
+                    </MudListItem>
                 }
-            </div>
-            <div class="notification-content">
-                <MudText Typo="Typo.body2">@notification.Message</MudText>
-                <MudText Typo="Typo.caption" Class="mt-1">@notification.Timestamp.ToString("g")</MudText>
-                @if (!notification.IsDismissed && notification.Id == selectedNotificationId)
-                {
-                    <MudButton Color="Color.Primary" Size="Size.Small" OnClick="() => DismissNotification(notification.Id)">
-                        Dismiss
-                    </MudButton>
-                }
-            </div>
-            <button class="notification-close" @onclick="() => DismissNotification(notification.Id)">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+            }
+        </MudList>
+    </ChildContent>
+</MudMenu>
+
+<style>
+    .unread {
+        background-color: var(--mud-palette-background-grey);
     }
-</div>
+
+    .notification-bell-active {
+        animation: bellPulse 2s infinite;
+    }
+
+    @@keyframes bellPulse {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.1);
+            opacity: 0.9;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+</style>
 
 @code {
-    private List<NotificationMessage> notifications = new();
-    private IDisposable? notificationSubscription;
-    private int selectedNotificationId = 0;
+    private List<Notification> notifications = new();
+    private int unreadCount = 0;
+    private readonly DateTimeOffset _currentTime = DateTimeOffset.Parse("2025-01-07T15:06:11+02:00");
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        notificationSubscription = NotificationService.OnNotification(notification =>
-        {
-            notifications.Add(notification);
-            InvokeAsync(StateHasChanged);
-
-            // Auto-dismiss after 5 seconds
-            Task.Delay(5000).ContinueWith(_ =>
-            {
-                DismissNotification(notification.Id);
-            });
-        });
+        NotificationService.OnNotificationsChanged += OnNotificationsChanged;
+        await LoadNotifications();
+        await UpdateUnreadCount();
     }
 
-    private void DismissNotification(int id)
+    private async Task LoadNotifications()
     {
-        var notification = notifications.FirstOrDefault(n => n.Id == id);
-        if (notification != null)
+        notifications = await NotificationService.GetNotificationsAsync();
+        StateHasChanged();
+    }
+
+    private async Task UpdateUnreadCount()
+    {
+        unreadCount = await NotificationService.GetUnreadCountAsync();
+        StateHasChanged();
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        try
         {
-            notifications.Remove(notification);
-            InvokeAsync(StateHasChanged);
+            await NotificationService.MarkAllAsReadAsync();
+            await LoadNotifications();
+            await UpdateUnreadCount();
+            Snackbar.Add("All notifications marked as read");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark all notifications as read");
+            Snackbar.Add("Failed to mark notifications as read");
+        }
+    }
+
+    private async Task MarkAsRead(int notificationId)
+    {
+        try
+        {
+            await NotificationService.MarkAsReadAsync(notificationId);
+            await LoadNotifications();
+            await UpdateUnreadCount();
+            Snackbar.Add("Notification marked as read");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to mark notification as read");
+            Snackbar.Add("Failed to mark notification as read");
+        }
+    }
+
+    private async Task HandleNotificationClick(Notification notification)
+    {
+        try
+        {
+            if (!notification.IsRead)
+            {
+                await MarkAsRead(notification.Id);
+            }
+
+            if (!string.IsNullOrEmpty(notification.Link))
+            {
+                NavigationManager.NavigateTo(notification.Link);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling notification click: {ex}");
         }
     }
 
     private string GetTimeAgo(DateTime timestamp)
     {
-        var timeSpan = DateTime.UtcNow - timestamp;
+        var timeSpan = _currentTime.DateTime - timestamp;
 
         if (timeSpan.TotalMinutes < 1)
             return "just now";
@@ -88,94 +176,21 @@
 
     public void Dispose()
     {
-        notificationSubscription?.Dispose();
+        NotificationService.OnNotificationsChanged -= OnNotificationsChanged;
+    }
+
+    private async void OnNotificationsChanged()
+    {
+        try
+        {
+            _logger.LogInformation("Notifications changed, refreshing...");
+            await LoadNotifications();
+            await UpdateUnreadCount();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in OnNotificationsChanged");
+        }
     }
 }
-
-<style>
-    .notification-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 1000;
-        max-width: 400px;
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.3s ease-in-out;
-    }
-
-    .notification-container.show {
-        opacity: 1;
-        transform: translateX(0);
-    }
-
-    .notification-item {
-        display: flex;
-        align-items: center;
-        padding: 12px;
-        margin-bottom: 10px;
-        border-radius: 4px;
-        background-color: white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        animation: slideIn 0.3s ease-in-out;
-    }
-
-    .notification-item.success {
-        border-left: 4px solid #4caf50;
-    }
-
-    .notification-item.warning {
-        border-left: 4px solid #ff9800;
-    }
-
-    .notification-item.error {
-        border-left: 4px solid #f44336;
-    }
-
-    .notification-item.info {
-        border-left: 4px solid #2196f3;
-    }
-
-    .notification-icon {
-        margin-right: 12px;
-        font-size: 20px;
-    }
-
-    .notification-content {
-        flex: 1;
-    }
-
-    .notification-message {
-        margin-bottom: 4px;
-        font-size: 14px;
-    }
-
-    .notification-time {
-        font-size: 12px;
-        color: #666;
-    }
-
-    .notification-close {
-        background: none;
-        border: none;
-        padding: 4px;
-        cursor: pointer;
-        color: #999;
-        transition: color 0.2s;
-    }
-
-    .notification-close:hover {
-        color: #666;
-    }
-
-    @@keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-</style>
