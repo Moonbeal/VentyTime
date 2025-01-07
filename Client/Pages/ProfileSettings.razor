@@ -147,57 +147,6 @@
                             </MudGrid>
                         </MudForm>
                     </MudTabPanel>
-
-                    <MudTabPanel Text="Notifications">
-                        <MudGrid Spacing="4">
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.EmailNotifications"
-                                         Color="Color.Primary"
-                                         Label="Email Notifications" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.PushNotifications"
-                                         Color="Color.Primary"
-                                         Label="Push Notifications" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.EventReminders"
-                                         Color="Color.Primary"
-                                         Label="Event Reminders" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.NewFollowerNotifications"
-                                         Color="Color.Primary"
-                                         Label="New Follower Notifications" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.NewLikeNotifications"
-                                         Color="Color.Primary"
-                                         Label="New Like Notifications" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudSwitch @bind-Checked="@notificationSettings.NewCommentNotifications"
-                                         Color="Color.Primary"
-                                         Label="New Comment Notifications" />
-                            </MudItem>
-                            <MudItem xs="12" Class="d-flex justify-end">
-                                <MudButton Variant="Variant.Filled"
-                                         Color="Color.Primary"
-                                         OnClick="SaveNotificationSettingsAsync"
-                                         Disabled="@isSavingNotifications">
-                                    @if (isSavingNotifications)
-                                    {
-                                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                                        <MudText Class="ms-2">Saving...</MudText>
-                                    }
-                                    else
-                                    {
-                                        <MudText>Save Changes</MudText>
-                                    }
-                                </MudButton>
-                            </MudItem>
-                        </MudGrid>
-                    </MudTabPanel>
                 </MudTabs>
             </MudItem>
         </MudGrid>
@@ -209,14 +158,12 @@
     private bool isLoading = true;
     private bool isSaving;
     private bool isChangingPassword;
-    private bool isSavingNotifications;
     private bool isUploadingAvatar;
+    private bool isShow;
     private MudForm? form;
     private MudForm? passwordForm;
     private UpdateProfileRequest editModel = new();
     private ChangePasswordRequest passwordModel = new();
-    private NotificationSettings notificationSettings = new();
-    private bool isShow;
     private InputType PasswordInput = InputType.Password;
     private string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
 
@@ -233,16 +180,6 @@
                     LastName = currentUser.LastName,
                     Email = currentUser.Email,
                     PhoneNumber = currentUser.PhoneNumber
-                };
-
-                notificationSettings = new NotificationSettings
-                {
-                    EmailNotifications = currentUser.EmailNotifications,
-                    PushNotifications = currentUser.PushNotifications,
-                    EventReminders = currentUser.EventReminders,
-                    NewFollowerNotifications = currentUser.NewFollowerNotifications,
-                    NewLikeNotifications = currentUser.NewLikeNotifications,
-                    NewCommentNotifications = currentUser.NewCommentNotifications
                 };
             }
         }
@@ -344,38 +281,6 @@
         finally
         {
             isChangingPassword = false;
-        }
-    }
-
-    private async Task SaveNotificationSettingsAsync()
-    {
-        try
-        {
-            isSavingNotifications = true;
-            var result = await UserService.UpdateNotificationSettingsAsync(
-                notificationSettings.EmailNotifications,
-                notificationSettings.PushNotifications,
-                notificationSettings.EventReminders,
-                notificationSettings.NewFollowerNotifications,
-                notificationSettings.NewLikeNotifications,
-                notificationSettings.NewCommentNotifications);
-            if (result)
-            {
-                Snackbar.Add("Notification settings updated", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Failed to update notification settings", Severity.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error saving notification settings: {ex.Message}");
-            Snackbar.Add("Failed to save notification settings", Severity.Error);
-        }
-        finally
-        {
-            isSavingNotifications = false;
         }
     }
 
