@@ -20,7 +20,7 @@ public class NotificationService : INotificationService
         try
         {
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == userId);
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
             {
@@ -50,7 +50,7 @@ public class NotificationService : INotificationService
         try
         {
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == userId);
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
             {
@@ -71,6 +71,34 @@ public class NotificationService : INotificationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating notification settings for user {UserId}", userId);
+            return false;
+        }
+    }
+
+    public async Task<bool> ClearNotificationsAsync(string userId)
+    {
+        try
+        {
+            var notifications = await _context.Notifications
+                .Where(n => n.UserId == userId)
+                .ToListAsync();
+
+            if (!notifications.Any())
+            {
+                return true;
+            }
+
+            foreach (var notification in notifications)
+            {
+                notification.IsDismissed = true;
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing notifications for user {UserId}", userId);
             return false;
         }
     }

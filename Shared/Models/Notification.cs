@@ -12,11 +12,16 @@ namespace VentyTime.Shared.Models
         public bool IsRead { get; set; }
         public int? EventId { get; set; }
         public string? Link { get; set; }
+        public bool IsDismissed { get; set; }
+
+        public virtual ApplicationUser? User { get; set; }
+        public virtual Event? Event { get; set; }
 
         public Notification()
         {
-            CreatedAt = DateTime.Now;
+            CreatedAt = DateTime.UtcNow;
             IsRead = false;
+            IsDismissed = false;
         }
     }
 }

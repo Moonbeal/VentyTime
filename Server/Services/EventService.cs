@@ -322,14 +322,19 @@ namespace VentyTime.Server.Services
                     .FirstOrDefaultAsync(e => e.Id == id) ?? 
                     throw new KeyNotFoundException($"Event with ID {id} not found");
 
+                // Get user and check if they are an admin
+                var user = await _userManager.FindByIdAsync(userId) ?? 
+                    throw new UnauthorizedAccessException("User not found");
+                var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+
                 // Check if user has permission to delete the event
-                if (@event.CreatorId != userId && @event.OrganizerId != userId)
+                if (!isAdmin && @event.CreatorId != userId && @event.OrganizerId != userId)
                 {
                     throw new UnauthorizedAccessException("You do not have permission to delete this event");
                 }
 
-                // Check if event has any confirmed registrations
-                if (@event.Registrations != null && @event.Registrations.Any(r => r.Status == RegistrationStatus.Confirmed))
+                // Only check for registrations if the user is not an admin
+                if (!isAdmin && @event.Registrations != null && @event.Registrations.Any(r => r.Status == RegistrationStatus.Confirmed))
                 {
                     throw new InvalidOperationException("Cannot delete event with confirmed registrations");
                 }

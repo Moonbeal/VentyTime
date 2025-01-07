@@ -14,6 +14,7 @@ namespace VentyTime.Server.Data
         public DbSet<Event> Events { get; set; } = null!;
         public DbSet<Comment> Comments { get; set; } = null!;
         public DbSet<Registration> Registrations { get; set; } = null!;
+        public DbSet<Notification> Notifications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -181,6 +182,36 @@ namespace VentyTime.Server.Data
                     .WithMany(e => e.Registrations)
                     .HasForeignKey(r => r.EventId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<Notification>(entity =>
+            {
+                entity.HasKey(n => n.Id);
+
+                entity.Property(n => n.Title)
+                    .HasMaxLength(200);
+
+                entity.Property(n => n.Message)
+                    .HasMaxLength(1000);
+
+                entity.Property(n => n.Link)
+                    .HasMaxLength(2000);
+
+                entity.Property(n => n.CreatedAt)
+                    .IsRequired()
+                    .HasConversion(
+                        v => v,
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+                entity.HasOne(n => n.User)
+                    .WithMany()
+                    .HasForeignKey(n => n.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(n => n.Event)
+                    .WithMany()
+                    .HasForeignKey(n => n.EventId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
         }
     }

@@ -24,7 +24,7 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized();
@@ -50,7 +50,7 @@ public class NotificationController : ControllerBase
     {
         try
         {
-            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized();
@@ -68,6 +68,32 @@ public class NotificationController : ControllerBase
         {
             _logger.LogError(ex, "Error updating notification settings");
             return StatusCode(500, "An error occurred while updating notification settings");
+        }
+    }
+
+    [HttpPost("clear")]
+    public async Task<IActionResult> ClearNotifications()
+    {
+        try
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            var success = await _notificationService.ClearNotificationsAsync(userId);
+            if (!success)
+            {
+                return StatusCode(500, "An error occurred while clearing notifications");
+            }
+
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing notifications");
+            return StatusCode(500, "An error occurred while clearing notifications");
         }
     }
 }
