@@ -85,7 +85,6 @@
                                     </div>
                                     <MudButton Variant="Variant.Text" 
                                               Color="Color.Primary"
-                                              EndIcon="@Icons.Material.Filled.ChevronRight"
                                               OnClick="@(() => NavigationManager.NavigateTo($"/events/{evt.Id}"))">
                                         View Details
                                     </MudButton>
@@ -95,53 +94,11 @@
                     </div>
                 </div>
             }
-
-            @if (currentUser != null && organizedEvents?.Any() == true)
+            else
             {
-                <div>
-                    <MudText Typo="Typo.h5" Class="mb-4">Events You're Organizing</MudText>
-                    <div class="d-flex flex-column gap-4">
-                        @foreach (var evt in organizedEvents)
-                        {
-                            <MudCard>
-                                <MudCardHeader>
-                                    <CardHeaderContent>
-                                        <MudText Typo="Typo.h6">@evt.Title</MudText>
-                                        <MudText Typo="Typo.body2">@evt.Description</MudText>
-                                    </CardHeaderContent>
-                                </MudCardHeader>
-                                <MudCardActions>
-                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Link="@($"/event/{evt.Id}")">View Details</MudButton>
-                                    <MudButton Variant="Variant.Text" Color="Color.Secondary" Link="@($"/event/{evt.Id}/edit")">Edit</MudButton>
-                                </MudCardActions>
-                            </MudCard>
-                        }
-                    </div>
-                </div>
-            }
-
-            @if (currentUser != null)
-            {
-                <div>
-                    <MudText Typo="Typo.h5" Class="mb-4">Admin Panel</MudText>
-                    <div class="d-flex flex-column gap-4">
-                        <AdminPanel />
-                    </div>
-                </div>
-            }
-
-            @if (registeredEvents?.Any() != true && organizedEvents?.Any() != true)
-            {
-                <MudPaper Class="pa-6 rounded-lg d-flex flex-column align-center" Elevation="0">
-                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Default" Size="Size.Large" Class="mb-4" />
-                    <MudText Typo="Typo.h6" Align="Align.Center">No Events Yet</MudText>
-                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-4">Start by browsing available events or create your own!</MudText>
-                    <MudButton Variant="Variant.Filled" 
-                              Color="Color.Primary"
-                              OnClick="@(() => NavigationManager.NavigateTo("/events"))">
-                        Browse Events
-                    </MudButton>
-                </MudPaper>
+                <MudAlert Severity="Severity.Info" Class="mb-6">
+                    You haven't registered for any events yet.
+                </MudAlert>
             }
         </MudItem>
     </MudGrid>
@@ -150,7 +107,6 @@
 @code {
     private ApplicationUser? currentUser;
     private IEnumerable<Event>? registeredEvents;
-    private IEnumerable<Event>? organizedEvents;
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,7 +114,6 @@
         if (currentUser != null)
         {
             registeredEvents = await EventService.GetRegisteredEventsAsync();
-            organizedEvents = await EventService.GetOrganizedEventsAsync();
         }
     }
 }

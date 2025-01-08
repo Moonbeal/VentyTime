@@ -277,11 +277,7 @@ namespace VentyTime.Client.Services
                 var key = $"notifications_{userId}";
                 _logger.LogInformation("Saving notification to storage for user {UserId}", userId);
                 
-                var storedNotifications = await _localStorage.GetItemAsync<List<Notification>>(key);
-                if (storedNotifications == null)
-                {
-                    storedNotifications = new List<Notification>();
-                }
+                var storedNotifications = (await _localStorage.GetItemAsync<List<Notification>>(key)) ?? new List<Notification>();
                 storedNotifications.Add(notification);
                 await _localStorage.SetItemAsync(key, storedNotifications);
                 _logger.LogInformation("Notification saved successfully");
@@ -434,6 +430,31 @@ namespace VentyTime.Client.Services
             {
                 _logger.LogError(ex, "Error sending event notifications");
                 throw;
+            }
+        }
+
+        public async Task ClearNotificationsAsync()
+        {
+            try
+            {
+                _notifications.Clear();
+                OnNotificationsChanged?.Invoke();
+                
+                var authState = await _authStateProvider.GetAuthenticationStateAsync();
+                var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var key = $"notifications_{userId}";
+                    await _localStorage.RemoveItemAsync(key);
+                }
+                
+                _logger.LogInformation("Notifications cleared successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing notifications");
+                _snackbar.Add("Error clearing notifications", Severity.Error);
             }
         }
 

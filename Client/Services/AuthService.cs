@@ -20,13 +20,15 @@ namespace VentyTime.Client.Services
         private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
         private readonly ILogger<AuthService> _logger;
         private readonly NavigationManager _navigationManager;
+        private readonly INotificationService _notificationService;
 
         public AuthService(
             IHttpClientFactory httpClientFactory,
             AuthenticationStateProvider authStateProvider,
             Blazored.LocalStorage.ILocalStorageService localStorage,
             ILogger<AuthService> logger,
-            NavigationManager navigationManager)
+            NavigationManager navigationManager,
+            INotificationService notificationService)
         {
             _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
             _noAuthClient = httpClientFactory.CreateClient("VentyTime.ServerAPI.NoAuth");
@@ -35,6 +37,7 @@ namespace VentyTime.Client.Services
             _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
+            _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
@@ -105,6 +108,7 @@ namespace VentyTime.Client.Services
             try
             {
                 await _localStorage.RemoveItemAsync("authToken");
+                await _notificationService.ClearNotificationsAsync();
                 await _authStateProvider.NotifyUserLogoutAsync();
                 _navigationManager.NavigateTo("/");
                 _logger.LogInformation("User logged out successfully.");
