@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using VentyTime.Server.Services;
 using VentyTime.Shared.Models;
+using VentyTime.Shared.Models.Auth;
 
 namespace VentyTime.Server.Controllers
 {
@@ -82,6 +83,42 @@ namespace VentyTime.Server.Controllers
 
             _logger.LogError("Failed to update user status: {UserId}, Errors: {Errors}", userId, string.Join(", ", result.Errors.Select(e => e.Description)));
             return BadRequest(result.Errors);
+        }
+
+        [HttpPut("{userId}/profile")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateUserProfile(string userId, [FromBody] UpdateProfileRequest request)
+        {
+            _logger.LogInformation("Updating profile for user {UserId}", userId);
+            
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                _logger.LogWarning("User not found while updating profile: {UserId}", userId);
+                return NotFound("User not found");
+            }
+
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+            user.PhoneNumber = request.PhoneNumber;
+            
+            // Email можна оновити тільки через спеціальну процедуру з підтвердженням
+            if (user.Email != request.Email)
+            {
+                _logger.LogWarning("Email update is not supported through this endpoint");
+                return BadRequest("Email update is not supported through this endpoint");
+            }
+
+            var result = await _userManager.UpdateAsync(user);
+            if (result.Succeeded)
+            {
+                _logger.LogInformation("User profile updated successfully: {UserId}", userId);
+                return Ok();
+            }
+
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            _logger.LogError("Failed to update user profile: {UserId}, Errors: {Errors}", userId, errors);
+            return BadRequest(errors);
         }
 
         [HttpDelete("{userId}")]

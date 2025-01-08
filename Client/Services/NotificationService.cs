@@ -21,7 +21,7 @@ namespace VentyTime.Client.Services
         private readonly List<Notification> _notifications = new();
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private readonly ILogger<NotificationService> _logger;
-        private readonly DateTimeOffset _currentTime = DateTimeOffset.Parse("2025-01-07T15:06:11+02:00");
+        private static DateTimeOffset CurrentTime { get => DateTimeOffset.Now; }
         public event Action? OnNotificationsChanged;
 
         public NotificationService(
@@ -70,7 +70,7 @@ namespace VentyTime.Client.Services
                 if (storedNotifications != null)
                 {
                     // Clean up old notifications (older than 7 days)
-                    var cutoffDate = _currentTime.DateTime.AddDays(-7);
+                    var cutoffDate = CurrentTime.DateTime.AddDays(-7);
                     storedNotifications = storedNotifications.Where(n => n.CreatedAt >= cutoffDate).ToList();
                     
                     _notifications.Clear();
@@ -294,8 +294,8 @@ namespace VentyTime.Client.Services
             try
             {
                 _logger.LogInformation("Starting CheckForEventNotifications");
-                _logger.LogInformation("Current time (UTC): {CurrentTimeUtc}", _currentTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"));
-                _logger.LogInformation("Current time (Local): {CurrentTimeLocal}", _currentTime.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss zzz"));
+                _logger.LogInformation("Current time (UTC): {CurrentTimeUtc}", CurrentTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                _logger.LogInformation("Current time (Local): {CurrentTimeLocal}", CurrentTime.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss zzz"));
                 
                 var authState = await _authStateProvider.GetAuthenticationStateAsync();
                 var user = authState.User;
@@ -320,7 +320,7 @@ namespace VentyTime.Client.Services
                 _logger.LogInformation("Found {Count} registered events", userEvents.Count);
 
                 // Get tomorrow's date in local time
-                var currentTimeLocal = _currentTime.LocalDateTime;
+                var currentTimeLocal = CurrentTime.LocalDateTime;
                 var tomorrowDate = currentTimeLocal.Date.AddDays(1);
                 _logger.LogInformation("Tomorrow date: {TomorrowDate}", tomorrowDate.ToString("yyyy-MM-dd"));
 

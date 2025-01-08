@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Logging;
 using MudBlazor;
 using VentyTime.Client.Auth;
+using VentyTime.Client.Services;
 using VentyTime.Shared.Models;
 using VentyTime.Shared.Models.Auth;
 
@@ -19,16 +20,16 @@ namespace VentyTime.Client.Services
         private readonly CustomAuthStateProvider _authStateProvider;
         private readonly Blazored.LocalStorage.ILocalStorageService _localStorage;
         private readonly ILogger<AuthService> _logger;
-        private readonly NavigationManager _navigationManager;
         private readonly INotificationService _notificationService;
+        private readonly NavigationManager _navigationManager;
 
         public AuthService(
             IHttpClientFactory httpClientFactory,
             AuthenticationStateProvider authStateProvider,
             Blazored.LocalStorage.ILocalStorageService localStorage,
             ILogger<AuthService> logger,
-            NavigationManager navigationManager,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            NavigationManager navigationManager)
         {
             _httpClient = httpClientFactory.CreateClient("VentyTime.ServerAPI");
             _noAuthClient = httpClientFactory.CreateClient("VentyTime.ServerAPI.NoAuth");
@@ -36,8 +37,8 @@ namespace VentyTime.Client.Services
                 ?? throw new ArgumentNullException(nameof(authStateProvider));
             _localStorage = localStorage ?? throw new ArgumentNullException(nameof(localStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+            _navigationManager = navigationManager ?? throw new ArgumentNullException(nameof(navigationManager));
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)

@@ -1,8 +1,11 @@
 @page "/dashboard"
+@using VentyTime.Shared
 @using VentyTime.Shared.Models
 @using VentyTime.Client.Services
 @using VentyTime.Client.Shared
 @using System.Security.Claims
+@using MudBlazor
+@using MudBlazor.Utilities
 @inject IUserService UserService
 @inject IEventService EventService
 @inject IRegistrationService RegistrationService
@@ -93,7 +96,7 @@
             </MudItem>
 
             <MudItem xs="12" sm="12" md="8" lg="9">
-                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mud-elevation-4" @bind-SelectedIndex="selectedTab">
+                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" Class="mud-elevation-4" @bind-Value="selectedTab">
                     <MudTabPanel Text="Upcoming Events" Icon="@Icons.Material.Filled.Event">
                         @if (!registeredEvents.Where(e => e.StartDate > DateTime.Now).Any())
                         {

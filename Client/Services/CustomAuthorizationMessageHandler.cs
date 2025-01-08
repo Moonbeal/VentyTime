@@ -14,7 +14,7 @@ public class CustomAuthorizationMessageHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var token = await _localStorage.GetItemAsync<string>("authToken");
+        var token = await _localStorage.GetItemAsync<string>("authToken", cancellationToken);
 
         if (!string.IsNullOrEmpty(token))
         {

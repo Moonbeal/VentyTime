@@ -1,4 +1,5 @@
 @using VentyTime.Shared.Models
+@using VentyTime.Shared.Models.Auth
 @inject IUserService UserService
 @inject ISnackbar Snackbar
 
@@ -116,15 +117,25 @@
         try
         {
             isSaving = true;
-            var result = await UserService.UpdateUserAsync(User);
-            if (result)
+            
+            var request = new UpdateProfileRequest
+            {
+                FirstName = User.FirstName ?? string.Empty,
+                LastName = User.LastName ?? string.Empty,
+                Email = User.Email ?? string.Empty,
+                PhoneNumber = User.PhoneNumber ?? string.Empty
+            };
+            
+            var response = await UserService.UpdateUserAsync(User.Id, request);
+            if (response.IsSuccessStatusCode)
             {
                 Snackbar.Add("User details updated successfully!", Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
             else
             {
-                Snackbar.Add("Failed to update user details.", Severity.Error);
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Failed to update user details: {error}", Severity.Error);
             }
         }
         catch (Exception ex)

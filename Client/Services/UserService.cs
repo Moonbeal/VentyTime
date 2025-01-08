@@ -340,18 +340,21 @@ namespace VentyTime.Client.Services
         {
             try
             {
-                var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) 
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
-
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                return await _httpClient.PutAsJsonAsync($"api/user/{userId}", request);
+                _logger.LogInformation("Updating user {UserId} with request: {@Request}", userId, request);
+                var response = await _httpClient.PutAsJsonAsync($"api/users/{userId}/profile", request);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("Failed to update user {UserId}. Status: {Status}, Error: {Error}", 
+                        userId, response.StatusCode, error);
+                }
+                
+                return response;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating user");
+                _logger.LogError(ex, "Error updating user {UserId}", userId);
                 return new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError) 
                 { 
                     Content = new StringContent(ex.Message) 
@@ -380,149 +383,31 @@ namespace VentyTime.Client.Services
 
         public async Task<List<Event>> GetUserEventsAsync()
         {
-            try
-            {
-                var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return new List<Event>();
-
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var result = await _httpClient.GetFromJsonAsync<List<Event>>("api/users/events");
-                return result ?? new List<Event>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting user events: {ex.Message}");
-                return new List<Event>();
-            }
-        }
-
-        public async Task<List<Message>> GetMessagesAsync(int conversationId)
-        {
-            try
-            {
-                var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return new List<Message>();
-
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var result = await _httpClient.GetFromJsonAsync<List<Message>>($"api/chat/conversations/{conversationId}/messages");
-                return result ?? new List<Message>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting messages: {ex.Message}");
-                return new List<Message>();
-            }
-        }
-
-        public async Task SendMessageAsync(int conversationId, string content)
-        {
-            try
-            {
-                var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return;
-
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                await _httpClient.PostAsJsonAsync($"api/chat/conversations/{conversationId}/messages", new { Content = content });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending message: {ex.Message}");
-                _snackbar.Add("Failed to send message", Severity.Error);
-            }
-        }
-
-        public async Task<List<Conversation>> GetConversationsAsync()
-        {
-            try
-            {
-                var token = await GetAuthTokenAsync();
-                if (string.IsNullOrEmpty(token)) return new List<Conversation>();
-
-                _httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-                var result = await _httpClient.GetFromJsonAsync<List<Conversation>>("api/chat/conversations");
-                return result ?? new List<Conversation>();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error getting conversations: {ex.Message}");
-                return new List<Conversation>();
-            }
+            var response = await _httpClient.GetAsync("api/events/user");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<Event>>() ?? new List<Event>();
         }
 
         public async Task<bool> DeleteAccountAsync()
         {
-            try
-            {
-                var response = await _httpClient.DeleteAsync("api/users/me");
-                if (response.IsSuccessStatusCode)
-                {
-                    await _localStorage.RemoveItemAsync("authToken");
-                    await _authStateProvider.NotifyUserLogoutAsync();
-                    _snackbar.Add("Account deleted successfully", Severity.Success);
-                    return true;
-                }
-                _snackbar.Add("Failed to delete account", Severity.Error);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error deleting account");
-                _snackbar.Add("An error occurred while deleting your account", Severity.Error);
-                return false;
-            }
+            var response = await _httpClient.DeleteAsync("api/users/account");
+            return response.IsSuccessStatusCode;
         }
 
         public async Task<IList<string>> GetUserRolesAsync(string userId)
         {
-            try
-            {
-                var response = await _httpClient.GetAsync($"api/users/{userId}/roles");
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
-                }
-                _logger.LogWarning("Failed to get user roles");
-                return new List<string>();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting user roles");
-                return new List<string>();
-            }
-        }
-
-        public async Task<HttpResponseMessage> UploadAvatarAsync(string userId, IBrowserFile file)
-        {
-            try
-            {
-                // Create form data
-                var content = new MultipartFormDataContent();
-                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
-                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
-                content.Add(fileContent, "file", file.Name);
-
-                // Upload the file
-                return await _httpClient.PostAsync($"api/user/avatar", content);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error uploading avatar");
-                throw;
-            }
+            var response = await _httpClient.GetAsync($"api/users/{userId}/roles");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
         }
 
         public async Task<bool> UpdateProfileAsync(string firstName, string lastName, string email, string phoneNumber)
         {
             try
             {
+                _logger.LogInformation("Updating profile for user. FirstName: {FirstName}, LastName: {LastName}, Email: {Email}", 
+                    firstName, lastName, email);
+
                 var request = new UpdateProfileRequest
                 {
                     FirstName = firstName,
@@ -531,16 +416,21 @@ namespace VentyTime.Client.Services
                     PhoneNumber = phoneNumber
                 };
 
+                _logger.LogInformation("Sending profile update request to server...");
                 var response = await _httpClient.PutAsJsonAsync($"api/user/profile", request);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation("Server response: Status: {StatusCode}, Content: {Content}", 
+                    response.StatusCode, responseContent);
+
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Profile updated successfully", Severity.Success);
+                    await _authStateProvider.NotifyUserAuthenticationAsync(await GetAuthTokenAsync() ?? string.Empty);
                     return true;
                 }
 
-                var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Failed to update profile: {Error}", error);
-                _snackbar.Add(error, Severity.Error);
+                _logger.LogWarning("Failed to update profile: {Error}", responseContent);
+                _snackbar.Add(responseContent, Severity.Error);
                 return false;
             }
             catch (Exception ex)
@@ -561,7 +451,7 @@ namespace VentyTime.Client.Services
                     NewPassword = newPassword
                 };
 
-                var response = await _httpClient.PostAsJsonAsync("api/user/change-password", request);
+                var response = await _httpClient.PostAsJsonAsync("api/users/password", request);
                 if (response.IsSuccessStatusCode)
                 {
                     _snackbar.Add("Password changed successfully", Severity.Success);
@@ -569,15 +459,34 @@ namespace VentyTime.Client.Services
                 }
 
                 var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Failed to change password: {Error}", error);
                 _snackbar.Add(error, Severity.Error);
                 return false;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error changing password");
-                _snackbar.Add("An error occurred while changing password", Severity.Error);
+                _snackbar.Add("An error occurred while changing your password", Severity.Error);
                 return false;
+            }
+        }
+
+        public async Task<HttpResponseMessage> UploadAvatarAsync(string userId, IBrowserFile file)
+        {
+            try
+            {
+                // Create form data
+                var content = new MultipartFormDataContent();
+                var fileContent = new StreamContent(file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "file", file.Name);
+
+                // Upload the file
+                return await _httpClient.PostAsync($"api/user/avatar", content);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar");
+                throw;
             }
         }
 

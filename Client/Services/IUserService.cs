@@ -22,9 +22,6 @@ namespace VentyTime.Client.Services
         Task<HttpResponseMessage> UpdateUserAsync(string userId, UpdateProfileRequest request);
         Task<bool> UpdateUserAsync(ApplicationUser user);
         Task<List<Event>> GetUserEventsAsync();
-        Task<List<Message>> GetMessagesAsync(int conversationId);
-        Task SendMessageAsync(int conversationId, string content);
-        Task<List<Conversation>> GetConversationsAsync();
         Task<bool> DeleteAccountAsync();
         Task<IList<string>> GetUserRolesAsync(string userId);
         Task<HttpResponseMessage> UploadAvatarAsync(string userId, IBrowserFile file);
